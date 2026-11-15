@@ -60,7 +60,6 @@ data class PeriodStats(
 const val MAX_CENTS = 99_999_999_999L
 const val MAX_NAME = 30
 const val MAX_NOTE = 200
-const val MAX_REPORT = 8_000
 val FIRST_DAY: LocalDate = LocalDate.of(1900, 1, 1)
 val LAST_DAY: LocalDate = LocalDate.of(2199, 12, 31)
 

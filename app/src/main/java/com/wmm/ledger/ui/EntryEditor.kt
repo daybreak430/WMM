@@ -1,5 +1,7 @@
 package com.wmm.ledger.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -22,7 +24,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -232,7 +233,7 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
     }
     if (accountDialog) {
         val available = data.accounts.filter { !it.archived || it.id == initial?.accountId }
-        AlertDialog(onDismissRequest = { accountDialog = false }, title = { Text("关联账户") }, text = {
+        LedgerAlertDialog(onDismissRequest = { accountDialog = false }, title = { Text("关联账户") }, text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 SettingsRow("不关联", end = if (accountId == null) "当前" else null) {
                     accountId = null
@@ -350,9 +351,12 @@ private fun EntryTagChip(label: String, selected: Boolean? = null, optional: Boo
         optional -> Modifier.toggleable(selected, role = Role.Checkbox) { onClick() }
         else -> Modifier.selectable(selected, role = Role.RadioButton, onClick = onClick)
     }
-    val tint = if (selected != false) colors.primary else colors.onSurface
+    val tint by animateColorAsState(if (selected != false) colors.primary else colors.onSurface,
+        tween(140), label = "标签文字")
+    val fill by animateColorAsState(if (selected == true) colors.primaryContainer else colors.surface,
+        tween(140), label = "标签背景")
     Box(Modifier.heightIn(min = 44.dp).clip(shape).then(interaction), contentAlignment = Alignment.Center) {
-        Surface(shape = shape, color = if (selected == true) colors.primaryContainer else colors.surface,
+        Surface(shape = shape, color = fill,
             border = BorderStroke(1.dp, colors.outlineVariant)) {
             Row(Modifier.heightIn(min = 34.dp).padding(horizontal = 11.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -388,7 +392,7 @@ private fun EntryDateDialog(day: LocalDate, time: LocalTime, onDismiss: () -> Un
     val pendingTime = LocalTime.parse(timeText)
     val chooseDate = CalendarAction(pendingDay) { dateText = it.toString() }
     val chooseTime = TimeAction(pendingTime) { timeText = it.toString() }
-    AlertDialog(onDismissRequest = onDismiss, shape = CardShape, title = { Text("日期时间") },
+    LedgerAlertDialog(onDismissRequest = onDismiss, shape = CardShape, title = { Text("日期时间") },
         text = {
             GroupCard {
                 EntryDetailRow("日期", pendingDay.toString(), Glyph.CALENDAR, chooseDate)
@@ -403,7 +407,7 @@ private fun EntryDateDialog(day: LocalDate, time: LocalTime, onDismiss: () -> Un
 @Composable
 private fun EntryNoteDialog(note: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var draft by rememberSaveable { mutableStateOf(note) }
-    AlertDialog(onDismissRequest = onDismiss, shape = CardShape, title = { Text("备注") },
+    LedgerAlertDialog(onDismissRequest = onDismiss, shape = CardShape, title = { Text("备注") },
         text = {
             OutlinedTextField(draft, { if (it.length <= MAX_NOTE) draft = it }, Modifier.fillMaxWidth(),
                 label = { Text("备注内容") }, minLines = 2, maxLines = 4, shape = FieldShape, colors = ledgerFieldColors())
@@ -416,7 +420,7 @@ private fun EntryNoteDialog(note: String, onDismiss: () -> Unit, onSave: (String
 fun NameDialog(title: String, label: String, original: String, allowBlank: Boolean = false,
     onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var name by rememberSaveable { mutableStateOf(original) }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = {
+    LedgerAlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = {
         OutlinedTextField(name, { if (it.length <= MAX_NAME) name = it }, label = { Text(label) }, singleLine = true,
             modifier = Modifier.fillMaxWidth(), shape = FieldShape, colors = ledgerFieldColors(),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done))

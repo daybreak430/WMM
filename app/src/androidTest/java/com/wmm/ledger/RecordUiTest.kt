@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -61,7 +62,9 @@ class RecordUiTest {
         ui.onNodeWithText("月").assertIsDisplayed()
         ui.onNode(hasScrollAction()).performScrollToNode(hasText(scene))
         ui.onNodeWithText(scene).performClick()
-        ui.onNode(hasText(combined) and hasText("−¥12.35")).assertIsDisplayed()
+        val sceneEntry = ui.onNode(hasText(combined) and hasText("−¥12.35"))
+        ui.waitUntil(8_000) { sceneEntry.isDisplayed() }
+        sceneEntry.assertIsDisplayed()
         ui.onNodeWithContentDescription("返回").performClick()
 
         ui.onNode(hasScrollAction()).performScrollToNode(hasText(tag))

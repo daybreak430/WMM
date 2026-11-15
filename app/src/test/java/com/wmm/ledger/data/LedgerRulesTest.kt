@@ -66,7 +66,7 @@ class LedgerRulesTest {
         assertEquals("1–7日", data.reportAnalysis(Period.MONTH, today, today).buckets.single().label)
     }
 
-    @Test fun trendAndMonthRollupUseCalendarDaysAndCountDirectionsSeparately() {
+    @Test fun trendUsesSevenCalendarDaysAndCountsDirectionsSeparately() {
         val end = LocalDate.of(2026, 1, 3)
         val base = entry("base", 125, 1, null)
         val data = LedgerSnapshot(entries = listOf(
@@ -82,8 +82,6 @@ class LedgerRulesTest {
         assertEquals(Cashflow(0, 125), trend.first().amount)
         assertEquals(Cashflow(0, 0), trend[1].amount)
         assertEquals(Cashflow(900, 200), trend.last().amount)
-        assertEquals(Cashflow(900, 200), data.monthCashflow(end))
-        assertEquals(700L, data.monthCashflow(end).net)
     }
 
     private fun entry(id: String, amount: Long, time: Long, account: String?) =

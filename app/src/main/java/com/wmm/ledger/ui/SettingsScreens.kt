@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -114,7 +113,7 @@ internal fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, active
         }
     }
     if (appearanceOptions) {
-        AlertDialog(onDismissRequest = { appearanceOptions = false }, title = { Text("外观") }, text = {
+        LedgerAlertDialog(onDismissRequest = { appearanceOptions = false }, title = { Text("外观") }, text = {
             Column {
                 Appearance.entries.forEachIndexed { index, option ->
                     if (index > 0) Hairline()
@@ -127,7 +126,7 @@ internal fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, active
         }, confirmButton = { TextButton(onClick = { appearanceOptions = false }) { Text("取消") } })
     }
     if (avatarOptions) {
-        AlertDialog(onDismissRequest = { avatarOptions = false }, title = { Text("头像") }, text = {
+        LedgerAlertDialog(onDismissRequest = { avatarOptions = false }, title = { Text("头像") }, text = {
             Column {
                 SettingsRow("选择照片") { avatarOptions = false; choosePhoto() }
                 if (data.profile.avatar != null) {
@@ -198,7 +197,7 @@ fun ModelSettings(model: LedgerViewModel, provider: Provider, providersWithKeys:
         // Key 只保留在当前对话框内存中，不放进 rememberSaveable 或系统恢复状态。
         var key by remember { mutableStateOf("") }
         var saving by remember { mutableStateOf(false) }
-        AlertDialog(onDismissRequest = { editKey = false }, title = { Text("${provider.title} API Key") }, text = {
+        LedgerAlertDialog(onDismissRequest = { editKey = false }, title = { Text("${provider.title} API Key") }, text = {
             OutlinedTextField(key, { if (it.length <= 512) key = it }, Modifier.fillMaxWidth(),
                 label = { Text("API Key") }, singleLine = true, visualTransformation = PasswordVisualTransformation(),
                 shape = FieldShape, colors = ledgerFieldColors(),
@@ -244,7 +243,7 @@ fun TagsScreen(data: LedgerSnapshot, model: LedgerViewModel, back: () -> Unit) {
     }
     val viewing = tags.firstOrNull { it.id == open }
     if (viewing != null) {
-        AlertDialog(onDismissRequest = { open = null }, title = { Text(viewing.name) }, text = {
+        LedgerAlertDialog(onDismissRequest = { open = null }, title = { Text(viewing.name) }, text = {
             Column {
                 SettingsRow("改名", icon = Glyph.EDIT) { open = null; edit = viewing.id }
                 Hairline()

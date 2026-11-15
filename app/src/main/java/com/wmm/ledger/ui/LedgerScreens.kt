@@ -1,5 +1,12 @@
 package com.wmm.ledger.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -15,10 +22,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Button
@@ -47,6 +56,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import com.wmm.ledger.R
+import com.wmm.ledger.data.Cashflow
+import com.wmm.ledger.data.DailyCashflow
 import com.wmm.ledger.data.Entry
 import com.wmm.ledger.data.FIRST_DAY
 import com.wmm.ledger.data.Kind
@@ -58,7 +69,6 @@ import com.wmm.ledger.data.Report
 import com.wmm.ledger.data.Reports
 import com.wmm.ledger.data.reportAnalysis
 import com.wmm.ledger.data.recentCashflow
-import com.wmm.ledger.data.monthCashflow
 import com.wmm.ledger.data.currency
 import com.wmm.ledger.data.stats
 import java.time.Instant
@@ -224,22 +234,33 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
     val calendar = CalendarAction(day, today, chooseDay)
     var consentDialog by rememberSaveable { mutableStateOf(false) }
     val colors = MaterialTheme.colorScheme
+    val trend = remember(data.entries, summary.start, period) {
+        if (period == Period.DAY) data.recentCashflow(summary.start) else emptyList()
+    }
+    val overview = StatsOverview(period, summary.start, summary.inProgress, Cashflow(summary.income, summary.expense), trend)
+    val expenses = remember(summary) { summary.tagTotals.filter { it.tag.kind == Kind.EXPENSE.name } }
+    val income = remember(summary) { summary.tagTotals.filter { it.tag.kind == Kind.INCOME.name } }
     Column(Modifier.fillMaxSize()) {
         PageHeader("统计")
-        LazyColumn(contentPadding = PaddingValues(horizontal = PagePadding, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        LazyColumn(contentPadding = PaddingValues(horizontal = PagePadding, vertical = 10.dp)) {
             item("filters") {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     LedgerSegments(Period.entries, period, { it.title }, choosePeriod)
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         val previous = period.step(summary.start, -1)
                         IconButton(onClick = { chooseDay(previous) }, enabled = previous >= FIRST_DAY) {
                             LucideIcon(Glyph.LEFT, description = "上一${period.title}")
                         }
-                        val label = periodLabel(period, summary.start)
                         TextButton(onClick = calendar, modifier = Modifier.weight(1f)) {
                             LucideIcon(Glyph.CALENDAR, color = colors.primary, size = 17)
-                            Text(label, Modifier.padding(start = 7.dp), style = MaterialTheme.typography.labelLarge)
+                            AnimatedContent(
+                                targetState = periodLabel(period, summary.start),
+                                modifier = Modifier.padding(start = 7.dp),
+                                transitionSpec = { fadeIn(tween(160)) togetherWith fadeOut(tween(95)) },
+                                label = "统计日期",
+                            ) { label ->
+                                Text(label, style = MaterialTheme.typography.labelLarge)
+                            }
                         }
                         val next = period.step(summary.start, 1)
                         IconButton(onClick = { chooseDay(next) }, enabled = next <= today) {
@@ -250,39 +271,44 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
                 }
             }
             item("rollup") {
-                if (period == Period.DAY) {
-                    SevenDayTrend(remember(data.entries, day) { data.recentCashflow(day) })
-                } else {
-                    val month = remember(data.entries, today) { data.monthCashflow(today) }
-                    MonthCashflowBoard(today, month)
-                }
-            }
-            if (summary.tagTotals.isEmpty()) {
-                item("empty-tags") { GroupCard { EmptyPanel("这个期间没有流水", glyph = Glyph.CHART) } }
-            } else {
-                Kind.entries.forEach { kind ->
-                    val tags = summary.tagTotals.filter { it.tag.kind == kind.name }
-                    if (tags.isNotEmpty()) {
-                        item("tag-title:${kind.name}") { SectionTitle("${kind.title}标签") }
-                        val total = if (kind == Kind.INCOME) summary.income else summary.expense
-                        items(tags, key = { "tag:${it.tag.id}" }) { row ->
-                            RankCard(row.tag.name, row.cents, total, kind == Kind.INCOME) { drill(row.tag.id) }
-                        }
+                AnimatedContent(
+                    targetState = overview,
+                    contentKey = { it.period to it.start },
+                    modifier = Modifier.fillMaxWidth(),
+                    transitionSpec = {
+                        (fadeIn(tween(PAGE_TRANSITION_MS)) togetherWith fadeOut(tween(120)))
+                            .using(SizeTransform(clip = true) { _, _ -> tween(PAGE_TRANSITION_MS) })
+                    },
+                    label = "统计看板",
+                ) { visible ->
+                    if (visible.period == Period.DAY) {
+                        Box(Modifier.blockExitingPage(visible == overview)) { SevenDayTrend(visible.trend) }
+                    } else {
+                        PeriodCashflowBoard(visible.period, visible.start, visible.current, visible.cashflow)
                     }
                 }
             }
-            if (summary.sceneTotals.isNotEmpty()) {
-                item("scene-title") { SectionTitle("支出场景") }
-                items(summary.sceneTotals, key = { "scene:${it.scene.id}" }) { row ->
-                    RankCard(row.scene.name, row.cents, summary.expense) { drillScene(row.scene.id) }
+            if (summary.entries.isEmpty()) {
+                item("empty-tags") {
+                    Box(Modifier.padding(top = 16.dp)) {
+                        GroupCard { EmptyPanel("这个期间没有流水", glyph = Glyph.CHART) }
+                    }
                 }
             }
+            rankSection("支出标签", Glyph.TAG, "expense", summary.expense,
+                expenses.map { RankedAmount(it.tag.id, it.tag.name, it.cents) }, drill)
+            rankSection("支出场景", Glyph.BOX, "scene", summary.expense,
+                summary.sceneTotals.map { RankedAmount(it.scene.id, it.scene.name, it.cents) }, drillScene)
+            rankSection("收入标签", Glyph.INCOME, "income", summary.income,
+                income.map { RankedAmount(it.tag.id, it.tag.name, it.cents) }, drill)
             item("report") {
                 val stale = report != null && remember(data, period, day, today) {
                     Reports.signature(data.reportAnalysis(period, day, today))
                 } != report.snapshotId
-                ReportPanel(summary, report, stale, busy, hasKey, openModel) {
-                    if (consent) generate(false) else consentDialog = true
+                Box(Modifier.padding(top = 18.dp)) {
+                    ReportPanel(summary, report, stale, busy, hasKey, openModel) {
+                        if (consent) generate(false) else consentDialog = true
+                    }
                 }
             }
         }
@@ -297,24 +323,71 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
     }
 }
 
+private data class StatsOverview(
+    val period: Period, val start: LocalDate, val current: Boolean,
+    val cashflow: Cashflow, val trend: List<DailyCashflow>,
+)
+
+private data class RankedAmount(val id: String, val label: String, val amount: Long)
+
+private fun LazyListScope.rankSection(title: String, icon: Glyph, key: String, total: Long,
+    ranks: List<RankedAmount>, open: (String) -> Unit) {
+    if (ranks.isEmpty()) return
+    item("rank-title:$key") {
+        val colors = MaterialTheme.colorScheme
+        Row(Modifier.fillMaxWidth().padding(start = 3.dp, top = 20.dp, bottom = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            LucideIcon(icon, color = colors.primary, size = 17)
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        }
+    }
+    itemsIndexed(ranks, key = { _, row -> "rank:$key:${row.id}" }) { index, row ->
+        RankRow(row, total, index == 0, index == ranks.lastIndex,
+            modifier = Modifier.animateItem(fadeInSpec = tween(155), fadeOutSpec = tween(105), placementSpec = null)) {
+            open(row.id)
+        }
+    }
+}
+
 @Composable
-private fun RankCard(label: String, amount: Long, total: Long, income: Boolean = false, click: () -> Unit) {
+private fun RankRow(rank: RankedAmount, total: Long, first: Boolean, last: Boolean, modifier: Modifier = Modifier,
+    click: () -> Unit) {
     val colors = MaterialTheme.colorScheme
-    Surface(onClick = click, shape = FieldShape, color = colors.surface,
-        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .68f))) {
-        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(label, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                AmountText(currency(amount), modifier = Modifier.weight(.72f),
-                    style = RowNumber.copy(textAlign = TextAlign.End))
-                LucideIcon(Glyph.RIGHT, color = colors.onSurfaceVariant, size = 16)
+    val top = if (first) 18.dp else 0.dp
+    val bottom = if (last) 18.dp else 0.dp
+    val shape = RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom)
+    val fraction = if (total > 0) (rank.amount.toDouble() / total).coerceIn(0.0, 1.0) else 0.0
+    val barFraction by animateFloatAsState(fraction.toFloat(), tween(250), label = "占比")
+    val percent = if (fraction > 0 && fraction < .001) "<0.1%"
+        else String.format(Locale.CHINA, "%.1f", fraction * 100).removeSuffix(".0") + "%"
+    // 榜单逐行加载，分组描边只在外边缘绘制。
+    Surface(
+        modifier = modifier.fillMaxWidth().clip(shape).background(colors.outlineVariant.copy(alpha = .70f))
+            .padding(start = 1.dp, end = 1.dp, top = if (first) 1.dp else 0.dp, bottom = if (last) 1.dp else 0.dp),
+        shape = shape,
+        color = colors.surface,
+    ) {
+        Column {
+            Row(Modifier.fillMaxWidth().heightIn(min = 62.dp).clickable(role = Role.Button, onClick = click)
+                .padding(horizontal = 15.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text(rank.label, style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.weight(1f, fill = false).width(56.dp).height(3.dp).clip(CircleShape)
+                            .background(colors.primaryContainer)) {
+                            Box(Modifier.fillMaxWidth(barFraction).height(3.dp)
+                                .background(colors.primary.copy(alpha = .76f), CircleShape))
+                        }
+                        Text(percent, color = colors.onSurfaceVariant, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                    }
+                }
+                AmountText(currency(rank.amount), modifier = Modifier.weight(.8f),
+                    style = LedgerFlowNumber.copy(textAlign = TextAlign.End))
+                LucideIcon(Glyph.RIGHT, color = colors.onSurfaceVariant, size = 15)
             }
-            val fraction = amount.toFloat() / total.toFloat()
-            Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(colors.outlineVariant)) {
-                Box(Modifier.fillMaxWidth(fraction.coerceIn(0f, 1f)).height(4.dp)
-                    .background(if (income) colors.primary else colors.outline))
-            }
+            if (!last) Hairline(15)
         }
     }
 }
@@ -331,7 +404,7 @@ private fun ReportPanel(summary: PeriodStats, report: Report?, stale: Boolean, b
                 Text("AI ${summary.period.title}报", Modifier.weight(1f),
                     style = MaterialTheme.typography.titleMedium)
                 if (stale) {
-                    Text("汇总已更新", color = colors.error, style = MaterialTheme.typography.bodySmall)
+                    Text("可重新生成", color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
             }
             if (report != null) {

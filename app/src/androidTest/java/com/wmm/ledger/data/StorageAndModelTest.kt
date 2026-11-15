@@ -110,6 +110,7 @@ class StorageAndModelTest {
         assertNotEquals(Reports.signature(analysis), Reports.signature(sceneEdit.reportAnalysis(Period.YEAR, today, today)))
         for (provider in Provider.entries) {
             val request = Reports.request(provider, analysis)
+            assertFalse(request.has("max_tokens") || request.has("max_completion_tokens"))
             assertEquals(provider.model, request.getString("model"))
             val payload = request.getJSONArray("messages").getJSONObject(1).getString("content")
             val fields = JSONObject(payload)
@@ -128,6 +129,13 @@ class StorageAndModelTest {
         }
         assertTrue(Reports.request(Provider.DEEPSEEK, analysis).has("thinking"))
         assertFalse(Reports.request(Provider.MINIMAX, analysis).has("thinking"))
+        val prompt = Reports.request(Provider.DEEPSEEK, analysis)
+            .getJSONArray("messages").getJSONObject(0).getString("content")
+        assertTrue(prompt.contains("长度和结构由发现决定"))
+        val longReport = "先说一件有意思的事。".repeat(900)
+        val longResponse = JSONObject().put("choices", org.json.JSONArray().put(JSONObject()
+            .put("finish_reason", "stop").put("message", JSONObject().put("content", longReport))))
+        assertEquals(longReport, Reports.readReply(200, longResponse.toString()))
         assertEquals("观察", Reports.readReply(200,
             """{"choices":[{"message":{"content":"观察","reasoning_content":"不展示"},"finish_reason":"stop"}]}"""))
         assertTrue((runCatching { Reports.readReply(401, "") }.exceptionOrNull() as LedgerError).display.contains("Key"))

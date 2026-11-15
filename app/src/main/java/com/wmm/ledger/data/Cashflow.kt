@@ -2,9 +2,7 @@ package com.wmm.ledger.data
 
 import java.time.LocalDate
 
-internal data class Cashflow(val income: Long, val expense: Long) {
-    val net get() = income - expense
-}
+internal data class Cashflow(val income: Long, val expense: Long)
 
 internal data class DailyCashflow(val date: LocalDate, val amount: Cashflow)
 
@@ -17,12 +15,6 @@ internal fun LedgerSnapshot.recentCashflow(end: LocalDate): List<DailyCashflow> 
         val date = first.plusDays(index.toLong())
         DailyCashflow(date, days[date.toString()].orEmpty().cashflow())
     }
-}
-
-internal fun LedgerSnapshot.monthCashflow(today: LocalDate): Cashflow {
-    val start = today.withDayOfMonth(1).toString()
-    val end = today.toString()
-    return entries.asSequence().filter { it.day in start..end }.asIterable().cashflow()
 }
 
 private fun Iterable<Entry>.cashflow(): Cashflow {

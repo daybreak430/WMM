@@ -35,25 +35,30 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.wmm.ledger.data.Cashflow
 import com.wmm.ledger.data.DailyCashflow
+import com.wmm.ledger.data.Period
+import com.wmm.ledger.data.Cashflow
 import com.wmm.ledger.data.currency
 import java.time.LocalDate
 
 @Composable
-internal fun MonthCashflowBoard(today: LocalDate, cashflow: Cashflow) {
+internal fun PeriodCashflowBoard(period: Period, start: LocalDate, current: Boolean, cashflow: Cashflow) {
     val colors = MaterialTheme.colorScheme
+    val yearly = period == Period.YEAR
+    val title = when {
+        yearly -> if (current) "本年收支看板" else "年度收支看板"
+        else -> if (current) "本月收支看板" else "月度收支看板"
+    }
+    val badge = if (yearly) "${start.year}" else "${start.year}.${start.monthValue.toString().padStart(2, '0')}"
     GroupCard {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            SectionTitle("本月收支看板") {
-                SummaryLabel("${today.year}.${today.monthValue.toString().padStart(2, '0')}", Glyph.CALENDAR)
-            }
+            SectionTitle(title) { SummaryLabel(badge, Glyph.CALENDAR) }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 CashflowMetric("收入", cashflow.income, Modifier.weight(1f), colors.primary)
                 VerticalDivider(Modifier.height(32.dp), color = colors.outlineVariant)
                 CashflowMetric("支出", cashflow.expense, Modifier.weight(1f))
                 VerticalDivider(Modifier.height(32.dp), color = colors.outlineVariant)
-                CashflowMetric("结余", cashflow.net, Modifier.weight(1f))
+                CashflowMetric("结余", cashflow.income - cashflow.expense, Modifier.weight(1f))
             }
         }
     }

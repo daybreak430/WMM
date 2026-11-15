@@ -13,7 +13,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -96,7 +95,7 @@ fun AssetsScreen(data: LedgerSnapshot, model: LedgerViewModel) {
     if (opening != null) {
         val calibrated = Instant.ofEpochMilli(opening.calibratedAt).atZone(ZoneId.systemDefault())
             .format(DateTimeFormatter.ofPattern("yyyy/M/d HH:mm:ss"))
-        AlertDialog(onDismissRequest = { accountOptions = null }, title = { Text(opening.name) }, text = {
+        LedgerAlertDialog(onDismissRequest = { accountOptions = null }, title = { Text(opening.name) }, text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 AmountText(currency(balances[opening.id] ?: 0), style = HeroNumber)
                 Text("上次校准 $calibrated", style = MaterialTheme.typography.bodySmall)
@@ -162,7 +161,7 @@ private fun AccountDialog(account: Account?, model: LedgerViewModel, close: () -
     val type = AccountType.valueOf(typeName)
     val parsed = parseCents(amount, signed = true)
     var chooseType by rememberSaveable { mutableStateOf(false) }
-    AlertDialog(onDismissRequest = close, title = { Text(if (account == null) "添加账户" else "编辑账户") }, text = {
+    LedgerAlertDialog(onDismissRequest = close, title = { Text(if (account == null) "添加账户" else "编辑账户") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedTextField(name, { if (it.length <= MAX_NAME) name = it }, Modifier.fillMaxWidth(),
                 label = { Text("账户名称") }, singleLine = true, shape = FieldShape, colors = ledgerFieldColors())
@@ -176,7 +175,7 @@ private fun AccountDialog(account: Account?, model: LedgerViewModel, close: () -
         }, enabled = validName(name.trim()) && (account != null || parsed != null) && !saving) { Text("保存账户") }
     }, dismissButton = { TextButton(onClick = close) { Text("取消") } })
     if (chooseType) {
-        AlertDialog(onDismissRequest = { chooseType = false }, title = { Text("账户类型") }, text = {
+        LedgerAlertDialog(onDismissRequest = { chooseType = false }, title = { Text("账户类型") }, text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 AccountType.entries.forEach { option ->
                     SettingsRow(option.title, end = if (option == type) "当前" else null) {
@@ -194,7 +193,7 @@ private fun CalibrationDialog(account: Account, balance: Long, model: LedgerView
     var input by rememberSaveable { mutableStateOf(editableAmount(balance)) }
     var saving by remember { mutableStateOf(false) }
     val parsed = parseCents(input, signed = true)
-    AlertDialog(onDismissRequest = close, title = { Text("校准余额") }, text = {
+    LedgerAlertDialog(onDismissRequest = close, title = { Text("校准余额") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(account.name, style = MaterialTheme.typography.titleMedium)
             SignedAmountField(input, { input = it }, "现在的真实余额")

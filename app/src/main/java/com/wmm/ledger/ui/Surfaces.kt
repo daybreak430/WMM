@@ -1,5 +1,8 @@
 package com.wmm.ledger.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -42,47 +45,44 @@ private val SummaryShape = RoundedCornerShape(27.dp)
 
 @Composable
 internal fun LedgerScreenFrame(refined: Boolean, content: @Composable () -> Unit) {
-    LedgerScreenTheme(refined) {
-        Box(Modifier.fillMaxSize()) {
-            LedgerBackdrop()
-            content()
-        }
+    Box(Modifier.fillMaxSize()) {
+        LedgerBackdrop(refined)
+        content()
     }
 }
 
 @Composable
-private fun LedgerBackdrop() {
-    val colors = MaterialTheme.colorScheme
+private fun LedgerBackdrop(refined: Boolean) {
     val dark = LocalLedgerDark.current
-    val refined = LocalLedgerRefinement.current
+    val animation = tween<Color>(PAGE_TRANSITION_MS)
+    val top = animateColorAsState(when {
+        refined && dark -> Color(0xFF1C3654)
+        refined -> Color(0xFFD3E7FC)
+        dark -> Color(0xFF1C304A)
+        else -> Color(0xFFC8E2FB)
+    }, animation, label = "背景顶部")
+    val middle = animateColorAsState(when {
+        refined && dark -> Color(0xFF18273F)
+        refined -> Color(0xFFE4EFFB)
+        dark -> Color(0xFF162236)
+        else -> Color(0xFFE6EFFA)
+    }, animation, label = "背景渐变")
+    val base = animateColorAsState(when {
+        refined && dark -> Color(0xFF111A29)
+        refined -> Color(0xFFF4F7FB)
+        else -> MaterialTheme.colorScheme.background
+    }, animation, label = "背景底色")
+    val glow = animateColorAsState(when {
+        refined && dark -> Color(0xFF314860).copy(alpha = .50f)
+        refined -> Color(0xFFF4FAFF).copy(alpha = .36f)
+        dark -> Color(0xFF7BABED).copy(alpha = .10f)
+        else -> Color.White.copy(alpha = .58f)
+    }, animation, label = "背景亮部")
+    val distance = animateDpAsState(if (refined) 280.dp else 330.dp, tween(PAGE_TRANSITION_MS), label = "背景渐变高度")
     Canvas(Modifier.fillMaxSize()) {
-        val distance = (if (refined) 280.dp else 330.dp).toPx()
-        // 顶部的色彩自然融入页面底色，向下滚动的内容仍在中性背景上。
-        drawRect(Brush.verticalGradient(
-            colorStops = arrayOf(
-                0f to when {
-                    refined && dark -> Color(0xFF1C3654)
-                    refined -> Color(0xFFD3E7FC)
-                    dark -> Color(0xFF1C304A)
-                    else -> Color(0xFFC8E2FB)
-                },
-                .52f to when {
-                    refined && dark -> Color(0xFF18273F)
-                    refined -> Color(0xFFE4EFFB)
-                    dark -> Color(0xFF162236)
-                    else -> Color(0xFFE6EFFA)
-                },
-                1f to colors.background,
-            ),
-            endY = distance,
-        ))
+        drawRect(Brush.verticalGradient(0f to top.value, .52f to middle.value, 1f to base.value, endY = distance.value.toPx()))
         drawRect(Brush.radialGradient(
-            colors = listOf(when {
-                refined && dark -> Color(0xFF314860).copy(alpha = .50f)
-                refined -> Color(0xFFF4FAFF).copy(alpha = .36f)
-                dark -> Color(0xFF7BABED).copy(alpha = .10f)
-                else -> Color.White.copy(alpha = .58f)
-            }, Color.Transparent),
+            colors = listOf(glow.value, Color.Transparent),
             center = Offset(size.width * .83f, 4.dp.toPx()),
             radius = 218.dp.toPx(),
         ))
@@ -181,14 +181,18 @@ fun <T> LedgerSegments(options: List<T>, selected: T, title: (T) -> String, onSe
             for (option in options) {
                 val active = selected == option
                 val shape = RoundedCornerShape(11.dp)
+                val fill by animateColorAsState(if (active) colors.primaryContainer else Color.Transparent,
+                    tween(170), label = "筛选底色")
+                val tint by animateColorAsState(if (active) colors.primary else colors.onSurfaceVariant,
+                    tween(170), label = "筛选文字")
                 Box(
                     Modifier.weight(1f).heightIn(min = if (refined) 44.dp else 48.dp).clip(shape)
-                        .background(if (active) colors.primaryContainer else Color.Transparent)
+                        .background(fill)
                         .selectable(active, role = Role.RadioButton) { onSelect(option) }
                         .padding(horizontal = 8.dp, vertical = 7.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(title(option), color = if (active) colors.primary else colors.onSurfaceVariant,
+                    Text(title(option), color = tint,
                         style = MaterialTheme.typography.labelLarge)
                 }
             }

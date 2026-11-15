@@ -104,7 +104,7 @@ object Backup {
             val signature = string("snapshotId").also { require(it.matches(Regex("[a-f0-9]{64}"))) }
             Report(period.name, start.toString(), signature, time("createdAt"),
                 enumValueOf<Provider>(string("provider")).name,
-                string("content").also { require(it.isNotBlank() && it.length <= MAX_REPORT) })
+                string("content").also { require(it.isNotBlank()) })
         }
         require(reports.distinctBy { it.period to it.startDay }.size == reports.size)
         val profile = root.getJSONObject("profile").run {
