@@ -5,14 +5,26 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -36,6 +48,7 @@ import com.wmm.ledger.ui.ConfirmDialog
 import com.wmm.ledger.ui.EmptyPanel
 import com.wmm.ledger.ui.EntryEditor
 import com.wmm.ledger.ui.Glyph
+import com.wmm.ledger.ui.LedgerBackdrop
 import com.wmm.ledger.ui.LedgerScreen
 import com.wmm.ledger.ui.LedgerTheme
 import com.wmm.ledger.ui.LineIcon
@@ -96,59 +109,58 @@ private fun LedgerApp(model: LedgerViewModel) {
 
     BackHandler(enabled = route != null || tab != Tab.LEDGER, onBack = ::back)
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbar) },
-        bottomBar = {
-            if (route == null && snapshot != null) {
-                NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
-                    Tab.entries.forEach { item ->
-                        NavigationBarItem(selected = tab == item, onClick = { tabName = item.name },
-                            icon = { LineIcon(item.icon, if (tab == item) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant) }, label = { Text(item.label) })
+    Box(Modifier.fillMaxSize()) {
+        LedgerBackdrop()
+        Scaffold(
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.onBackground,
+            snackbarHost = { SnackbarHost(snackbar) },
+            bottomBar = {
+                if (route == null && snapshot != null) {
+                    LedgerNavigation(tab) { tabName = it.name }
+                }
+            },
+        ) { padding ->
+            Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
+                val data = snapshot
+                val current = route
+                when {
+                    openError -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        EmptyPanel("无法打开账本", "请重新打开应用。若仍无法打开，请保留现有应用数据。")
                     }
-                }
-            }
-        },
-    ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
-            val data = snapshot
-            val current = route
-            when {
-                openError -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    EmptyPanel("无法打开账本", "请重新打开应用。若仍无法打开，请保留现有应用数据。")
-                }
-                data == null -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                current == "settings" -> SettingsScreen(data, model, provider, provider in keys, fileBusy, ::back,
-                    tags = { parent = current; route = "tags" }, openModel = { parent = current; route = "model" })
-                current == "tags" -> TagsScreen(data, model, ::back)
-                current == "model" -> ModelSettings(model, provider, keys, ::back)
-                current == "new" -> EntryEditor(data, null, model) { if (route == current) back() }
-                current?.startsWith("entry:") == true -> {
-                    val entry = data.entries.firstOrNull { it.id == current.substringAfter(':') }
-                    if (entry != null) {
-                        EntryEditor(data, entry, model) { if (route == current) back() }
-                    } else {
-                        LaunchedEffect(current) { if (route == current) back() }
+                    data == null -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                    current == "settings" -> SettingsScreen(data, model, provider, provider in keys, fileBusy, ::back,
+                        tags = { parent = current; route = "tags" }, openModel = { parent = current; route = "model" })
+                    current == "tags" -> TagsScreen(data, model, ::back)
+                    current == "model" -> ModelSettings(model, provider, keys, ::back)
+                    current == "new" -> EntryEditor(data, null, model) { if (route == current) back() }
+                    current?.startsWith("entry:") == true -> {
+                        val entry = data.entries.firstOrNull { it.id == current.substringAfter(':') }
+                        if (entry != null) {
+                            EntryEditor(data, entry, model) { if (route == current) back() }
+                        } else {
+                            LaunchedEffect(current) { if (route == current) back() }
+                        }
                     }
-                }
-                current?.startsWith("tag:") == true -> TagDrillScreen(data, today, period, day, current.substringAfter(':'), ::back) {
-                    parent = current
-                    route = "entry:${it.id}"
-                }
-                else -> navState.SaveableStateProvider(tab.name) {
-                    when (tab) {
-                        Tab.LEDGER -> LedgerScreen(data, today, { route = "settings" }, {
-                            dayText = today.toString()
-                            followToday = true
-                            periodName = Period.MONTH.name
-                            tabName = Tab.STATS.name
-                        }, { route = "new" }, { route = "entry:${it.id}" })
-                        Tab.STATS -> StatsScreen(data, today, period, day, { periodName = it.name }, {
-                            dayText = it.toString()
-                            followToday = it == today
-                        }, { route = "tag:$it" }, generating, provider in keys, model.hasReportConsent(),
-                            { agreed -> model.generate(period, day, agreed) }, { route = "model" })
-                        Tab.ASSETS -> AssetsScreen(data, model)
+                    current?.startsWith("tag:") == true -> TagDrillScreen(data, today, period, day, current.substringAfter(':'), ::back) {
+                        parent = current
+                        route = "entry:${it.id}"
+                    }
+                    else -> navState.SaveableStateProvider(tab.name) {
+                        when (tab) {
+                            Tab.LEDGER -> LedgerScreen(data, today, { route = "settings" }, {
+                                dayText = today.toString()
+                                followToday = true
+                                periodName = Period.MONTH.name
+                                tabName = Tab.STATS.name
+                            }, { route = "new" }, { route = "entry:${it.id}" })
+                            Tab.STATS -> StatsScreen(data, today, period, day, { periodName = it.name }, {
+                                dayText = it.toString()
+                                followToday = it == today
+                            }, { route = "tag:$it" }, generating, provider in keys, model.hasReportConsent(),
+                                { agreed -> model.generate(period, day, agreed) }, { route = "model" })
+                            Tab.ASSETS -> AssetsScreen(data, model)
+                        }
                     }
                 }
             }
@@ -159,5 +171,39 @@ private fun LedgerApp(model: LedgerViewModel) {
         ConfirmDialog("替换本机账本？", "此备份含 ${backup.entries.size} 笔流水和 ${backup.accounts.size} 个账户。" +
             "恢复会替换本机的流水、标签、资产、资料和报告，无法撤销。", "替换并恢复",
             model::cancelRestore, model::restore)
+    }
+}
+
+
+@Composable
+private fun LedgerNavigation(selected: Tab, onSelect: (Tab) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        color = colors.surface,
+        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .65f)),
+    ) {
+        Row(Modifier.navigationBarsPadding().selectableGroup().padding(horizontal = 12.dp)) {
+            for (item in Tab.entries) {
+                val active = selected == item
+                val tint = if (active) colors.primary else colors.onSurfaceVariant
+                Column(
+                    Modifier.weight(1f).heightIn(min = 62.dp)
+                        .selectable(active, role = Role.Tab, onClick = { onSelect(item) })
+                        .padding(vertical = 7.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Surface(
+                        modifier = Modifier.size(width = 42.dp, height = 25.dp),
+                        color = if (active) colors.primaryContainer else Color.Transparent,
+                        shape = RoundedCornerShape(9.dp),
+                    ) {
+                        Box(contentAlignment = Alignment.Center) { LineIcon(item.icon, tint, size = 20) }
+                    }
+                    Text(item.label, modifier = Modifier.padding(top = 2.dp), color = tint,
+                        style = MaterialTheme.typography.labelMedium)
+                }
+            }
+        }
     }
 }

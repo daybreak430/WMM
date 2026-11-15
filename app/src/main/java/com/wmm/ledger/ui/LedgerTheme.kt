@@ -1,16 +1,20 @@
 package com.wmm.ledger.ui
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.Surface
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -28,78 +32,114 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private val Paper = Color(0xFFF8F7F3)
-private val Ink = Color(0xFF202722)
-val Cover = Color(0xFF183D34)
-val CoverInk = Color(0xFFF4F6EA)
-val Lime = Color(0xFFDFEDAE)
-val Clay = Color(0xFFB96C48)
+private val Ink = Color(0xFF101B2E)
+private val Paper = Color(0xFFF3F5F8)
+private val DarkPaper = Color(0xFF101722)
 
 private val Light = lightColorScheme(
-    primary = Color(0xFF30584A),
+    primary = Color(0xFF245FA6),
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFE3EDDE),
-    onPrimaryContainer = Color(0xFF243C2F),
-    secondary = Color(0xFF4D6658),
-    secondaryContainer = Color(0xFFE6EBE1),
-    onSecondaryContainer = Color(0xFF333E35),
+    primaryContainer = Color(0xFFDFECFC),
+    onPrimaryContainer = Color(0xFF173E70),
+    inversePrimary = Color(0xFFABCDFF),
+    secondary = Color(0xFF4D607B),
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFFE7EDF6),
+    onSecondaryContainer = Color(0xFF263D59),
+    tertiary = Color(0xFF715573),
+    onTertiary = Color.White,
+    tertiaryContainer = Color(0xFFF8EAF8),
+    onTertiaryContainer = Color(0xFF533857),
     background = Paper,
     onBackground = Ink,
-    surface = Paper,
+    surface = Color.White,
     onSurface = Ink,
-    surfaceVariant = Color(0xFFECEDE5),
-    onSurfaceVariant = Color(0xFF5F6A62),
-    surfaceContainer = Color(0xFFF0F0E8),
-    surfaceContainerLow = Color(0xFFF4F3ED),
-    surfaceContainerHigh = Color(0xFFEBECE3),
-    surfaceContainerHighest = Color(0xFFE6E7DE),
-    outline = Color(0xFF737E75),
-    outlineVariant = Color(0xFFDEE0D6),
-    error = Color(0xFF9E4232),
+    surfaceVariant = Color(0xFFEAF0F7),
+    onSurfaceVariant = Color(0xFF566478),
+    surfaceContainerLowest = Color.White,
+    surfaceContainerLow = Color(0xFFF8FAFC),
+    surfaceContainer = Color(0xFFEDF2F8),
+    surfaceContainerHigh = Color(0xFFE6EDF5),
+    surfaceContainerHighest = Color(0xFFDDE6F1),
+    outline = Color(0xFF738197),
+    outlineVariant = Color(0xFFDCE4EE),
+    inverseSurface = Ink,
+    inverseOnSurface = Color(0xFFEFF4FB),
+    error = Color(0xFFAE3747),
+    errorContainer = Color(0xFFFFE7EA),
+    onErrorContainer = Color(0xFF701B2A),
 )
 
 private val Dark = darkColorScheme(
-    primary = Color(0xFFB2D5C0),
-    onPrimary = Color(0xFF193127),
-    primaryContainer = Color(0xFF29463A),
-    onPrimaryContainer = Color(0xFFD5EDDD),
-    secondaryContainer = Color(0xFF2D3931),
-    onSecondaryContainer = Color(0xFFD5E2D7),
-    background = Color(0xFF161C18),
-    onBackground = Color(0xFFE8EDE3),
-    surface = Color(0xFF161C18),
-    onSurface = Color(0xFFE8EDE3),
-    surfaceVariant = Color(0xFF2D3730),
-    onSurfaceVariant = Color(0xFFB3C0B5),
-    surfaceContainer = Color(0xFF242C25),
-    surfaceContainerLow = Color(0xFF1B241E),
-    surfaceContainerHigh = Color(0xFF2C372F),
-    surfaceContainerHighest = Color(0xFF333F35),
-    outline = Color(0xFF9DAA9F),
-    outlineVariant = Color(0xFF38463C),
-    error = Color(0xFFFFB4A2),
+    primary = Color(0xFFABCDFF),
+    onPrimary = Color(0xFF102C55),
+    primaryContainer = Color(0xFF233951),
+    onPrimaryContainer = Color(0xFFCEE1FF),
+    inversePrimary = Color(0xFF245FA6),
+    secondary = Color(0xFFBDCFE7),
+    onSecondary = Color(0xFF283A50),
+    secondaryContainer = Color(0xFF253246),
+    onSecondaryContainer = Color(0xFFDDE8F8),
+    tertiary = Color(0xFFDFC0E3),
+    onTertiary = Color(0xFF402742),
+    tertiaryContainer = Color(0xFF583B5B),
+    onTertiaryContainer = Color(0xFFFBE3FB),
+    background = DarkPaper,
+    onBackground = Color(0xFFEFF4FD),
+    surface = Color(0xFF1A2331),
+    onSurface = Color(0xFFEFF4FD),
+    surfaceVariant = Color(0xFF263447),
+    onSurfaceVariant = Color(0xFFADBCD0),
+    surfaceContainerLowest = Color(0xFF101722),
+    surfaceContainerLow = Color(0xFF182233),
+    surfaceContainer = Color(0xFF1D2838),
+    surfaceContainerHigh = Color(0xFF243144),
+    surfaceContainerHighest = Color(0xFF2B394D),
+    outline = Color(0xFF8798B0),
+    outlineVariant = Color(0xFF34455B),
+    inverseSurface = Color(0xFFF0F5FD),
+    inverseOnSurface = Ink,
+    error = Color(0xFFFFADB7),
+    errorContainer = Color(0xFF701B2A),
+    onErrorContainer = Color(0xFFFFD9DE),
 )
+
+internal val LocalLedgerDark = staticCompositionLocalOf { false }
 
 private val LedgerType = Typography(
-    headlineLarge = TextStyle(fontSize = 32.sp, lineHeight = 42.sp, fontWeight = FontWeight.SemiBold),
-    headlineSmall = TextStyle(fontSize = 22.sp, lineHeight = 30.sp, fontWeight = FontWeight.SemiBold),
-    titleLarge = TextStyle(fontSize = 20.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold),
-    titleMedium = TextStyle(fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight.Medium),
-    bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 24.sp),
+    headlineLarge = TextStyle(fontSize = 28.sp, lineHeight = 36.sp, fontWeight = FontWeight.SemiBold),
+    headlineSmall = TextStyle(fontSize = 22.sp, lineHeight = 30.sp, fontWeight = FontWeight.Medium),
+    titleLarge = TextStyle(fontSize = 19.sp, lineHeight = 26.sp, fontWeight = FontWeight.Medium),
+    titleMedium = TextStyle(fontSize = 16.sp, lineHeight = 23.sp, fontWeight = FontWeight.Medium),
+    titleSmall = TextStyle(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium),
+    bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 25.sp),
     bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 21.sp),
-    bodySmall = TextStyle(fontSize = 12.sp, lineHeight = 18.sp),
-    labelLarge = TextStyle(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold),
-    labelMedium = TextStyle(fontSize = 12.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium),
+    bodySmall = TextStyle(fontSize = 13.sp, lineHeight = 19.sp),
+    labelLarge = TextStyle(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium),
+    labelMedium = TextStyle(fontSize = 12.sp, lineHeight = 17.sp, fontWeight = FontWeight.Medium),
+    labelSmall = TextStyle(fontSize = 11.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium),
 )
 
-val HeroNumber = TextStyle(fontSize = 38.sp, lineHeight = 48.sp, fontWeight = FontWeight.SemiBold,
-    fontFamily = FontFamily.SansSerif, fontFeatureSettings = "tnum", letterSpacing = (-1.6).sp)
-val RowNumber = TextStyle(fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold,
-    fontFamily = FontFamily.SansSerif, fontFeatureSettings = "tnum")
+val HeroNumber = TextStyle(fontSize = 44.sp, fontWeight = FontWeight.Medium,
+    fontFamily = FontFamily.SansSerif, fontFeatureSettings = "tnum", letterSpacing = (-1.9).sp)
+val RowNumber = TextStyle(fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium,
+    fontFamily = FontFamily.SansSerif, fontFeatureSettings = "tnum", letterSpacing = (-0.3).sp)
 
 @Composable
 fun LedgerTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = if (isSystemInDarkTheme()) Dark else Light, typography = LedgerType, content = content)
+    val dark = isSystemInDarkTheme()
+    CompositionLocalProvider(LocalLedgerDark provides dark) {
+        MaterialTheme(
+            colorScheme = if (dark) Dark else Light,
+            typography = LedgerType,
+            shapes = Shapes(
+                extraSmall = RoundedCornerShape(8.dp), small = RoundedCornerShape(12.dp),
+                medium = RoundedCornerShape(16.dp), large = RoundedCornerShape(24.dp),
+                extraLarge = RoundedCornerShape(28.dp),
+            ),
+            content = content,
+        )
+    }
 }
 
 enum class Glyph(source: String) {
@@ -142,8 +182,14 @@ fun LineIcon(glyph: Glyph, color: Color = MaterialTheme.colorScheme.onSurface,
 @Composable
 fun IconBadge(glyph: Glyph, modifier: Modifier = Modifier, emphasis: Boolean = false) {
     val colors = MaterialTheme.colorScheme
-    Box(modifier.size(42.dp).background(if (emphasis) colors.primaryContainer else colors.surfaceVariant, CircleShape),
-        contentAlignment = Alignment.Center) {
-        LineIcon(glyph, if (emphasis) colors.onPrimaryContainer else colors.onSurfaceVariant, size = 19)
+    Surface(
+        modifier.size(40.dp),
+        shape = RoundedCornerShape(13.dp),
+        color = if (emphasis) colors.primaryContainer else colors.surfaceVariant,
+        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .40f)),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            LineIcon(glyph, if (emphasis) colors.primary else colors.onSurfaceVariant, size = 19)
+        }
     }
 }

@@ -3,6 +3,7 @@
     <style name="Theme.WMM" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
-        <item name="android:windowBackground">#F8F7F3</item>
+        <item name="android:windowBackground">#F3F5F8</item>
+        <item name="android:colorAccent">#245FA6</item>
     </style>
 </resources>

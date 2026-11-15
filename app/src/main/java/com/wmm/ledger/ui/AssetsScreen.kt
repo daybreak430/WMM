@@ -1,5 +1,6 @@
 package com.wmm.ledger.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,6 +17,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -27,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.wmm.ledger.LedgerViewModel
 import com.wmm.ledger.data.Account
@@ -61,10 +64,14 @@ fun AssetsScreen(data: LedgerSnapshot, model: LedgerViewModel) {
         LazyColumn(contentPadding = PaddingValues(start = PagePadding, end = PagePadding, top = 8.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item("net-assets") {
-                InkCard {
-                    Text("净资产总额", color = CoverInk.copy(alpha = .76f), style = MaterialTheme.typography.labelLarge)
-                    AmountText(currency(active.sumOf { balances[it.id] ?: 0L }), CoverInk, style = HeroNumber)
-                    Text("${active.size} 个账户", color = Lime, style = MaterialTheme.typography.bodySmall)
+                BalancePanel {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("净资产总额", Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.labelLarge)
+                        SummaryLabel("${active.size} 个账户", Glyph.WALLET)
+                    }
+                    AmountText(currency(active.sumOf { balances[it.id] ?: 0L }),
+                        modifier = Modifier.fillMaxWidth().padding(top = 5.dp), style = HeroNumber)
                 }
             }
             item("account-title") { SectionTitle("账户", Modifier.padding(top = 5.dp)) }
@@ -128,15 +135,19 @@ fun AssetsScreen(data: LedgerSnapshot, model: LedgerViewModel) {
 @Composable
 private fun AccountCard(account: Account, balance: Long, open: () -> Unit) {
     val colors = MaterialTheme.colorScheme
-    androidx.compose.material3.Surface(onClick = open, shape = CardShape, color = colors.surfaceContainerLow) {
+    Surface(onClick = open, shape = CardShape, color = colors.surface,
+        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .70f))) {
         Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically) {
             IconBadge(if (account.archived) Glyph.BOX else Glyph.WALLET)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(account.name, style = MaterialTheme.typography.titleMedium)
-                Text(AccountType.valueOf(account.type).title, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                val typeLabel = AccountType.valueOf(account.type).title
+                if (typeLabel != account.name) {
+                    Text(typeLabel, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                }
             }
-            AmountText(currency(balance), modifier = Modifier.weight(.68f, fill = false))
+            AmountText(currency(balance), modifier = Modifier.weight(.68f), style = RowNumber.copy(textAlign = TextAlign.End))
             LineIcon(Glyph.RIGHT, colors.onSurfaceVariant, size = 16)
         }
     }
@@ -154,7 +165,7 @@ private fun AccountDialog(account: Account?, model: LedgerViewModel, close: () -
     AlertDialog(onDismissRequest = close, title = { Text(if (account == null) "添加账户" else "编辑账户") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedTextField(name, { if (it.length <= MAX_NAME) name = it }, Modifier.fillMaxWidth(),
-                label = { Text("账户名称") }, singleLine = true)
+                label = { Text("账户名称") }, singleLine = true, shape = FieldShape, colors = ledgerFieldColors())
             SettingsRow("账户类型", end = type.title) { chooseType = true }
             if (account == null) SignedAmountField(amount, { amount = it }, "初始余额")
         }
@@ -203,6 +214,7 @@ private fun CalibrationDialog(account: Account, balance: Long, model: LedgerView
 private fun SignedAmountField(input: String, onInput: (String) -> Unit, label: String) {
     OutlinedTextField(input, { if (it.length <= 17) onInput(it) }, Modifier.fillMaxWidth(),
         label = { Text(label) }, prefix = { Text("¥ ") }, singleLine = true,
+        shape = FieldShape, colors = ledgerFieldColors(),
         trailingIcon = { TextButton(onClick = {
             onInput(if (input.startsWith("-")) input.removePrefix("-") else "-$input")
         }) { Text("±") } },

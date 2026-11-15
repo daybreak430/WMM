@@ -20,9 +20,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -189,6 +186,7 @@ fun ModelSettings(model: LedgerViewModel, provider: Provider, providersWithKeys:
         AlertDialog(onDismissRequest = { editKey = false }, title = { Text("${provider.title} API Key") }, text = {
             OutlinedTextField(key, { if (it.length <= 512) key = it }, Modifier.fillMaxWidth(),
                 label = { Text("API Key") }, singleLine = true, visualTransformation = PasswordVisualTransformation(),
+                shape = FieldShape, colors = ledgerFieldColors(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
         }, confirmButton = {
             TextButton(onClick = {
@@ -221,12 +219,7 @@ fun TagsScreen(data: LedgerSnapshot, model: LedgerViewModel, back: () -> Unit) {
         LazyColumn(contentPadding = PaddingValues(horizontal = PagePadding, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(9.dp)) {
             item("tag-kinds") {
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    Kind.entries.forEachIndexed { index, option ->
-                        SegmentedButton(selected = option == kind, onClick = { kindName = option.name },
-                            shape = SegmentedButtonDefaults.itemShape(index, Kind.entries.size), icon = {}, label = { Text(option.title) })
-                    }
-                }
+                LedgerSegments(Kind.entries, kind, { it.title }) { kindName = it.name }
             }
             if (tags.isEmpty()) item("empty") { GroupCard { EmptyPanel("还没有${kind.title}标签", glyph = Glyph.TAG) } }
             items(tags.sortedBy { it.archived }, key = { it.id }) { tag ->

@@ -1,5 +1,6 @@
 package com.wmm.ledger.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,17 +17,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.wmm.ledger.data.Entry
@@ -66,58 +64,68 @@ fun LedgerScreen(data: LedgerSnapshot, today: LocalDate, openSettings: () -> Uni
     val stats = remember(data, today) { data.stats(Period.MONTH, today, today) }
     val colors = MaterialTheme.colorScheme
     Column(Modifier.fillMaxSize()) {
-        PageHeader("账本", end = { UserAvatar(data.profile, openSettings) })
-        Box(Modifier.weight(1f)) {
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = PagePadding, end = PagePadding,
-                top = 8.dp, bottom = 84.dp)) {
-                item("cover") {
-                    InkCard {
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Text("本月结余", Modifier.weight(1f), color = CoverInk.copy(alpha = .77f),
-                                style = MaterialTheme.typography.labelLarge)
-                            Text("${today.year} / ${today.monthValue.toString().padStart(2, '0')}",
-                                color = Lime, style = MaterialTheme.typography.labelMedium)
-                        }
-                        AmountText(currency(stats.net), CoverInk, style = HeroNumber)
-                        Spacer(Modifier.height(5.dp))
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            CoverMetric("收入", stats.income, Modifier.weight(1f))
-                            CoverMetric("支出", stats.expense, Modifier.weight(1f))
-                        }
+        PageHeader("账本", mark = Glyph.BOOK) { UserAvatar(data.profile, openSettings) }
+        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(start = PagePadding, end = PagePadding,
+            top = 5.dp, bottom = 16.dp)) {
+            item("cover") {
+                BalancePanel {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("本月结余", Modifier.weight(1f), color = colors.onSurfaceVariant,
+                            style = MaterialTheme.typography.labelLarge)
+                        SummaryLabel("${today.year}.${today.monthValue.toString().padStart(2, '0')}", Glyph.CALENDAR)
                     }
-                }
-                item("recent") {
-                    SectionTitle("最近流水", Modifier.padding(top = 18.dp, bottom = 3.dp)) {
-                        TextButton(onClick = openStats) {
-                            Text("收支统计")
-                            LineIcon(Glyph.RIGHT, color = colors.primary, size = 15)
-                        }
+                    AmountText(currency(stats.net), modifier = Modifier.fillMaxWidth().padding(top = 9.dp),
+                        style = HeroNumber.copy(textAlign = TextAlign.Center))
+                    Spacer(Modifier.height(15.dp))
+                    Hairline()
+                    Row(Modifier.fillMaxWidth().padding(top = 13.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        SummaryMetric(Kind.INCOME, stats.income, Modifier.weight(1f))
+                        SummaryMetric(Kind.EXPENSE, stats.expense, Modifier.weight(1f))
                     }
-                }
-                if (data.entries.isEmpty()) {
-                    item("empty") {
-                        GroupCard { EmptyPanel("还没有流水", "点「记一笔」记下第一笔收支。") }
-                    }
-                } else {
-                    ledgerRows(data.entries, data, today, edit)
                 }
             }
-            Button(onClick = record, modifier = Modifier.align(Alignment.BottomEnd)
-                .padding(end = PagePadding, bottom = 14.dp).height(54.dp),
-                shape = RoundedCornerShape(18.dp), elevation = ButtonDefaults.buttonElevation(defaultElevation = 3.dp),
-                contentPadding = PaddingValues(horizontal = 17.dp)) {
-                LineIcon(Glyph.PLUS, colors.onPrimary, size = 21)
-                Text("记一笔", Modifier.padding(start = 6.dp), style = MaterialTheme.typography.labelLarge)
+            item("recent") {
+                SectionTitle("最近流水", Modifier.padding(top = 14.dp, bottom = 2.dp)) {
+                    TextButton(onClick = openStats) {
+                        Text("收支统计")
+                        LineIcon(Glyph.RIGHT, color = colors.primary, size = 15)
+                    }
+                }
             }
+            if (data.entries.isEmpty()) {
+                item("empty") { GroupCard { EmptyPanel("还没有流水") } }
+            } else {
+                ledgerRows(data.entries, data, today, edit)
+            }
+        }
+        PrimaryAction("记一笔", record, Modifier.fillMaxWidth().padding(horizontal = PagePadding, vertical = 10.dp), Glyph.PLUS)
+    }
+}
+
+@Composable
+fun SummaryLabel(text: String, icon: Glyph? = null) {
+    val colors = MaterialTheme.colorScheme
+    Surface(shape = RoundedCornerShape(9.dp), color = colors.surface.copy(alpha = .75f),
+        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .62f))) {
+        Row(Modifier.padding(horizontal = 9.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (icon != null) LineIcon(icon, colors.primary, size = 15)
+            Text(text, color = colors.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
         }
     }
 }
 
 @Composable
-fun CoverMetric(title: String, cents: Long, modifier: Modifier = Modifier) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Text(title, color = CoverInk.copy(alpha = .74f), style = MaterialTheme.typography.bodySmall)
-        AmountText(currency(cents), color = CoverInk)
+private fun SummaryMetric(kind: Kind, cents: Long, modifier: Modifier = Modifier) {
+    val colors = MaterialTheme.colorScheme
+    val income = kind == Kind.INCOME
+    val tint = if (income) colors.primary else colors.onSurfaceVariant
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            LineIcon(if (income) Glyph.INCOME else Glyph.EXPENSE, tint, size = 16)
+            Text(kind.title, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+        }
+        AmountText(currency(cents), color = if (income) colors.primary else colors.onSurface)
     }
 }
 
@@ -132,12 +140,21 @@ fun LazyListScope.ledgerRows(entries: List<Entry>, data: LedgerSnapshot, today: 
                 today.minusDays(1) -> "昨天"
                 else -> if (day.year == today.year) day.format(DateLabel) else date
             }
-            Text(label, Modifier.padding(top = 15.dp, bottom = 5.dp), style = MaterialTheme.typography.labelLarge,
+            Text(label, Modifier.padding(start = 2.dp, top = 11.dp, bottom = 6.dp), style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        items(records, key = { "entry:${it.id}" }) { entry ->
-            LedgerRow(entry, tagById[entry.tagId]?.name.orEmpty(), entry.accountId?.let { accountById[it]?.name }, edit)
-            Hairline()
+        itemsIndexed(records, key = { _, entry -> "entry:${entry.id}" }) { position, entry ->
+            val first = if (position == 0) 18.dp else 0.dp
+            val last = if (position == records.lastIndex) 18.dp else 0.dp
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(topStart = first, topEnd = first, bottomStart = last, bottomEnd = last),
+            ) {
+                Column {
+                    LedgerRow(entry, tagById[entry.tagId]?.name.orEmpty(), entry.accountId?.let { accountById[it]?.name }, edit)
+                    if (position < records.lastIndex) Hairline(14)
+                }
+            }
         }
     }
 }
@@ -146,7 +163,7 @@ fun LazyListScope.ledgerRows(entries: List<Entry>, data: LedgerSnapshot, today: 
 private fun LedgerRow(entry: Entry, tag: String, account: String?, edit: (Entry) -> Unit) {
     val income = entry.kind == Kind.INCOME.name
     val colors = MaterialTheme.colorScheme
-    Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { edit(entry) }.padding(vertical = 11.dp),
+    Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { edit(entry) }.padding(horizontal = 14.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
         IconBadge(if (income) Glyph.INCOME else Glyph.EXPENSE, emphasis = income)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -157,7 +174,8 @@ private fun LedgerRow(entry: Entry, tag: String, account: String?, edit: (Entry)
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         AmountText((if (income) "+" else "−") + currency(entry.cents),
-            if (income) colors.primary else colors.onSurface, Modifier.weight(0.68f, fill = false))
+            if (income) colors.primary else colors.onSurface, Modifier.weight(.70f),
+            style = RowNumber.copy(textAlign = TextAlign.End))
     }
 }
 
@@ -176,13 +194,7 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item("filters") {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                        Period.entries.forEachIndexed { index, option ->
-                            SegmentedButton(selected = period == option, onClick = { choosePeriod(option) },
-                                shape = SegmentedButtonDefaults.itemShape(index, Period.entries.size),
-                                icon = {}, label = { Text(option.title) })
-                        }
-                    }
+                    LedgerSegments(Period.entries, period, { it.title }, choosePeriod)
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         val previous = period.step(summary.start, -1)
                         IconButton(onClick = { chooseDay(previous) }, enabled = previous >= FIRST_DAY) {
@@ -235,22 +247,28 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
 
 @Composable
 private fun StatsCover(summary: PeriodStats) {
-    InkCard {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("期间结余", Modifier.weight(1f), color = CoverInk.copy(alpha = .77f), style = MaterialTheme.typography.labelLarge)
-            if (summary.inProgress) Text("截至当前", color = Lime, style = MaterialTheme.typography.labelMedium)
-        }
-        AmountText(currency(summary.net), CoverInk, style = HeroNumber)
-        if (summary.income + summary.expense > 0) {
-            val split = summary.income.toFloat() / (summary.income + summary.expense).toFloat()
-            Row(Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)).background(Clay)) {
-                Box(Modifier.fillMaxWidth(split).height(5.dp).background(Lime))
+    val colors = MaterialTheme.colorScheme
+    GroupCard {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("期间结余", Modifier.weight(1f), color = colors.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelLarge)
+                if (summary.inProgress) SummaryLabel("截至当前")
             }
-        }
-        Spacer(Modifier.height(5.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            CoverMetric("收入", summary.income, Modifier.weight(1f))
-            CoverMetric("支出", summary.expense, Modifier.weight(1f))
+            AmountText(currency(summary.net), modifier = Modifier.fillMaxWidth(), style = HeroNumber)
+            if (summary.income + summary.expense > 0) {
+                val fraction = summary.income.toFloat() / (summary.income + summary.expense).toFloat()
+                Box(Modifier.fillMaxWidth().padding(vertical = 7.dp).height(6.dp)
+                    .clip(RoundedCornerShape(3.dp)).background(colors.secondaryContainer)) {
+                    Box(Modifier.fillMaxWidth(fraction).height(6.dp).background(colors.primary))
+                }
+            } else {
+                Hairline()
+            }
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                SummaryMetric(Kind.INCOME, summary.income, Modifier.weight(1f))
+                SummaryMetric(Kind.EXPENSE, summary.expense, Modifier.weight(1f))
+            }
         }
     }
 }
@@ -259,18 +277,20 @@ private fun StatsCover(summary: PeriodStats) {
 private fun TagRank(total: TagTotal, kindTotal: Long, click: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val income = total.tag.kind == Kind.INCOME.name
-    Surface(onClick = click, shape = RoundedCornerShape(17.dp), color = colors.surfaceContainerLow) {
-        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Surface(onClick = click, shape = FieldShape, color = colors.surface,
+        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .68f))) {
+        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(total.tag.name, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
-                AmountText(currency(total.cents))
+                AmountText(currency(total.cents), modifier = Modifier.weight(.72f),
+                    style = RowNumber.copy(textAlign = TextAlign.End))
                 LineIcon(Glyph.RIGHT, color = colors.onSurfaceVariant, size = 16)
             }
             val fraction = total.cents.toFloat() / kindTotal.toFloat()
             Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(colors.outlineVariant)) {
                 Box(Modifier.fillMaxWidth(fraction.coerceIn(0f, 1f)).height(4.dp)
-                    .background(if (income) colors.primary else Clay))
+                    .background(if (income) colors.primary else colors.outline))
             }
         }
     }
@@ -327,10 +347,11 @@ fun TagDrillScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: 
         PageHeader(data.tags.firstOrNull { it.id == id }?.name ?: "标签流水", back)
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = PagePadding, vertical = 10.dp)) {
             item("summary") {
-                InkCard {
-                    Text(periodLabel(period, stat.start), color = CoverInk, style = MaterialTheme.typography.labelLarge)
-                    AmountText(currency(filtered.sumOf { it.cents }), CoverInk, style = HeroNumber)
-                    Text("${filtered.size} 笔", color = CoverInk, style = MaterialTheme.typography.bodySmall)
+                BalancePanel {
+                    val colors = MaterialTheme.colorScheme
+                    Text(periodLabel(period, stat.start), color = colors.onSurfaceVariant, style = MaterialTheme.typography.labelLarge)
+                    AmountText(currency(filtered.sumOf { it.cents }), modifier = Modifier.fillMaxWidth(), style = HeroNumber)
+                    Text("${filtered.size} 笔", color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
             }
             ledgerRows(filtered, data, today, edit)

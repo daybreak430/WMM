@@ -3,25 +3,25 @@ package com.wmm.ledger.ui
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.graphics.BitmapFactory
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -29,14 +29,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -48,19 +47,41 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-val PagePadding = 20.dp
-val CardShape = RoundedCornerShape(23.dp)
 val DateLabel: DateTimeFormatter = DateTimeFormatter.ofPattern("M月d日 EEE", Locale.SIMPLIFIED_CHINESE)
 val TimeLabel: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
 @Composable
-fun PageHeader(title: String, back: (() -> Unit)? = null, end: @Composable () -> Unit = {}) {
-    Row(Modifier.fillMaxWidth().height(62.dp).padding(start = if (back == null) PagePadding else 8.dp, end = PagePadding),
-        horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (back != null) IconButton(onClick = back) { LineIcon(Glyph.BACK, description = "返回") }
-        Text(title, Modifier.weight(1f), style = if (back == null) MaterialTheme.typography.headlineLarge
-            else MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        end()
+fun PageHeader(title: String, back: (() -> Unit)? = null, mark: Glyph? = null, centered: Boolean = false,
+    end: @Composable () -> Unit = {}) {
+    val colors = MaterialTheme.colorScheme
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 68.dp).padding(horizontal = PagePadding, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (back != null) {
+            IconButton(onClick = back, modifier = Modifier.size(48.dp)) {
+                Surface(
+                    modifier = Modifier.size(40.dp), shape = CircleShape, color = colors.surface,
+                    border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .65f)),
+                ) {
+                    Box(contentAlignment = Alignment.Center) { LineIcon(Glyph.BACK, description = "返回", size = 19) }
+                }
+            }
+        }
+        if (mark != null) {
+            Surface(
+                modifier = Modifier.size(38.dp), shape = FieldShape, color = colors.surface,
+                border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .50f)),
+            ) {
+                Box(contentAlignment = Alignment.Center) { LineIcon(mark, color = colors.primary, size = 21) }
+            }
+        }
+        Text(title, Modifier.weight(1f),
+            style = if (back == null) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge,
+            textAlign = if (centered) TextAlign.Center else TextAlign.Start,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (centered) Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { end() } else end()
     }
 }
 
@@ -70,27 +91,17 @@ fun UserAvatar(profile: Profile, onClick: () -> Unit, size: Int = 44, descriptio
         profile.avatar?.let { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() }
     }
     val colors = MaterialTheme.colorScheme
-    Surface(onClick = onClick, shape = CircleShape, color = colors.primaryContainer, modifier = Modifier.size(size.dp)) {
-        Box(contentAlignment = Alignment.Center) {
-            if (image == null) LineIcon(Glyph.PERSON, colors.onPrimaryContainer, description)
-            else Image(image, description, Modifier.size(size.dp), contentScale = ContentScale.Crop)
-        }
-    }
-}
-
-@Composable
-fun InkCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Surface(modifier.fillMaxWidth(), shape = CardShape, color = Cover, contentColor = CoverInk) {
-        Box {
-            Canvas(Modifier.matchParentSize()) {
-                // 低对比度的同心线让账本封面在大块纯色中留有一点质感。
-                for (ring in 0..5) {
-                    drawCircle(Lime.copy(alpha = 0.075f), size.width * (0.20f + ring * 0.055f),
-                        Offset(size.width * .97f, size.height * .76f),
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
-                }
+    IconButton(onClick = onClick, modifier = Modifier.size(maxOf(size, 48).dp)) {
+        Surface(
+            shape = CircleShape,
+            color = colors.surface,
+            modifier = Modifier.size(size.dp),
+            border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .75f)),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                if (image == null) LineIcon(Glyph.PERSON, colors.primary, description, size = 21)
+                else Image(image, description, Modifier.size(size.dp), contentScale = ContentScale.Crop)
             }
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(7.dp), content = content)
         }
     }
 }
@@ -98,9 +109,24 @@ fun InkCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -
 @Composable
 fun AmountText(amount: String, color: Color = MaterialTheme.colorScheme.onSurface,
     modifier: Modifier = Modifier, style: TextStyle = RowNumber) {
-    val displayStyle = if (amount.length > 13 && style == HeroNumber) style.copy(fontSize = 28.sp, lineHeight = 38.sp) else style
-    Text(amount, modifier, style = displayStyle, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    BasicText(
+        text = amount,
+        modifier = modifier,
+        style = style.copy(color = color),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        autoSize = TextAutoSize.StepBased(minFontSize = (if (style.fontSize.value > 30) 23 else 12).sp,
+            maxFontSize = style.fontSize, stepSize = 1.sp),
+    )
 }
+
+@Composable
+fun ledgerFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedContainerColor = MaterialTheme.colorScheme.surface,
+    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+    focusedBorderColor = MaterialTheme.colorScheme.primary,
+)
 
 @Composable
 fun SectionTitle(title: String, modifier: Modifier = Modifier, end: @Composable () -> Unit = {}) {
@@ -112,7 +138,7 @@ fun SectionTitle(title: String, modifier: Modifier = Modifier, end: @Composable 
 
 @Composable
 fun EmptyPanel(title: String, detail: String? = null, glyph: Glyph = Glyph.BOOK) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 29.dp),
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         IconBadge(glyph)
         Text(title, style = MaterialTheme.typography.titleMedium)
@@ -134,22 +160,19 @@ fun SettingsRow(title: String, description: String? = null, icon: Glyph? = null,
                 color = if (enabled) colors.onSurface else colors.onSurfaceVariant)
             if (description != null) Text(description, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
         }
-        if (end != null) Text(end, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant,
-            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(.45f, fill = false))
+        if (end != null) {
+            Box(Modifier.weight(.52f), contentAlignment = Alignment.CenterEnd) {
+                Text(end, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
         LineIcon(Glyph.RIGHT, colors.onSurfaceVariant, size = 17)
     }
 }
 
 @Composable
-fun GroupCard(content: @Composable ColumnScope.() -> Unit) {
-    Surface(shape = CardShape, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
-        Column(content = content)
-    }
-}
-
-@Composable
 fun Hairline(inset: Int = 0) = HorizontalDivider(
-    Modifier.padding(horizontal = inset.dp), color = MaterialTheme.colorScheme.outlineVariant,
+    Modifier.padding(horizontal = inset.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .78f),
 )
 
 @Composable
