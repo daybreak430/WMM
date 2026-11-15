@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:,">
+<title>WMM 账本样式卡</title>
+<style>
+:root {
+  color-scheme: light;
+  --blue: #2266B9; --blue-pressed: #1B5195; --on-blue: #FFFFFF; --blue-tint: #E4EFFF;
+  --ink: #121E32; --muted: #53647B; --quiet: #62748B; --page: #F4F7FB; --surface: #FFFFFF;
+  --canvas: #E9EFF7; --line: #DFE7F2; --sky: #D3E7FC; --sky-light: #F4FAFF;
+  --cover-from: #FFFFFF; --cover-to: #E7F2FF; --edge: #FFFFFF; --keyboard: #E6EDF7;
+  --danger: #AB3548; --disabled: #DCE6F2; --shadow-rgb: 22,58,107;
+  --hero: 650 44px/50px var(--font); --entry: 650 46px/54px var(--font);
+  --title: 650 22px/28px var(--font); --section: 650 18px/24px var(--font);
+  --row: 600 15px/21px var(--font); --metric: 650 15px/20px var(--font);
+  --body: 500 14px/20px var(--font); --button: 650 14px/20px var(--font); --small: 500 12px/17px var(--font);
+  --font: Roboto,"Noto Sans SC","PingFang SC",system-ui,sans-serif;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --blue: #8DBBFF; --blue-pressed: #73A8F5; --on-blue: #102440; --blue-tint: #243C5D;
+  --ink: #EDF4FF; --muted: #AEBDD0; --quiet: #93A6BF; --page: #111A29; --surface: #1B273A;
+  --canvas: #0C1420; --line: #34455E; --sky: #1C3654; --sky-light: #314860;
+  --cover-from: #233850; --cover-to: #1B2B41; --edge: #49617F; --keyboard: #152234;
+  --danger: #FFAFB7; --disabled: #2A3950; --shadow-rgb: 0,0,0;
+}
+* { box-sizing: border-box; }
+html { background: var(--canvas); }
+body { margin: 0; color: var(--ink); font: var(--body); }
+h1,h2,h3,p { margin: 0; }
+svg.icon { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.num { font-variant-numeric: tabular-nums lining-nums; white-space: nowrap; }
+.board { width: min(1180px, 100%); margin: 0 auto; padding: 25px 24px 32px; }
+.board-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 18px; }
+.board-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px 12px; }
+.board-title h1 { font: var(--title); }
+.board-title p { color: var(--muted); font: var(--small); }
+.switch { display: flex; gap: 4px; padding: 4px; background: var(--surface); border-radius: 14px; border: 1px solid var(--line); }
+.switch button { min-width: 48px; min-height: 38px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); cursor: pointer; font: var(--small); }
+.switch button[aria-pressed="true"] { background: var(--blue-tint); color: var(--blue); }
+.switch button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.samples { display: grid; grid-template-columns: 240px minmax(0, 393px) minmax(0, 393px); gap: 20px; align-items: start; justify-content: center; }
+.reference { padding: 18px 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
+.reference h2 { font: var(--section); margin-bottom: 12px; }
+.reference .group + .group { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.reference h3 { font: var(--small); color: var(--muted); margin-bottom: 10px; }
+.palette { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.color-chip { height: 30px; border: 1px solid var(--line); border-radius: 9px; background: var(--swatch); }
+.palette small { display: block; margin-top: 3px; font: var(--small); color: var(--muted); }
+.type-sample { font: var(--hero); font-size: clamp(25px, 7.5vw, 35px); line-height: 42px; letter-spacing: -1.3px; }
+.type-list { display: grid; gap: 7px; padding-top: 7px; color: var(--muted); font: var(--small); }
+.type-list span { color: var(--ink); font: var(--row); }
+.reference .entry-row { margin: 0; padding: 7px 0; grid-template-columns: 32px minmax(0, 1fr) auto; gap: 6px; }
+.reference .row-icon { width: 32px; height: 32px; }
+.reference .row-name, .reference .amount { font-size: 12px; line-height: 17px; }
+.caption { color: var(--muted); padding: 0 3px 8px; font: var(--small); }
+.phone { height: 836px; position: relative; display: flex; flex-direction: column; min-width: 0; overflow: hidden;
+  background: radial-gradient(ellipse 210px 115px at 78% 31px, var(--sky-light), transparent 100%), linear-gradient(180deg, var(--sky), var(--page) 280px);
+  border: 1px solid var(--edge); border-radius: 30px; box-shadow: 0 16px 36px rgba(var(--shadow-rgb), .10); }
+.status { height: 26px; flex: none; padding: 6px 22px 1px; display: flex; align-items: center; justify-content: space-between; font: var(--small); color: var(--muted); }
+.status-shapes { display: flex; align-items: center; gap: 4px; }
+.signal { display: flex; align-items: end; gap: 1.5px; height: 9px; }
+.signal span { background: currentColor; border-radius: 1px; width: 2px; }
+.signal span:nth-child(1) { height: 3px; } .signal span:nth-child(2) { height: 5px; }
+.signal span:nth-child(3) { height: 7px; } .signal span:nth-child(4) { height: 9px; }
+.battery { width: 13px; height: 8px; border: 1px solid currentColor; border-radius: 2px; padding: 1px; }
+.battery::before { content: ""; display: block; width: 100%; height: 100%; background: currentColor; border-radius: 1px; }
+.app-header { flex: none; min-height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; gap: 8px; }
+.app-header h2 { font: var(--title); }
+.app-header.center { display: grid; grid-template-columns: 40px 1fr 40px; text-align: center; }
+.app-start { display: flex; align-items: center; gap: 9px; }
+.icon-button { width: 40px; height: 40px; display: grid; place-items: center; color: var(--blue); background: var(--surface); border: 1px solid var(--line); border-radius: 50%; }
+.logo { width: 36px; height: 36px; display: grid; place-items: center; background: var(--surface); color: var(--blue); border: 1px solid var(--edge); border-radius: 11px; }
+.phone-content { flex: 1 1 auto; min-height: 0; overflow: auto; scrollbar-width: none; padding: 8px 20px 12px; }
+.cover { position: relative; isolation: isolate; padding: 20px; border-radius: 24px; border: 1px solid var(--edge);
+  background: linear-gradient(125deg,var(--cover-from) 2%,var(--cover-from) 28%,var(--cover-to) 100%);
+  box-shadow: 0 8px 22px rgba(var(--shadow-rgb),.08); }
+.cover::after { content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: -1;
+  background: radial-gradient(ellipse at 91% 0%,var(--sky-light),transparent 56%); opacity: .6; }
+.cover-top, .section-row, .metric-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cover-top { color: var(--muted); }
+.month { display: flex; align-items: center; gap: 4px; padding: 4px 7px; border: 1px solid var(--line); border-radius: 8px; font: var(--small); background: var(--surface); }
+.month .icon { width: 15px; height: 15px; color: var(--blue); }
+.hero { margin-top: 7px; font: var(--hero); letter-spacing: -2px; }
+.metrics { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); margin-top: 15px; padding-top: 12px; border-top: 1px solid var(--line); }
+.metric + .metric { border-left: 1px solid var(--line); padding-left: 15px; }
+.metric-head { justify-content: start; color: var(--muted); font: var(--small); gap: 4px; }
+.metric-head .icon { width: 15px; height: 15px; }
+.metric strong { display: block; margin-top: 3px; font: var(--metric); }
+.income { color: var(--blue); }
+.section-row { margin: 19px 0 10px; }
+.section-row h3 { font: var(--section); }
+.text-link { color: var(--blue); display: flex; align-items: center; gap: 2px; font: var(--small); }
+.text-link .icon { width: 14px; height: 14px; }
+.date-group + .date-group { margin-top: 12px; }
+.date-label { padding: 0 2px 6px; color: var(--muted); font: var(--small); }
+.group-card { border: 1px solid var(--line); border-radius: 18px; background: var(--surface); overflow: hidden; }
+.entry-row { position: relative; margin: 0 14px; display: grid; grid-template-columns: 36px minmax(0,1fr) auto; min-height: 60px; gap: 10px; align-items: center; }
+.entry-row + .entry-row::before { content: ""; position: absolute; top: 0; left: 46px; right: 0; border-top: 1px solid var(--line); }
+.row-icon { display: grid; place-items: center; width: 36px; height: 36px; color: var(--muted); background: var(--page); border-radius: 11px; }
+.row-icon .icon { width: 18px; height: 18px; }
+.row-detail { display: grid; min-width: 0; align-content: center; gap: 2px; }
+.row-name, .amount { font: var(--row); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-meta { color: var(--muted); font: var(--small); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.amount { display: flex; align-items: center; justify-content: end; text-align: right; }
+.footer { flex: none; background: var(--page); padding: 8px 20px; }
+.cta { display: flex; min-height: 50px; align-items: center; justify-content: center; gap: 7px; border-radius: 14px; background: var(--blue); color: var(--on-blue); font: var(--button); }
+.cta .icon { width: 18px; height: 18px; }
+.nav { display: grid; grid-template-columns: repeat(3,1fr); flex: none; padding: 5px 12px; gap: 8px; border-top: 1px solid var(--line); background: var(--surface); }
+.tab { min-height: 47px; display: grid; place-content: center; justify-items: center; gap: 1px; color: var(--muted); font: var(--small); }
+.tab.active { color: var(--blue); }
+.tab-mark { display: grid; place-items: center; width: 40px; height: 26px; border-radius: 10px; }
+.tab.active .tab-mark { background: var(--blue-tint); }
+.gesture { flex: none; height: 16px; display: grid; place-items: center; background: var(--surface); }
+.gesture::after { content: ""; width: 104px; height: 4px; border-radius: 4px; background: var(--ink); opacity: .68; }
+.editor-content { padding-top: 6px; }
+.segments { height: 44px; display: grid; grid-template-columns: repeat(2,1fr); gap: 3px; padding: 3px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; color: var(--muted); }
+.seg { display: grid; place-items: center; border-radius: 11px; }
+.seg.active { background: var(--blue-tint); color: var(--blue); font: var(--button); }
+.entry-figure { margin-top: 14px; padding-bottom: 12px; text-align: center; border-bottom: 1px solid var(--line); }
+.entry-figure p { font: var(--small); color: var(--muted); }
+.entry-figure strong { display: block; font: var(--entry); letter-spacing: -2px; }
+.entry-figure strong span { font-size: 28px; line-height: 34px; font-weight: 600; letter-spacing: 0; }
+.tags-title { margin: 14px 0 7px; font: var(--section); }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { min-height: 34px; padding: 0 9px; display: inline-flex; align-items: center; gap: 3px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font: var(--small); }
+.tag.active { color: var(--blue); border-color: var(--blue-tint); background: var(--blue-tint); }
+.tag .icon { width: 14px; height: 14px; }
+.fields { margin-top: 14px; padding: 0 14px; }
+.field-row { min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 6px; font: var(--body); }
+.field-row + .field-row { border-top: 1px solid var(--line); }
+.field-label, .field-value { display: flex; align-items: center; gap: 5px; }
+.field-label .icon, .field-value .icon { width: 16px; height: 16px; color: var(--quiet); }
+.field-value { color: var(--muted); text-align: right; font: var(--small); }
+.keys { flex: none; border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; padding: 8px 14px 2px; background: var(--keyboard); }
+.key { min-height: 36px; display: grid; place-content: center; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: var(--row); }
+.key .icon { width: 17px; height: 17px; }
+.gesture.keyboard-gesture { background: var(--keyboard); }
+@media (max-width: 1040px) {
+  .samples { grid-template-columns: repeat(2,minmax(0,393px)); }
+  .reference { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; }
+  .reference h2 { grid-column: 1 / -1; margin-bottom: 0; }
+  .reference .group + .group { margin: 0; padding: 0; border: 0; }
+}
+@media (max-width: 640px) {
+  .board { padding: 16px 12px 24px; }
+  .board-header { align-items: start; }
+  .board-title { display: block; }
+  .board-title p { margin-top: 3px; }
+  .samples { grid-template-columns: minmax(0,393px); gap: 16px; }
+  .reference { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .reference .examples { grid-column: 1 / -1; }
+}
+@media (max-width: 360px) {
+  .reference { grid-template-columns: minmax(0,1fr); }
+  .status { padding-inline: 16px; }
+  .app-header, .phone-content, .footer { padding-inline: 16px; }
+  .cover { padding-inline: 16px; }
+  .tag { padding-inline: 7px; }
+}
+</style>
+</head>
+<body>
+<svg class="sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+<symbol id="arrow_down_left" viewBox="0 0 24 24"><path d="M17 7 7 17"/><path d="M17 17H7V7"/></symbol>
+<symbol id="arrow_left" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></symbol>
+<symbol id="arrow_up_right" viewBox="0 0 24 24"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></symbol>
+<symbol id="calendar_days" viewBox="0 0 24 24"><path d="M8 2v3"/><path d="M16 2v3"/><path d="M5 3H19A2 2 0 0 1 21 5V19A2 2 0 0 1 19 21H5A2 2 0 0 1 3 19V5A2 2 0 0 1 5 3Z"/><path d="M3 9h18"/><path d="M8 13h.01"/><path d="M12 13h.01"/><path d="M16 13h.01"/><path d="M8 17h.01"/><path d="M12 17h.01"/><path d="M16 17h.01"/></symbol>
+<symbol id="chart_no_axes_column_increasing" viewBox="0 0 24 24"><path d="M5 21v-6"/><path d="M12 21V9"/><path d="M19 21V3"/></symbol>
+<symbol id="chevron_right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+<symbol id="notebook_pen" viewBox="0 0 24 24"><path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4"/><path d="M2 10h4"/><path d="M2 14h4"/><path d="M2 18h4"/><path d="M21.378 5.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/></symbol>
+<symbol id="pencil" viewBox="0 0 24 24"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></symbol>
+<symbol id="plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+<symbol id="user_round" viewBox="0 0 24 24"><path d="M17 8A5 5 0 1 0 7 8A5 5 0 1 0 17 8Z"/><path d="M20 21a8 8 0 0 0-16 0"/></symbol>
+<symbol id="wallet" viewBox="0 0 24 24"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></symbol>
+</svg>
+<main class="board">
+  <header class="board-header">
+    <div class="board-title">
+      <h1>WMM 样式卡</h1>
+      <p>账本与记一笔 · 样例数据</p>
+    </div>
+    <div class="switch" role="group" aria-label="显示主题">
+      <button type="button" data-theme-option="light" aria-pressed="true">浅色</button>
+      <button type="button" data-theme-option="dark" aria-pressed="false">深色</button>
+    </div>
+  </header>
+  <div class="samples">
+    <aside class="reference" aria-label="设计样例">
+      <h2>颜色与组件</h2>
+      <div class="group">
+        <h3>色板</h3>
+        <div class="palette">
+          <div><div class="color-chip" style="--swatch:var(--blue)"></div><small>主蓝</small></div>
+          <div><div class="color-chip" style="--swatch:var(--sky)"></div><small>淡蓝光</small></div>
+          <div><div class="color-chip" style="--swatch:var(--surface)"></div><small>卡面</small></div>
+          <div><div class="color-chip" style="--swatch:var(--ink)"></div><small>主文字</small></div>
+        </div>
+      </div>
+      <div class="group">
+        <h3>文字阶梯</h3>
+        <div class="type-sample num">¥12,921.60</div>
+        <div class="type-list">
+          <div><span>最近流水</span>　区块标题</div>
+          <div><span>读书与学习用品</span>　流水名称</div>
+          <div>19:13 · 储蓄卡 · 两本新书</div>
+        </div>
+      </div>
+      <div class="group examples">
+        <h3>主按钮</h3>
+        <div class="cta"><svg class="icon" aria-hidden="true"><use href="#plus"/></svg>记一笔</div>
+      </div>
+    </aside>
+
+    <section aria-labelledby="home-caption">
+      <h2 id="home-caption" class="caption">P01　账本 · 含流水</h2>
+      <div class="phone">
+        <div class="status" aria-hidden="true"><span>21:30</span><div class="status-shapes"><span class="signal"><span></span><span></span><span></span><span></span></span><span>5G</span><span class="battery"></span></div></div>
+        <div class="app-header">
+          <div class="app-start"><span class="logo"><svg class="icon" aria-hidden="true"><use href="#notebook_pen"/></svg></span><h2>账本</h2></div>
+          <span class="icon-button" aria-label="个人设置"><svg class="icon" aria-hidden="true"><use href="#user_round"/></svg></span>
+        </div>
+        <div class="phone-content">
+          <div class="cover">
+            <div class="cover-top"><span>本月结余</span><span class="month num"><svg class="icon" aria-hidden="true"><use href="#calendar_days"/></svg>2026.11</span></div>
+            <div class="hero num">¥12,921.60</div>
+            <div class="metrics">
+              <div class="metric"><div class="metric-head"><svg class="icon income" aria-hidden="true"><use href="#arrow_down_left"/></svg>收入</div><strong class="income num">¥18,600.00</strong></div>
+              <div class="metric"><div class="metric-head"><svg class="icon" aria-hidden="true"><use href="#arrow_up_right"/></svg>支出</div><strong class="num">¥5,678.40</strong></div>
+            </div>
+          </div>
+          <div class="section-row"><h3>最近流水</h3><span class="text-link">收支统计<svg class="icon" aria-hidden="true"><use href="#chevron_right"/></svg></span></div>
+          <div class="date-group">
+            <div class="date-label">今天</div>
+            <div class="group-card">
+              <div class="entry-row"><span class="row-icon"><svg class="icon" aria-hidden="true"><use href="#arrow_up_right"/></svg></span><div class="row-detail"><span class="row-name">咖啡</span><span class="row-meta">20:55 · 储蓄卡 · 燕麦拿铁</span></div><span class="amount num">−¥28.00</span></div>
+              <div class="entry-row"><span class="row-icon"><svg class="icon" aria-hidden="true"><use href="#arrow_up_right"/></svg></span><div class="row-detail"><span class="row-name">日常</span><span class="row-meta">20:00 · 储蓄卡 · 周末采购</span></div><span class="amount num">−¥168.90</span></div>
+              <div class="entry-row"><span class="row-icon"><svg class="icon" aria-hidden="true"><use href="#arrow_up_right"/></svg></span><div class="row-detail"><span class="row-name">电影</span><span class="row-meta">18:51 · 储蓄卡 · 周末电影</span></div><span class="amount num">−¥68.00</span></div>
+            </div>
+          </div>
+          <div class="date-group">
+            <div class="date-label">昨天</div>
+            <div class="group-card">
+              <div class="entry-row"><span class="row-icon"><svg class="icon" aria-hidden="true"><use href="#arrow_up_right"/></svg></span><div class="row-detail"><span class="row-name">日常</span><span class="row-meta">22:43 · 交通卡 · 地铁</span></div><span class="amount num">−¥6.50</span></div>
+              <div class="entry-row"><span class="row-icon"><svg class="icon" aria-hidden="true"><use href="#arrow_up_right"/></svg></span><div class="row-detail"><span class="row-name">读书与学习用品</span><span class="row-meta">19:13 · 储蓄卡 · 两本新书</span></div><span class="amount num">−¥127.00</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="footer"><div class="cta"><svg class="icon" aria-hidden="true"><use href="#plus"/></svg>记一笔</div></div>
+        <div class="nav">
+          <div class="tab active"><span class="tab-mark"><svg class="icon" aria-hidden="true"><use href="#notebook_pen"/></svg></span>账本</div>
+          <div class="tab"><span class="tab-mark"><svg class="icon" aria-hidden="true"><use href="#chart_no_axes_column_increasing"/></svg></span>统计</div>
+          <div class="tab"><span class="tab-mark"><svg class="icon" aria-hidden="true"><use href="#wallet"/></svg></span>资产</div>
+        </div>
+        <div class="gesture" aria-hidden="true"></div>
+      </div>
+    </section>
+
+    <section aria-labelledby="entry-caption">
+      <h2 id="entry-caption" class="caption">P02　记一笔 · 数字键盘弹出</h2>
+      <div class="phone">
+        <div class="status" aria-hidden="true"><span>21:30</span><div class="status-shapes"><span class="signal"><span></span><span></span><span></span><span></span></span><span>5G</span><span class="battery"></span></div></div>
+        <div class="app-header center">
+          <span class="icon-button" aria-label="返回"><svg class="icon" aria-hidden="true"><use href="#arrow_left"/></svg></span><h2>记一笔</h2>
+        </div>
+        <div class="phone-content editor-content">
+          <div class="segments"><span class="seg active">支出</span><span class="seg">收入</span></div>
+          <div class="entry-figure"><p>金额</p><strong class="num"><span>¥ </span>38.50</strong></div>
+          <h3 class="tags-title">标签</h3>
+          <div class="tags">
+            <span class="tag active">日常</span><span class="tag">咖啡</span><span class="tag">电影</span><span class="tag">房租</span>
+            <span class="tag">读书与学习用品</span><span class="tag"><svg class="icon" aria-hidden="true"><use href="#plus"/></svg>新建标签</span>
+          </div>
+          <div class="group-card fields">
+            <div class="field-row"><span class="field-label"><svg class="icon" aria-hidden="true"><use href="#wallet"/></svg>账户</span><span class="field-value">不关联<svg class="icon" aria-hidden="true"><use href="#chevron_right"/></svg></span></div>
+            <div class="field-row"><span class="field-label"><svg class="icon" aria-hidden="true"><use href="#calendar_days"/></svg>日期时间</span><span class="field-value num">2026/11/15　21:30<svg class="icon" aria-hidden="true"><use href="#chevron_right"/></svg></span></div>
+            <div class="field-row"><span class="field-label"><svg class="icon" aria-hidden="true"><use href="#pencil"/></svg>备注</span><span class="field-value">便利店补货</span></div>
+          </div>
+        </div>
+        <div class="footer"><div class="cta">保存流水</div></div>
+        <div class="keys num" aria-label="模拟数字键盘">
+          <span class="key">1</span><span class="key">2</span><span class="key">3</span>
+          <span class="key">4</span><span class="key">5</span><span class="key">6</span>
+          <span class="key">7</span><span class="key">8</span><span class="key">9</span>
+          <span class="key">.</span><span class="key">0</span><span class="key"><svg class="icon" aria-label="退格"><use href="#arrow_left"/></svg></span>
+        </div>
+        <div class="gesture keyboard-gesture" aria-hidden="true"></div>
+      </div>
+    </section>
+  </div>
+</main>
+<script>
+  const themes = document.querySelectorAll('[data-theme-option]');
+  themes.forEach(button => {
+    button.addEventListener('click', () => {
+      document.documentElement.dataset.theme = button.dataset.themeOption;
+      themes.forEach(option => option.setAttribute('aria-pressed', String(option === button)));
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,971 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:,">
+<title>WMM · 账本 UI Demo</title>
+<style>
+:root {
+  color-scheme: light;
+  --blue: #2266B9; --blue-pressed: #1B5195; --on-blue: #FFFFFF; --blue-tint: #E4EFFF;
+  --ink: #121E32; --muted: #53647B; --quiet: #62748B; --page: #F4F7FB; --surface: #FFFFFF;
+  --canvas: #E9EFF7; --line: #DFE7F2; --sky: #D3E7FC; --sky-light: #F4FAFF;
+  --cover-from: #FFFFFF; --cover-to: #E7F2FF; --edge: #FFFFFF; --keyboard: #E6EDF7;
+  --danger: #AB3548; --disabled: #DCE6F2; --shadow-rgb: 22,58,107;
+  --hero: 650 44px/50px var(--font); --entry: 650 46px/54px var(--font);
+  --title: 650 22px/28px var(--font); --section: 650 18px/24px var(--font);
+  --row: 600 15px/21px var(--font); --metric: 650 15px/20px var(--font);
+  --body: 500 14px/20px var(--font); --button: 650 14px/20px var(--font); --small: 500 12px/17px var(--font);
+  --font: Roboto,"Noto Sans SC","PingFang SC",system-ui,sans-serif;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --blue: #8DBBFF; --blue-pressed: #73A8F5; --on-blue: #102440; --blue-tint: #243C5D;
+  --ink: #EDF4FF; --muted: #AEBDD0; --quiet: #93A6BF; --page: #111A29; --surface: #1B273A;
+  --canvas: #0C1420; --line: #34455E; --sky: #1C3654; --sky-light: #314860;
+  --cover-from: #233850; --cover-to: #1B2B41; --edge: #49617F; --keyboard: #152234;
+  --danger: #FFAFB7; --disabled: #2A3950; --shadow-rgb: 0,0,0;
+}
+* { box-sizing: border-box; }
+html { background: var(--canvas); }
+body { margin: 0; color: var(--ink); font: var(--body); }
+h1,h2,h3,p { margin: 0; }
+svg.icon { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.num { font-variant-numeric: tabular-nums lining-nums; white-space: nowrap; }
+.phone { height: 836px; position: relative; display: flex; flex-direction: column; min-width: 0; overflow: hidden;
+  background: radial-gradient(ellipse 210px 115px at 78% 31px, var(--sky-light), transparent 100%), linear-gradient(180deg, var(--sky), var(--page) 280px);
+  border: 1px solid var(--edge); border-radius: 30px; box-shadow: 0 16px 36px rgba(var(--shadow-rgb), .10); }
+.status { height: 26px; flex: none; padding: 6px 22px 1px; display: flex; align-items: center; justify-content: space-between; font: var(--small); color: var(--muted); }
+.status-shapes { display: flex; align-items: center; gap: 4px; }
+.signal { display: flex; align-items: end; gap: 1.5px; height: 9px; }
+.signal span { background: currentColor; border-radius: 1px; width: 2px; }
+.signal span:nth-child(1) { height: 3px; } .signal span:nth-child(2) { height: 5px; }
+.signal span:nth-child(3) { height: 7px; } .signal span:nth-child(4) { height: 9px; }
+.battery { width: 13px; height: 8px; border: 1px solid currentColor; border-radius: 2px; padding: 1px; }
+.battery::before { content: ""; display: block; width: 100%; height: 100%; background: currentColor; border-radius: 1px; }
+.app-header { flex: none; min-height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; gap: 8px; }
+.app-header h2 { font: var(--title); }
+.app-header.center { display: grid; grid-template-columns: 40px 1fr 40px; text-align: center; }
+.app-start { display: flex; align-items: center; gap: 9px; }
+.icon-button { width: 40px; height: 40px; display: grid; place-items: center; color: var(--blue); background: var(--surface); border: 1px solid var(--line); border-radius: 50%; }
+.logo { width: 36px; height: 36px; display: grid; place-items: center; background: var(--surface); color: var(--blue); border: 1px solid var(--edge); border-radius: 11px; }
+.phone-content { flex: 1 1 auto; min-height: 0; overflow: auto; scrollbar-width: none; padding: 8px 20px 12px; }
+.cover { position: relative; isolation: isolate; padding: 20px; border-radius: 24px; border: 1px solid var(--edge);
+  background: linear-gradient(125deg,var(--cover-from) 2%,var(--cover-from) 28%,var(--cover-to) 100%);
+  box-shadow: 0 8px 22px rgba(var(--shadow-rgb),.08); }
+.cover::after { content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: -1;
+  background: radial-gradient(ellipse at 91% 0%,var(--sky-light),transparent 56%); opacity: .6; }
+.cover-top, .section-row, .metric-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cover-top { color: var(--muted); }
+.month { display: flex; align-items: center; gap: 4px; padding: 4px 7px; border: 1px solid var(--line); border-radius: 8px; font: var(--small); background: var(--surface); }
+.month .icon { width: 15px; height: 15px; color: var(--blue); }
+.hero { margin-top: 7px; font: var(--hero); letter-spacing: -2px; }
+.metrics { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); margin-top: 15px; padding-top: 12px; border-top: 1px solid var(--line); }
+.metric + .metric { border-left: 1px solid var(--line); padding-left: 15px; }
+.metric-head { justify-content: start; color: var(--muted); font: var(--small); gap: 4px; }
+.metric-head .icon { width: 15px; height: 15px; }
+.metric strong { display: block; margin-top: 3px; font: var(--metric); }
+.income { color: var(--blue); }
+.section-row { margin: 19px 0 10px; }
+.section-row h3 { font: var(--section); }
+.text-link { color: var(--blue); display: flex; align-items: center; gap: 2px; font: var(--small); }
+.text-link .icon { width: 14px; height: 14px; }
+.date-group + .date-group { margin-top: 12px; }
+.date-label { padding: 0 2px 6px; color: var(--muted); font: var(--small); }
+.group-card { border: 1px solid var(--line); border-radius: 18px; background: var(--surface); overflow: hidden; }
+.entry-row { position: relative; margin: 0 14px; display: grid; grid-template-columns: 36px minmax(0,1fr) auto; min-height: 60px; gap: 10px; align-items: center; }
+.entry-row + .entry-row::before { content: ""; position: absolute; top: 0; left: 46px; right: 0; border-top: 1px solid var(--line); }
+.row-icon { display: grid; place-items: center; width: 36px; height: 36px; color: var(--muted); background: var(--page); border-radius: 11px; }
+.row-icon .icon { width: 18px; height: 18px; }
+.row-detail { display: grid; min-width: 0; align-content: center; gap: 2px; }
+.row-name, .amount { font: var(--row); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-meta { color: var(--muted); font: var(--small); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.amount { display: flex; align-items: center; justify-content: end; text-align: right; }
+.footer { flex: none; background: var(--page); padding: 8px 20px; }
+.cta { display: flex; min-height: 50px; align-items: center; justify-content: center; gap: 7px; border-radius: 14px; background: var(--blue); color: var(--on-blue); font: var(--button); }
+.cta .icon { width: 18px; height: 18px; }
+.nav { display: grid; grid-template-columns: repeat(3,1fr); flex: none; padding: 5px 12px; gap: 8px; border-top: 1px solid var(--line); background: var(--surface); }
+.tab { min-height: 47px; display: grid; place-content: center; justify-items: center; gap: 1px; color: var(--muted); font: var(--small); }
+.tab.active { color: var(--blue); }
+.tab-mark { display: grid; place-items: center; width: 40px; height: 26px; border-radius: 10px; }
+.tab.active .tab-mark { background: var(--blue-tint); }
+.gesture { flex: none; height: 16px; display: grid; place-items: center; background: var(--surface); }
+.gesture::after { content: ""; width: 104px; height: 4px; border-radius: 4px; background: var(--ink); opacity: .68; }
+.editor-content { padding-top: 6px; }
+.segments { height: 44px; display: grid; grid-template-columns: repeat(2,1fr); gap: 3px; padding: 3px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; color: var(--muted); }
+.seg { display: grid; place-items: center; border-radius: 11px; }
+.seg.active { background: var(--blue-tint); color: var(--blue); font: var(--button); }
+.entry-figure { margin-top: 14px; padding-bottom: 12px; text-align: center; border-bottom: 1px solid var(--line); }
+.entry-figure p { font: var(--small); color: var(--muted); }
+.entry-figure strong { display: block; font: var(--entry); letter-spacing: -2px; }
+.entry-figure strong span { font-size: 28px; line-height: 34px; font-weight: 600; letter-spacing: 0; }
+.tags-title { margin: 14px 0 7px; font: var(--section); }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { min-height: 34px; padding: 0 9px; display: inline-flex; align-items: center; gap: 3px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font: var(--small); }
+.tag.active { color: var(--blue); border-color: var(--blue-tint); background: var(--blue-tint); }
+.tag .icon { width: 14px; height: 14px; }
+.fields { margin-top: 14px; padding: 0 14px; }
+.field-row { min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 6px; font: var(--body); }
+.field-row + .field-row { border-top: 1px solid var(--line); }
+.field-label, .field-value { display: flex; align-items: center; gap: 5px; }
+.field-label .icon, .field-value .icon { width: 16px; height: 16px; color: var(--quiet); }
+.field-value { color: var(--muted); text-align: right; font: var(--small); }
+.keys { flex: none; border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; padding: 8px 14px 2px; background: var(--keyboard); }
+.key { min-height: 36px; display: grid; place-content: center; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: var(--row); }
+.key .icon { width: 17px; height: 17px; }
+.gesture.keyboard-gesture { background: var(--keyboard); }
+button,input { font: inherit; color: inherit; }
+button { border: 0; padding: 0; cursor: pointer; }
+button:disabled { cursor: default; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+a { color: var(--blue); }
+[hidden] { display: none !important; }
+.shell {
+  display: grid;
+  grid-template-columns: minmax(180px,252px) max-content minmax(180px,252px);
+  align-items: start;
+  justify-content: center;
+  gap: 24px;
+  padding: 22px 24px;
+  min-height: 100dvh;
+}
+.panel {
+  padding: 19px 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+}
+.panel h1 { font: var(--title); }
+.panel h2 { font: var(--section); }
+.panel p { color: var(--muted); font: var(--small); margin-top: 5px; }
+.panel .control-group { margin-top: 16px; }
+.step-list { display: grid; gap: 6px; margin-top: 14px; }
+.step {
+  text-align: left;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 10px;
+  min-height: 52px;
+  display: grid;
+  gap: 2px;
+}
+.step strong { font: var(--button); }
+.step span { color: var(--muted); font: var(--small); }
+.step[aria-current="step"] { color: var(--blue); background: var(--blue-tint); border-color: var(--blue-tint); }
+.panel-controls { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin-top: 12px; }
+.secondary {
+  display: grid;
+  place-items: center;
+  min-height: 44px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  font: var(--small);
+  text-align: center;
+}
+.secondary:hover, .step:hover { border-color: var(--blue); }
+.secondary:disabled { opacity: .64; }
+.theme-options button[aria-pressed="true"] { background: var(--blue-tint); border-color: var(--blue-tint); color: var(--blue); }
+.stage { width: calc(393px * var(--scale, 1)); height: calc(836px * var(--scale, 1)); }
+.phone {
+  width: 393px;
+  height: 836px;
+  transform: scale(var(--scale, 1));
+  transform-origin: top left;
+}
+.app-view { display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; }
+.app-view.arriving { animation: appear 220ms ease-out; }
+@keyframes appear { from { opacity: .64; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+button.entry-row { width: calc(100% - 28px); background: transparent; text-align: left; }
+button.text-link, button.tab, button.field-row { background: transparent; }
+button.text-link { min-height: 44px; margin-block: -10px; }
+button.icon-button { position: relative; }
+button.icon-button::after { content: ""; position: absolute; inset: -3px; }
+button.icon-button.danger { color: var(--danger); }
+button.tab { border-radius: 10px; }
+button.tag { position: relative; }
+button.tag::after { content: ""; position: absolute; inset: -5px 0; }
+button.cta { width: 100%; }
+button.cta:active { background: var(--blue-pressed); transform: scale(.98); }
+button.cta { transition: transform 100ms; }
+button.cta:disabled { background: var(--disabled); color: var(--muted); transform: none; }
+button.seg { background: transparent; }
+button.seg.active { background: var(--blue-tint); color: var(--blue); }
+button.field-row { width: 100%; min-height: 44px; text-align: left; }
+.field-value { min-width: 0; }
+.field-value .field-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.editor-content .tags { row-gap: 10px; }
+.amount-field { display: flex; justify-content: center; align-items: baseline; gap: 5px; max-width: 100%; }
+.amount-field > span { font: 600 28px/34px var(--font); white-space: nowrap; }
+.amount-input {
+  width: min(var(--amount-width, 110px),calc(100% - 38px));
+  min-width: 0;
+  padding: 0 0 1px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  caret-color: var(--blue);
+  font: var(--entry);
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -2px;
+  text-align: center;
+}
+.amount-input.long-value { font-size: 30px; }
+.amount-input::placeholder { color: var(--quiet); opacity: 1; }
+.amount-input:focus { outline: 0; }
+.entry-figure:focus-within { border-bottom-color: var(--blue); }
+.entry-figure .error, .form-error { color: var(--danger); font: var(--small); }
+.entry-figure .error { margin-top: 5px; }
+.hero.long-value { font-size: 30px; letter-spacing: -1px; }
+.empty { padding: 22px 14px; text-align: center; }
+.empty .row-icon { margin: 0 auto 9px; }
+.empty p { font: var(--row); }
+button.key { width: 100%; }
+button.key:active { background: var(--blue-tint); }
+.sheet-mask {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  background: rgba(var(--shadow-rgb),.35);
+  display: flex;
+  align-items: end;
+}
+.sheet {
+  width: 100%;
+  max-height: 88%;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 22px 22px 0 0;
+  background: var(--surface);
+  padding: 18px 20px max(18px,env(safe-area-inset-bottom));
+  box-shadow: 0 12px 32px rgba(var(--shadow-rgb),.18);
+  animation: slide-in 260ms ease-out;
+}
+@keyframes slide-in { from { transform: translateY(24px); opacity: .45; } to { transform: translateY(0); opacity: 1; } }
+.sheet h3 { font: var(--section); margin-bottom: 10px; }
+.sheet p { color: var(--muted); }
+.sheet form { display: grid; gap: 8px; }
+.sheet label { display: grid; gap: 4px; color: var(--muted); font: var(--small); }
+.sheet input, .sheet textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  background: var(--page);
+  border-radius: 10px;
+  padding: 8px 10px;
+  color: var(--ink);
+  font: var(--body);
+}
+.sheet textarea { resize: vertical; }
+.sheet-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.sheet-actions .secondary { min-height: 50px; font: var(--button); border-radius: 14px; }
+.sheet-actions .danger { color: var(--danger); border-radius: 14px; background: var(--page); }
+.options { display: grid; gap: 6px; }
+.options button { text-align: left; padding: 8px 12px; min-height: 44px; border-radius: 10px; background: var(--page); }
+.options button[aria-pressed="true"] { background: var(--blue-tint); color: var(--blue); }
+.toast {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 137px;
+  z-index: 5;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px 14px;
+  box-shadow: 0 12px 32px rgba(var(--shadow-rgb),.18);
+}
+@media (max-width: 880px) {
+  .shell { display: block; min-height: 0; padding: 0; }
+  .panel, .desktop-status, .gesture, .keys { display: none; }
+  .stage { width: 100%; height: auto; }
+  .phone {
+    width: 100%;
+    height: var(--mobile-height,100dvh);
+    min-height: 280px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    transform: none;
+  }
+  .app-header { padding-top: env(safe-area-inset-top); }
+  .nav, .editor-footer { padding-bottom: max(8px,env(safe-area-inset-bottom)); }
+  .amount-input, .sheet input, .sheet textarea { scroll-margin: 12px; }
+}
+@media (max-width: 360px) {
+  .app-header, .phone-content, .footer { padding-inline: 16px; }
+  .cover { padding-inline: 16px; }
+  .tag { padding-inline: 7px; }
+  .entry-row { grid-template-columns: 32px minmax(0,1fr) auto; gap: 8px; }
+  .row-icon { width: 32px; height: 32px; }
+  .hero { font-size: 40px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0ms !important; transition-duration: 0ms !important; }
+}
+.demo-mobile-mark { display: none; }
+@media (max-width: 880px) {
+  .demo-mobile-mark { display: block; padding: max(5px,env(safe-area-inset-top)) 20px 0; color: var(--muted); font: var(--small); }
+  .app-header { padding-top: 0; }
+}
+</style>
+</head>
+<body>
+<!-- Lucide 图标许可
+ISC License
+
+Copyright (c) 2026 Lucide Icons and Contributors
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+—-
+
+The following Lucide icons are derived from the Feather project:
+
+airplay, alert-circle, alert-octagon, alert-triangle, aperture, arrow-down-circle, arrow-down-left, arrow-down-right, arrow-down, arrow-left-circle, arrow-left, arrow-right-circle, arrow-right, arrow-up-circle, arrow-up-left, arrow-up-right, arrow-up, at-sign, calendar, cast, check, chevron-down, chevron-left, chevron-right, chevron-up, chevrons-down, chevrons-left, chevrons-right, chevrons-up, circle, clipboard, clock, code, columns, command, compass, corner-down-left, corner-down-right, corner-left-down, corner-left-up, corner-right-down, corner-right-up, corner-up-left, corner-up-right, crosshair, database, divide-circle, divide-square, dollar-sign, download, external-link, feather, frown, hash, headphones, help-circle, info, italic, key, layout, life-buoy, link-2, link, loader, lock, log-in, log-out, maximize, meh, minimize, minimize-2, minus-circle, minus-square, minus, monitor, moon, more-horizontal, more-vertical, move, music, navigation-2, navigation, octagon, pause-circle, percent, plus-circle, plus-square, plus, power, radio, rss, search, server, share, shopping-bag, sidebar, smartphone, smile, square, table-2, tablet, target, terminal, trash-2, trash, triangle, tv, type, upload, x-circle, x-octagon, x-square, x, zoom-in, zoom-out
+
+The MIT License (MIT) (for the icons listed above)
+
+Copyright (c) 2013-present Cole Bemis
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+-->
+<svg class="sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+<symbol id="arrow_down_left" viewBox="0 0 24 24"><path d="M17 7 7 17"/><path d="M17 17H7V7"/></symbol>
+<symbol id="arrow_left" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></symbol>
+<symbol id="arrow_up_right" viewBox="0 0 24 24"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></symbol>
+<symbol id="calendar_days" viewBox="0 0 24 24"><path d="M8 2v3"/><path d="M16 2v3"/><path d="M5 3H19A2 2 0 0 1 21 5V19A2 2 0 0 1 19 21H5A2 2 0 0 1 3 19V5A2 2 0 0 1 5 3Z"/><path d="M3 9h18"/><path d="M8 13h.01"/><path d="M12 13h.01"/><path d="M16 13h.01"/><path d="M8 17h.01"/><path d="M12 17h.01"/><path d="M16 17h.01"/></symbol>
+<symbol id="chart_no_axes_column_increasing" viewBox="0 0 24 24"><path d="M5 21v-6"/><path d="M12 21V9"/><path d="M19 21V3"/></symbol>
+<symbol id="chevron_right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+<symbol id="notebook_pen" viewBox="0 0 24 24"><path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4"/><path d="M2 10h4"/><path d="M2 14h4"/><path d="M2 18h4"/><path d="M21.378 5.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/></symbol>
+<symbol id="pencil" viewBox="0 0 24 24"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></symbol>
+<symbol id="plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+<symbol id="user_round" viewBox="0 0 24 24"><path d="M17 8A5 5 0 1 0 7 8A5 5 0 1 0 17 8Z"/><path d="M20 21a8 8 0 0 0-16 0"/></symbol>
+<symbol id="wallet" viewBox="0 0 24 24"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></symbol>
+<symbol id="trash" viewBox="0 0 24 24"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol></svg>
+<main class="shell">
+  <aside class="panel" aria-label="演示脚本">
+    <h1>WMM UI Demo</h1>
+    <p>3 分钟 · 可用 ← / → 切换步骤</p>
+    <div class="step-list">
+      <button type="button" class="step" data-action="go-step" data-step="0" data-index="0">
+        <strong>浏览账本</strong><span>00:00–00:45 · 看总览和流水对齐</span>
+      </button>
+      <button type="button" class="step" data-action="go-step" data-step="1" data-index="1">
+        <strong>录入一笔支出</strong><span>00:45–01:45 · 输入 38.50 并选「日常」</span>
+      </button>
+      <button type="button" class="step" data-action="go-step" data-step="2" data-index="2">
+        <strong>查看保存结果</strong><span>01:45–02:25 · 看新流水和结余更新</span>
+      </button>
+      <button type="button" class="step" data-action="go-step" data-step="3" data-index="3">
+        <strong>切换空账本</strong><span>02:25–03:00 · 看首次使用的首屏</span>
+      </button>
+    </div>
+    <div class="panel-controls">
+      <button type="button" class="secondary" data-action="step-prev">上一步</button>
+      <button type="button" class="secondary" data-action="step-next">下一步</button>
+    </div>
+  </aside>
+  <section class="stage" aria-label="WMM 手机预览">
+    <div class="phone">
+      <div class="status desktop-status" aria-hidden="true">
+        <span>21:30</span>
+        <div class="status-shapes"><span class="signal"><span></span><span></span><span></span><span></span></span><span>5G</span><span class="battery"></span></div>
+      </div>
+      <div class="demo-mobile-mark">样例数据</div>
+      <div id="app-view" class="app-view"></div>
+      <div id="sheet-mask" class="sheet-mask" hidden></div>
+      <div id="toast" class="toast" role="status" hidden></div>
+    </div>
+  </section>
+  <aside class="panel" aria-label="场景控制台">
+    <h2>场景控制台</h2>
+    <p id="scenario-status">样例数据</p>
+    <div class="panel-controls control-group">
+      <button type="button" class="secondary" data-action="example">填入示例</button>
+      <button type="button" class="secondary" data-action="empty">空账本</button>
+    </div>
+    <div class="panel-controls">
+      <button type="button" class="secondary" data-action="reset">重置演示</button>
+    </div>
+    <div class="panel-controls control-group theme-options" role="group" aria-label="显示主题">
+      <button type="button" class="secondary" data-action="theme" data-theme="light" aria-pressed="true">浅色</button>
+      <button type="button" class="secondary" data-action="theme" data-theme="dark" aria-pressed="false">深色</button>
+    </div>
+  </aside>
+</main>
+<script>
+'use strict';
+
+// 示例与已确认的 PRD 保持一致，金额全部用整数分。
+const DAY = '2026-11-15';
+const NOW = '21:30';
+const LIMIT = 99_999_999_999;
+const DATA = [
+  { id: 'cafe', date: DAY, time: '20:55', kind: 'expense', cents: 2800, tag: '咖啡', account: '储蓄卡', note: '燕麦拿铁' },
+  { id: 'grocery', date: DAY, time: '20:00', kind: 'expense', cents: 16890, tag: '日常', account: '储蓄卡', note: '周末采购' },
+  { id: 'movie', date: DAY, time: '18:51', kind: 'expense', cents: 6800, tag: '电影', account: '储蓄卡', note: '周末电影' },
+  { id: 'metro', date: '2026-11-14', time: '22:43', kind: 'expense', cents: 650, tag: '日常', account: '交通卡', note: '地铁' },
+  { id: 'books', date: '2026-11-14', time: '19:13', kind: 'expense', cents: 12700, tag: '读书与学习用品', account: '储蓄卡', note: '两本新书' },
+  { id: 'salary', date: '2026-11-10', time: '09:00', kind: 'income', cents: 1860000, tag: '工资', account: '储蓄卡', note: '' },
+  { id: 'rent', date: '2026-11-01', time: '08:30', kind: 'expense', cents: 528000, tag: '房租', account: '储蓄卡', note: '' },
+];
+const FIRST_TAGS = { expense: ['日常', '咖啡', '电影', '房租', '读书与学习用品'], income: ['工资'] };
+const ACCOUNTS = ['不关联', '储蓄卡', '交通卡'];
+const money = new Intl.NumberFormat('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const format = cents => (cents < 0 ? '−' : '') + '¥' + money.format(Math.abs(cents) / 100);
+const safe = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+const icon = name => `<svg class="icon" aria-hidden="true"><use href="#${name}"/></svg>`;
+const screen = document.querySelector('#app-view');
+const layer = document.querySelector('#sheet-mask');
+const toast = document.querySelector('#toast');
+const desktop = matchMedia('(min-width: 881px)');
+const preferred = matchMedia('(prefers-color-scheme: dark)');
+const amountRuler = document.createElement('canvas').getContext('2d');
+const KIND = { expense: '支出', income: '收入' };
+
+let sequence = 0;
+let toastTimer;
+let themeOverride = false;
+const state = {
+  entries: [], tags: { income: [], expense: [] },
+  draft: null, sheet: '', step: 0, saving: false, demo: 'sample', homeScroll: 0,
+  keyboard: false, allTags: false, lastTrigger: '',
+};
+
+function parseAmount(raw) {
+  const value = raw.trim().replace(/[，。．,]/g, '.');
+  if (!/^(?:[0-9]{1,10}(?:\.[0-9]{0,2})?|\.[0-9]{1,2})$/.test(value)) return 0;
+  const [whole, fraction = ''] = value.split('.');
+  const cents = Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+  return cents > 0 && cents <= LIMIT ? cents : 0;
+}
+
+function sample(resetToEmpty = false) {
+  Object.assign(state, {
+    entries: resetToEmpty ? [] : DATA.map(row => ({ ...row })),
+    tags: resetToEmpty ? { income: [], expense: [] } : { income: [...FIRST_TAGS.income], expense: [...FIRST_TAGS.expense] },
+    draft: null, sheet: '', saving: false, step: resetToEmpty ? 3 : 0, homeScroll: 0,
+    keyboard: false, allTags: false, demo: resetToEmpty ? 'empty' : 'sample',
+  });
+  hideToast();
+  render(true);
+}
+
+function openEntry(entry = null, focus = !entry) {
+  if (state.saving) return;
+  if (!state.draft) state.homeScroll = screen.querySelector('.phone-content')?.scrollTop ?? 0;
+  state.draft = entry
+    ? { ...entry, amount: (entry.cents / 100).toFixed(2) }
+    : { id: null, kind: 'expense', amount: '', tag: '', account: '', date: DAY, time: NOW, note: '' };
+  state.keyboard = focus;
+  state.allTags = false;
+  state.step = 1;
+  hideToast();
+  render(true, focus ? '#amount' : '');
+}
+
+function dateCaption(date) {
+  if (date === DAY) return '今天';
+  if (date === '2026-11-14') return '昨天';
+  const [year, month, day] = date.split('-');
+  return (year === '2026' ? '' : year + '年') + Number(month) + '月' + Number(day) + '日';
+}
+
+function row(entry) {
+  const income = entry.kind === 'income';
+  const meta = [entry.time, entry.account, entry.note].filter(Boolean).map(safe).join(' · ');
+  return `<button type="button" class="entry-row" data-action="edit" data-id="${safe(entry.id)}">
+    <span class="row-icon${income ? ' income' : ''}">${icon(income ? 'arrow_down_left' : 'arrow_up_right')}</span>
+    <span class="row-detail"><span class="row-name">${safe(entry.tag)}</span><span class="row-meta">${meta}</span></span>
+    <span class="amount num${income ? ' income' : ''}">${income ? '+' : '−'}${format(entry.cents)}</span>
+  </button>`;
+}
+
+function totals() {
+  return state.entries.filter(entry => entry.date.slice(0, 7) === DAY.slice(0, 7)).reduce((total, entry) => {
+    total[entry.kind] += entry.cents;
+    return total;
+  }, { income: 0, expense: 0 });
+}
+
+function list() {
+  if (!state.entries.length) return `<div class="group-card empty"><div class="row-icon">${icon('notebook_pen')}</div><p>还没有流水</p></div>`;
+  const groups = new Map();
+  const sorted = [...state.entries].sort((first, second) =>
+    (second.date + second.time).localeCompare(first.date + first.time));
+  for (const entry of sorted) {
+    if (!groups.has(entry.date)) groups.set(entry.date, []);
+    groups.get(entry.date).push(entry);
+  }
+  return [...groups].map(([date, entries]) => `<div class="date-group">
+    <div class="date-label">${dateCaption(date)}</div>
+    <div class="group-card">${entries.map(row).join('')}</div>
+  </div>`).join('');
+}
+
+function navigation() {
+  return `<div class="nav" aria-label="底部导航">
+    ${[['账本','notebook_pen','home'],['统计','chart_no_axes_column_increasing','outside'],['资产','wallet','outside']].map(([label, glyph, action]) =>
+      `<button type="button" class="tab${action === 'home' ? ' active' : ''}" ${action === 'home' ? 'aria-current="page"' : ''} data-action="${action}">
+        <span class="tab-mark">${icon(glyph)}</span>${label}
+      </button>`).join('')}
+  </div>`;
+}
+
+function home() {
+  const { income, expense } = totals();
+  const balance = format(income - expense);
+  const metric = (name, amount, income) => `<div class="metric">
+    <div class="metric-head">${icon(income ? 'arrow_down_left' : 'arrow_up_right')}${name}</div>
+    <strong class="num${income ? ' income' : ''}">${format(amount)}</strong>
+  </div>`;
+  return `<header class="app-header">
+    <div class="app-start"><span class="logo">${icon('notebook_pen')}</span><h2>账本</h2></div>
+    <button type="button" class="icon-button" data-action="outside" aria-label="个人设置">${icon('user_round')}</button>
+  </header>
+  <div class="phone-content">
+    <div class="cover">
+      <div class="cover-top"><span>本月结余</span><span class="month num">${icon('calendar_days')}2026.11</span></div>
+      <div class="hero num${balance.length > 13 ? ' long-value' : ''}" data-balance>${balance}</div>
+      <div class="metrics">${metric('收入',income,true)}${metric('支出',expense,false)}</div>
+    </div>
+    <div class="section-row"><h3>最近流水</h3><button type="button" class="text-link" data-action="outside">收支统计${icon('chevron_right')}</button></div>
+    ${list()}
+  </div>
+  <div class="footer"><button type="button" class="cta" data-action="new">${icon('plus')}记一笔</button></div>
+  ${navigation()}<div class="gesture" aria-hidden="true"></div>`;
+}
+
+function editor() {
+  const draft = state.draft;
+  const choices = state.tags[draft.kind];
+  const visible = state.allTags ? choices : [...new Set([...choices.slice(0, 8), ...[draft.tag].filter(Boolean)])];
+  const showKeyboard = state.keyboard && desktop.matches;
+  const field = (action, glyph, label, value) => `<button type="button" class="field-row" data-action="${action}">
+    <span class="field-label">${icon(glyph)}${label}</span><span class="field-value"><span class="field-text">${safe(value)}</span>${icon('chevron_right')}</span>
+  </button>`;
+  return `<header class="app-header center">
+    <button type="button" class="icon-button" data-action="back" aria-label="返回">${icon('arrow_left')}</button>
+    <h2>${draft.id ? '编辑流水' : '记一笔'}</h2>
+    ${draft.id ? `<button type="button" class="icon-button danger" data-action="delete" aria-label="删除流水">${icon('trash')}</button>` : ''}
+  </header>
+  <div class="phone-content editor-content">
+    <div class="segments" role="group" aria-label="收支类型">
+      ${Object.entries(KIND).map(([key, label]) => `<button type="button" class="seg${draft.kind === key ? ' active' : ''}" aria-pressed="${draft.kind === key}" data-action="kind" data-kind="${key}">${label}</button>`).join('')}
+    </div>
+    <div class="entry-figure">
+      <p><label for="amount">金额</label></p>
+      <div class="amount-field"><span aria-hidden="true">¥</span><input id="amount" class="amount-input" inputmode="decimal" autocomplete="off" maxlength="14" spellcheck="false" placeholder="0.00" value="${safe(draft.amount)}" aria-describedby="amount-error"></div>
+      <p class="error" id="amount-error" hidden>请输入有效金额，最多两位小数。</p>
+    </div>
+    <div class="section-row tags-title"><h3>标签</h3>${choices.length > 8 ? `<button class="text-link" data-action="more-tags">${state.allTags ? '收起' : '全部'}</button>` : ''}</div>
+    <div class="tags">
+      ${visible.map(tag => `<button type="button" class="tag${draft.tag === tag ? ' active' : ''}" data-action="choose-tag" data-tag="${safe(tag)}" aria-pressed="${draft.tag === tag}">${safe(tag)}</button>`).join('')}
+      <button type="button" class="tag" data-action="new-tag">${icon('plus')}新建标签</button>
+    </div>
+    <div class="group-card fields">
+      ${field('account','wallet','账户',draft.account || '不关联')}
+      ${field('date','calendar_days','日期时间',draft.date.replaceAll('-','/') + '　' + draft.time)}
+      ${field('note','pencil','备注',draft.note || '选填')}
+    </div>
+  </div>
+  <div class="footer editor-footer"><button type="button" class="cta" data-action="save" disabled>${state.saving ? '正在保存' : '保存流水'}</button></div>
+  ${showKeyboard ? `<div class="keys num" aria-label="模拟数字键盘">
+    ${['1','2','3','4','5','6','7','8','9','.','0','退格'].map(key => `<button type="button" class="key" data-action="digit" data-key="${key}"${key === '退格' ? ' aria-label="退格"' : ''}>${key === '退格' ? icon('arrow_left') : key}</button>`).join('')}
+  </div>` : ''}
+  <div class="gesture${showKeyboard ? ' keyboard-gesture' : ''}" aria-hidden="true"></div>`;
+}
+
+function refreshAmount() {
+  const input = screen.querySelector('#amount');
+  if (!input) return;
+  const text = state.draft.amount.trim();
+  const cents = parseAmount(text);
+  input.classList.toggle('long-value', text.length > 9);
+  // 按当前字体约束金额输入框，让币种符号跟着数字整体居中。
+  const figure = text || input.placeholder;
+  const typography = getComputedStyle(input);
+  const tracking = Number.parseFloat(typography.letterSpacing) || 0;
+  amountRuler.font = typography.fontWeight + ' ' + typography.fontSize + ' ' + typography.fontFamily;
+  const width = Math.ceil(amountRuler.measureText(figure).width + tracking * figure.length + 10);
+  input.style.setProperty('--amount-width', Math.max(42, width) + 'px');
+  screen.querySelector('#amount-error').hidden = !text || !!cents;
+  input.setAttribute('aria-invalid', text && !cents ? 'true' : 'false');
+  const save = screen.querySelector('[data-action=save]');
+  save.disabled = state.saving || !cents || !state.draft.tag;
+}
+
+function flash(message) {
+  clearTimeout(toastTimer);
+  toast.textContent = message;
+  toast.hidden = false;
+  toastTimer = setTimeout(hideToast, 2500);
+}
+
+function hideToast() {
+  clearTimeout(toastTimer);
+  toast.hidden = true;
+  toast.textContent = '';
+}
+
+function displaySheet(name) {
+  state.sheet = name;
+  state.lastTrigger = name;
+  const draft = state.draft;
+  let title;
+  let contents;
+  const form = (action, fields, buttonLabel = '确认') => `<form data-form="${action}">
+    ${fields}<p class="form-error" role="alert" hidden></p>
+    <div class="sheet-actions"><button type="button" class="secondary" data-action="close-sheet">取消</button>
+    <button type="submit" class="cta">${buttonLabel}</button></div>
+  </form>`;
+  if (name === 'new-tag') {
+    title = '新建标签';
+    contents = form('tag', '<label>标签名称<input name="tag" maxlength="30" autocomplete="off" required></label>', '创建标签');
+  } else if (name === 'account') {
+    title = '选择账户';
+    contents = `<div class="options">${ACCOUNTS.map(label => `<button type="button" data-action="pick-account" data-value="${label}" aria-pressed="${(draft.account || '不关联') === label}">${label}</button>`).join('')}</div>
+    <div class="sheet-actions"><button type="button" class="secondary" data-action="close-sheet">取消</button></div>`;
+  } else if (name === 'date') {
+    title = '日期时间';
+    contents = form('date', `<label>日期<input name="date" type="date" min="1900-01-01" max="${DAY}" value="${safe(draft.date)}" required></label>
+      <label>时间<input name="time" type="time" value="${safe(draft.time)}" required></label>`);
+  } else if (name === 'note') {
+    title = '备注';
+    contents = form('note', `<label>备注（选填）<textarea name="note" maxlength="200" rows="3">${safe(draft.note)}</textarea></label>`);
+  } else {
+    title = '删除这笔流水？';
+    contents = `<p>此操作会更新本月收支和最近流水。</p>
+      <div class="sheet-actions"><button type="button" class="secondary" data-action="close-sheet">取消</button>
+      <button type="button" class="cta danger" data-action="confirm-delete">删除流水</button></div>`;
+  }
+  layer.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+    <h3 id="sheet-title">${title}</h3>${contents}</div>`;
+  screen.inert = true;
+  layer.hidden = false;
+  layer.querySelector('input:not([type=date]):not([type=time]), textarea, button')?.focus({ preventScroll: true });
+}
+
+function closeSheet(redraw = false) {
+  const trigger = state.lastTrigger;
+  layer.hidden = true;
+  layer.replaceChildren();
+  screen.inert = false;
+  state.sheet = '';
+  if (redraw) render();
+  screen.querySelector('[data-action="' + trigger + '"]')?.focus({ preventScroll: true });
+}
+
+function render(animate = false, focus = '') {
+  const scroll = screen.querySelector('.phone-content')?.scrollTop ?? 0;
+  const editing = !!state.draft;
+  screen.innerHTML = editing ? editor() : home();
+  screen.querySelector('.phone-content').scrollTop = editing ? (animate ? 0 : scroll) : state.homeScroll;
+  if (animate) {
+    screen.classList.remove('arriving');
+    void screen.offsetWidth;
+    screen.classList.add('arriving');
+  }
+  refreshAmount();
+  document.querySelectorAll('[data-step]').forEach(button => {
+    if (Number(button.dataset.step) === state.step) button.setAttribute('aria-current','step');
+    else button.removeAttribute('aria-current');
+  });
+  document.querySelector('[data-action=step-prev]').disabled = state.step === 0;
+  document.querySelector('[data-action=step-next]').disabled = state.step === 3;
+  document.querySelector('#scenario-status').textContent = state.demo === 'empty' ? '空账本' : '样例数据';
+  if (focus) screen.querySelector(focus)?.focus({ preventScroll: true });
+}
+
+function save(guided = false) {
+  const draft = state.draft;
+  const cents = parseAmount(draft.amount);
+  if (state.saving || !cents || !draft.tag) return;
+  state.saving = true;
+  render();
+  setTimeout(() => {
+    // 重置演示或切换场景后的旧保存不会改动新场景。
+    if (state.draft !== draft) return;
+    const { id, date, time, kind, tag, account, note } = draft;
+    const entry = { id: id || 'entry-' + ++sequence, date, time, kind, tag, account, note: note.trim(), cents, guided };
+    const index = state.entries.findIndex(item => item.id === entry.id);
+    if (index >= 0) state.entries[index] = entry;
+    else state.entries.unshift(entry);
+    state.saving = false;
+    state.draft = null;
+    state.homeScroll = id ? state.homeScroll : 0;
+    state.step = 2;
+    render(true);
+    flash('已保存');
+  }, 140);
+}
+
+function resetSheet() {
+  if (state.sheet) closeSheet();
+}
+
+function useExample() {
+  resetSheet();
+  if (state.saving) return;
+  if (!state.draft || state.draft.id) openEntry();
+  if (!state.tags.expense.includes('日常')) state.tags.expense.unshift('日常');
+  Object.assign(state.draft, { kind: 'expense', amount: '38.50', tag: '日常', note: '便利店补货', date: DAY, time: NOW, account: '' });
+  state.keyboard = true;
+  state.step = 1;
+  render();
+}
+
+function goStep(index) {
+  if (index < 0 || index > 3) return;
+  resetSheet();
+  if (index === 0 || index === 3) {
+    sample(index === 3);
+    return;
+  }
+  if (index === 1) {
+    if (state.demo === 'empty') sample();
+    if (state.saving) return;
+    openEntry();
+    return;
+  }
+  if (state.demo === 'empty') sample();
+  if (state.saving) return;
+  if (state.entries.some(entry => entry.guided) || !state.draft && state.step === 2) {
+    state.draft = null;
+    state.step = 2;
+    render(true);
+    return;
+  }
+  useExample();
+  save(true);
+}
+
+function appendKey(key) {
+  const draft = state.draft;
+  const input = screen.querySelector('#amount');
+  const from = input.selectionStart ?? draft.amount.length;
+  const to = input.selectionEnd ?? from;
+  const active = document.activeElement === input;
+  const start = active ? from : draft.amount.length;
+  const end = active ? to : start;
+  const head = key === '退格' && start === end ? Math.max(0,start - 1) : start;
+  const next = draft.amount.slice(0,head) + (key === '退格' ? '' : key) + draft.amount.slice(end);
+  if (next.length > 14) return;
+  draft.amount = input.value = next;
+  input.focus({ preventScroll: true });
+  input.setSelectionRange(head + (key === '退格' ? 0 : key.length),head + (key === '退格' ? 0 : key.length));
+  refreshAmount();
+}
+
+document.addEventListener('click', event => {
+  const target = event.target.closest('[data-action]');
+  if (event.target === layer) closeSheet();
+  if (!target) return;
+  const { action, index, theme, id, kind, tag, value, key } = target.dataset;
+  switch (action) {
+    case 'theme':
+      themeOverride = true;
+      applyTheme(theme);
+      break;
+    case 'reset': resetSheet(); sample(); break;
+    case 'empty': resetSheet(); sample(true); break;
+    case 'example': useExample(); break;
+    case 'go-step': goStep(Number(index)); break;
+    case 'step-prev': goStep(state.step - 1); break;
+    case 'step-next': goStep(state.step + 1); break;
+    case 'new': openEntry(); break;
+    case 'edit': {
+      const entry = state.entries.find(entry => entry.id === id);
+      if (entry) openEntry(entry,false);
+      break;
+    }
+    case 'home':
+      state.homeScroll = 0;
+      render();
+      break;
+    case 'back':
+      if (state.saving) return;
+      state.draft = null;
+      state.step = state.demo === 'empty' ? 3 : 0;
+      render(true);
+      break;
+    case 'outside': flash('此页面在 Android 正式版中可打开'); break;
+    case 'kind':
+      if (state.draft.kind !== kind) {
+        state.draft.kind = kind;
+        state.draft.tag = '';
+        state.allTags = false;
+        render();
+      }
+      break;
+    case 'choose-tag':
+      state.draft.tag = tag;
+      state.keyboard = false;
+      render();
+      break;
+    case 'more-tags': state.allTags = !state.allTags; render(); break;
+    case 'digit': appendKey(key); break;
+    case 'save': save(); break;
+    case 'account':
+    case 'date':
+    case 'note':
+    case 'new-tag':
+    case 'delete':
+      displaySheet(action);
+      break;
+    case 'pick-account':
+      state.draft.account = value === '不关联' ? '' : value;
+      closeSheet(true);
+      break;
+    case 'close-sheet': closeSheet(); break;
+    case 'confirm-delete':
+      state.entries = state.entries.filter(entry => entry.id !== state.draft.id);
+      closeSheet();
+      state.draft = null;
+      state.homeScroll = 0;
+      state.step = state.demo === 'empty' ? 3 : 0;
+      render(true);
+      flash('已删除');
+      break;
+  }
+});
+
+// 避免键帽按下时移走金额框的选区，点击仍可在光标位置输入。
+screen.addEventListener('pointerdown', event => {
+  if (event.target.closest('[data-action=digit]')) event.preventDefault();
+});
+screen.addEventListener('input', event => {
+  if (event.target.id === 'amount' && state.draft) {
+    state.draft.amount = event.target.value;
+    refreshAmount();
+  }
+});
+screen.addEventListener('focusin', event => {
+  if (event.target.id === 'amount' && state.draft && desktop.matches && !state.keyboard) {
+    const caret = event.target.selectionStart;
+    state.keyboard = true;
+    render(false,'#amount');
+    screen.querySelector('#amount').setSelectionRange(caret,caret);
+  }
+});
+
+layer.addEventListener('submit', event => {
+  event.preventDefault();
+  const form = event.target;
+  const data = new FormData(form);
+  function error(message) {
+    const notice = form.querySelector('.form-error');
+    notice.textContent = message;
+    notice.hidden = false;
+  }
+  if (form.dataset.form === 'tag') {
+    const name = String(data.get('tag')).trim();
+    if (!name || /[\u0000-\u001f\u007f]/.test(name)) return error('请输入标签名称。');
+    const choices = state.tags[state.draft.kind];
+    if (choices.some(existing => existing.toLocaleLowerCase() === name.toLocaleLowerCase())) return error('已存在同名标签。');
+    choices.unshift(name);
+    state.draft.tag = name;
+    state.keyboard = false;
+  } else if (form.dataset.form === 'date') {
+    const date = String(data.get('date'));
+    const time = String(data.get('time'));
+    if ((date + time) > (DAY + NOW)) return error('日期时间不能晚于演示时间。');
+    Object.assign(state.draft, { date, time });
+  } else {
+    state.draft.note = String(data.get('note')).trim();
+  }
+  closeSheet(true);
+});
+
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape') {
+    if (state.sheet) closeSheet();
+    else if (state.draft && !state.saving) {
+      state.draft = null;
+      state.step = state.demo === 'empty' ? 3 : 0;
+      render(true);
+    }
+    return;
+  }
+  if (event.key === 'Tab' && state.sheet) {
+    const items = layer.querySelectorAll('button, input, textarea');
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+    if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    return;
+  }
+  if (!desktop.matches || state.sheet || ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
+  if (['ArrowLeft','ArrowRight'].includes(event.key)) {
+    event.preventDefault();
+    goStep(state.step + (event.key === 'ArrowLeft' ? -1 : 1));
+  }
+});
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  document.querySelectorAll('[data-theme]').forEach(button => {
+    if (button.tagName === 'BUTTON') button.setAttribute('aria-pressed', String(button.dataset.theme === theme));
+  });
+}
+
+function fitPhone() {
+  const mobile = !desktop.matches;
+  document.documentElement.style.setProperty('--scale', mobile ? '1' : String(Math.min(1,Math.max(.56,(innerHeight - 44) / 836))));
+  if (mobile && window.visualViewport) {
+    document.documentElement.style.setProperty('--mobile-height', Math.floor(window.visualViewport.height) + 'px');
+  } else {
+    document.documentElement.style.removeProperty('--mobile-height');
+  }
+}
+
+preferred.addEventListener('change', () => {
+  if (!themeOverride) applyTheme(preferred.matches ? 'dark' : 'light');
+});
+desktop.addEventListener('change', () => {
+  const action = document.activeElement?.id === 'amount' ? '#amount' : '';
+  fitPhone();
+  if (!state.sheet) render(false,action);
+});
+window.addEventListener('resize', fitPhone);
+window.visualViewport?.addEventListener('resize', fitPhone);
+applyTheme(preferred.matches ? 'dark' : 'light');
+sample();
+fitPhone();
+</script>
+</body>
+</html>
