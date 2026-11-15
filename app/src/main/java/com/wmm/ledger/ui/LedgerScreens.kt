@@ -45,6 +45,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import com.wmm.ledger.R
 import com.wmm.ledger.data.Entry
 import com.wmm.ledger.data.FIRST_DAY
 import com.wmm.ledger.data.Kind
@@ -55,6 +57,8 @@ import com.wmm.ledger.data.Provider
 import com.wmm.ledger.data.Report
 import com.wmm.ledger.data.Reports
 import com.wmm.ledger.data.reportAnalysis
+import com.wmm.ledger.data.recentCashflow
+import com.wmm.ledger.data.monthCashflow
 import com.wmm.ledger.data.currency
 import com.wmm.ledger.data.stats
 import java.time.Instant
@@ -70,7 +74,7 @@ fun LedgerScreen(data: LedgerSnapshot, today: LocalDate, openSettings: () -> Uni
     val colors = MaterialTheme.colorScheme
     val inset = LedgerPageInset()
     Column(Modifier.fillMaxSize()) {
-        PageHeader("账本", mark = Glyph.BOOK) { UserAvatar(data.profile, openSettings) }
+        PageHeader(stringResource(R.string.app_name), mark = Glyph.BOOK) { UserAvatar(data.profile, openSettings) }
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(start = inset, end = inset, top = 4.dp, bottom = 14.dp)) {
             item("cover") {
                 BalancePanel {
@@ -196,9 +200,13 @@ private fun LedgerRow(entry: Entry, tag: String, account: String?, edit: (Entry)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(tag, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val time = Instant.ofEpochMilli(entry.occurredAt).atZone(ZoneId.systemDefault()).format(TimeLabel)
-            val subtitle = listOfNotNull(time, account, entry.note.takeIf { it.isNotBlank() }).joinToString(" · ")
+            val subtitle = listOfNotNull(time, account).joinToString(" · ")
             Text(subtitle, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (entry.note.isNotBlank()) {
+                Text(entry.note, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
         AmountText((if (income) "+" else "−") + currency(entry.cents),
             if (income) colors.primary else colors.onSurface, Modifier.weight(.70f),
@@ -241,7 +249,14 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
                     }
                 }
             }
-            item("rollup") { StatsCover(summary) }
+            item("rollup") {
+                if (period == Period.DAY) {
+                    SevenDayTrend(remember(data.entries, day) { data.recentCashflow(day) })
+                } else {
+                    val month = remember(data.entries, today) { data.monthCashflow(today) }
+                    MonthCashflowBoard(today, month)
+                }
+            }
             if (summary.tagTotals.isEmpty()) {
                 item("empty-tags") { GroupCard { EmptyPanel("这个期间没有流水", glyph = Glyph.CHART) } }
             } else {
@@ -278,34 +293,6 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
             "同意并生成", { consentDialog = false }) {
             consentDialog = false
             generate(true)
-        }
-    }
-}
-
-@Composable
-private fun StatsCover(summary: PeriodStats) {
-    val colors = MaterialTheme.colorScheme
-    GroupCard {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("期间结余", Modifier.weight(1f), color = colors.onSurfaceVariant,
-                    style = MaterialTheme.typography.labelLarge)
-                if (summary.inProgress) SummaryLabel("截至当前")
-            }
-            AmountText(currency(summary.net), modifier = Modifier.fillMaxWidth(), style = HeroNumber)
-            if (summary.income + summary.expense > 0) {
-                val fraction = summary.income.toFloat() / (summary.income + summary.expense).toFloat()
-                Box(Modifier.fillMaxWidth().padding(vertical = 7.dp).height(6.dp)
-                    .clip(RoundedCornerShape(3.dp)).background(colors.secondaryContainer)) {
-                    Box(Modifier.fillMaxWidth(fraction).height(6.dp).background(colors.primary))
-                }
-            } else {
-                Hairline()
-            }
-            Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                SummaryMetric(Kind.INCOME, summary.income, Modifier.weight(1f))
-                SummaryMetric(Kind.EXPENSE, summary.expense, Modifier.weight(1f))
-            }
         }
     }
 }

@@ -1,6 +1,5 @@
 package com.wmm.ledger.ui
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
@@ -12,6 +11,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.colorResource
+import com.wmm.ledger.R
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -23,11 +24,9 @@ private val Paper = Color(0xFFF3F5F8)
 private val DarkPaper = Color(0xFF101722)
 
 private val Light = lightColorScheme(
-    primary = Color(0xFF245FA6),
     onPrimary = Color.White,
     primaryContainer = Color(0xFFDFECFC),
     onPrimaryContainer = Color(0xFF173E70),
-    inversePrimary = Color(0xFFABCDFF),
     secondary = Color(0xFF4D607B),
     onSecondary = Color.White,
     secondaryContainer = Color(0xFFE7EDF6),
@@ -57,11 +56,9 @@ private val Light = lightColorScheme(
 )
 
 private val Dark = darkColorScheme(
-    primary = Color(0xFFABCDFF),
     onPrimary = Color(0xFF102C55),
     primaryContainer = Color(0xFF233951),
     onPrimaryContainer = Color(0xFFCEE1FF),
-    inversePrimary = Color(0xFF245FA6),
     secondary = Color(0xFFBDCFE7),
     onSecondary = Color(0xFF283A50),
     secondaryContainer = Color(0xFF253246),
@@ -112,11 +109,14 @@ val RowNumber = TextStyle(fontSize = 16.sp, lineHeight = 22.sp, fontWeight = Fon
     fontFamily = FontFamily.SansSerif, fontFeatureSettings = "tnum", letterSpacing = (-0.3).sp)
 
 @Composable
-fun LedgerTheme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
+fun LedgerTheme(dark: Boolean, content: @Composable () -> Unit) {
+    val blue = colorResource(R.color.brand_blue)
+    val lightBlue = colorResource(R.color.brand_blue_dark_theme)
+    val palette = if (dark) Dark.copy(primary = lightBlue, inversePrimary = blue)
+        else Light.copy(primary = blue, inversePrimary = lightBlue)
     CompositionLocalProvider(LocalLedgerDark provides dark) {
         MaterialTheme(
-            colorScheme = if (dark) Dark else Light,
+            colorScheme = palette,
             typography = LedgerType,
             shapes = Shapes(
                 extraSmall = RoundedCornerShape(8.dp), small = RoundedCornerShape(12.dp),
@@ -131,14 +131,14 @@ fun LedgerTheme(content: @Composable () -> Unit) {
 internal val LocalLedgerRefinement = staticCompositionLocalOf { false }
 
 private val RefinedLight = Light.copy(
-    primary = Color(0xFF2266B9), primaryContainer = Color(0xFFE4EFFF),
+    primaryContainer = Color(0xFFE2EEFF),
     background = Color(0xFFF4F7FB), onBackground = Color(0xFF121E32), onSurface = Color(0xFF121E32),
     surfaceContainerLow = Color(0xFFF4FAFF), surfaceContainerHighest = Color(0xFFDCE6F2),
     onSurfaceVariant = Color(0xFF53647B), outline = Color(0xFF62748B), outlineVariant = Color(0xFFDFE7F2),
     error = Color(0xFFAB3548),
 )
 private val RefinedDark = Dark.copy(
-    primary = Color(0xFF8DBBFF), onPrimary = Color(0xFF102440), primaryContainer = Color(0xFF243C5D),
+    onPrimary = Color(0xFF102440), primaryContainer = Color(0xFF243C5D),
     background = Color(0xFF111A29), onBackground = Color(0xFFEDF4FF), onSurface = Color(0xFFEDF4FF),
     surface = Color(0xFF1B273A), surfaceContainerHighest = Color(0xFF2A3950),
     onSurfaceVariant = Color(0xFFAEBDD0), outline = Color(0xFF93A6BF), outlineVariant = Color(0xFF34455E),
@@ -162,7 +162,10 @@ internal fun LedgerPageInset() = if (LocalLedgerRefinement.current && LocalConfi
 
 @Composable
 internal fun LedgerScreenTheme(refined: Boolean, content: @Composable () -> Unit) {
-    val colors = if (!refined) MaterialTheme.colorScheme else if (LocalLedgerDark.current) RefinedDark else RefinedLight
+    val base = MaterialTheme.colorScheme
+    val colors = if (refined) {
+        (if (LocalLedgerDark.current) RefinedDark else RefinedLight).copy(primary = base.primary, inversePrimary = base.inversePrimary)
+    } else base
     CompositionLocalProvider(LocalLedgerRefinement provides refined) {
         MaterialTheme(
             colorScheme = colors,

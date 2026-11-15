@@ -15,15 +15,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -65,7 +65,6 @@ import com.wmm.ledger.data.LedgerRepository
 import com.wmm.ledger.data.LedgerSnapshot
 import com.wmm.ledger.data.MAX_NAME
 import com.wmm.ledger.data.MAX_NOTE
-import com.wmm.ledger.data.Scene
 import com.wmm.ledger.data.editableAmount
 import com.wmm.ledger.data.frequentScenes
 import com.wmm.ledger.data.frequentTags
@@ -77,7 +76,8 @@ import java.time.LocalTime
 import java.time.ZoneId
 import kotlinx.coroutines.delay
 
-@OptIn(ExperimentalLayoutApi::class)
+private const val VISIBLE_TAG_LIMIT = 8
+
 @Composable
 fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, back: () -> Unit) {
     var kindName by rememberSaveable { mutableStateOf(initial?.kind ?: Kind.EXPENSE.name) }
@@ -94,19 +94,22 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
     val zone = ZoneId.systemDefault()
     val time = Instant.ofEpochMilli(occurredAt).atZone(zone).toLocalTime()
     var tagDialog by rememberSaveable { mutableStateOf(false) }
-    var scenePicker by rememberSaveable { mutableStateOf(false) }
     var newScene by rememberSaveable { mutableStateOf(false) }
     var accountDialog by rememberSaveable { mutableStateOf(false) }
     var noteEditor by rememberSaveable { mutableStateOf(false) }
     var dateEditor by rememberSaveable { mutableStateOf(false) }
     var deleteDialog by rememberSaveable { mutableStateOf(false) }
+    var showScenes by rememberSaveable { mutableStateOf(false) }
     var showTags by rememberSaveable { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     val tags = remember(data, kind, initial?.tagId) { data.frequentTags(kind, initial?.tagId) }
-    val scene = data.scenes.firstOrNull { it.id == sceneId }
+    val scenes = remember(data) { data.frequentScenes() }
+    val currentScene = scenes.firstOrNull { it.id == sceneId }
+    val visibleScenes = if (showScenes) scenes
+        else (scenes.take(VISIBLE_TAG_LIMIT) + listOfNotNull(currentScene)).distinctBy { it.id }
     val account = data.accounts.firstOrNull { it.id == accountId }
     val currentTag = tags.firstOrNull { it.id == tagId }
-    val visibleTags = if (showTags) tags else (tags.take(8) + listOfNotNull(currentTag)).distinctBy { it.id }
+    val visibleTags = if (showTags) tags else (tags.take(VISIBLE_TAG_LIMIT) + listOfNotNull(currentTag)).distinctBy { it.id }
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = LocalFocusManager.current
     val pageInset = LedgerPageInset()
@@ -141,33 +144,42 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
                 if (amountError) Text("请输入有效金额，最多两位小数。", color = colors.error,
                     style = MaterialTheme.typography.bodySmall)
             }
-            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                SectionTitle("类型标签") {
-                    if (tags.size > 8) TextButton(onClick = { showTags = !showTags }) { Text(if (showTags) "收起" else "全部") }
-                    else if (tagId == null) Text("必选", color = colors.onSurfaceVariant,
-                        style = MaterialTheme.typography.labelMedium)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (kind == Kind.EXPENSE) {
+                    EntryTagGroup("场景", hint = "选填") {
+                        visibleScenes.forEach { scene ->
+                            EntryTagChip(scene.name, selected = sceneId == scene.id, optional = true) {
+                                sceneId = scene.id.takeUnless { it == sceneId }
+                                dismissKeyboard()
+                            }
+                        }
+                        EntryTagChip("新建场景", add = true) {
+                            dismissKeyboard()
+                            newScene = true
+                        }
+                        if (scenes.size > VISIBLE_TAG_LIMIT) {
+                            EntryTagChip(if (showScenes) "收起场景" else "全部场景") { showScenes = !showScenes }
+                        }
+                    }
+                    HorizontalDivider(Modifier.padding(vertical = 2.dp), color = colors.outlineVariant.copy(alpha = .54f))
                 }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                EntryTagGroup("类型标签", hint = if (tagId == null) "必选" else null) {
                     visibleTags.forEach { tag ->
                         EntryTagChip(tag.name, selected = tagId == tag.id) {
                             tagId = tag.id
                             dismissKeyboard()
                         }
                     }
-                    EntryTagChip("新建标签") {
+                    EntryTagChip("新建标签", add = true) {
                         dismissKeyboard()
                         tagDialog = true
+                    }
+                    if (tags.size > VISIBLE_TAG_LIMIT) {
+                        EntryTagChip(if (showTags) "收起类型" else "全部类型") { showTags = !showTags }
                     }
                 }
             }
             GroupCard {
-                if (kind == Kind.EXPENSE) {
-                    EntryDetailRow("场景", scene?.name ?: "选填", Glyph.TAG) {
-                        dismissKeyboard()
-                        scenePicker = true
-                    }
-                    Hairline(14)
-                }
                 EntryDetailRow("账户", account?.name ?: "不关联", Glyph.WALLET) {
                     dismissKeyboard()
                     accountDialog = true
@@ -208,16 +220,6 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
                 tagId = tag.id
                 tagDialog = false
             }
-        }
-    }
-    if (scenePicker && kind == Kind.EXPENSE) {
-        val scenes = remember(data) { data.frequentScenes() }
-        ScenePicker(scenes, sceneId, onDismiss = { scenePicker = false }, onNew = {
-            scenePicker = false
-            newScene = true
-        }) {
-            sceneId = it
-            scenePicker = false
         }
     }
     if (newScene && kind == Kind.EXPENSE) {
@@ -271,23 +273,18 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ScenePicker(scenes: List<Scene>, selectedId: String?, onDismiss: () -> Unit, onNew: () -> Unit,
-    onSelect: (String?) -> Unit) {
-    AlertDialog(onDismissRequest = onDismiss, shape = CardShape, title = { Text("选择场景") },
-        text = {
-            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 320.dp)) {
-                item {
-                    SettingsRow("不填场景", end = if (selectedId == null) "当前" else null) { onSelect(null) }
-                }
-                items(scenes, key = { it.id }) { scene ->
-                    Hairline()
-                    SettingsRow(scene.name, end = if (scene.id == selectedId) "当前" else null) { onSelect(scene.id) }
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onNew) { Text("新建场景") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } })
+private fun EntryTagGroup(title: String, hint: String?, content: @Composable () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val typography = MaterialTheme.typography.labelMedium
+    Column {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 1.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(title, style = typography.copy(fontWeight = FontWeight.SemiBold), color = colors.onSurfaceVariant)
+            if (hint != null) Text(hint, style = typography, color = colors.onSurfaceVariant)
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { content() }
+    }
 }
 
 @Composable
@@ -344,18 +341,22 @@ private fun EntryAmount(amount: String, error: Boolean, autoFocus: Boolean, onCh
 }
 
 @Composable
-private fun EntryTagChip(label: String, selected: Boolean? = null, onClick: () -> Unit) {
+private fun EntryTagChip(label: String, selected: Boolean? = null, optional: Boolean = false,
+    add: Boolean = false, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(10.dp)
-    val interaction = if (selected != null) Modifier.selectable(selected, role = Role.RadioButton, onClick = onClick)
-        else Modifier.clickable(role = Role.Button, onClick = onClick)
+    val interaction = when {
+        selected == null -> Modifier.clickable(role = Role.Button, onClick = onClick)
+        optional -> Modifier.toggleable(selected, role = Role.Checkbox) { onClick() }
+        else -> Modifier.selectable(selected, role = Role.RadioButton, onClick = onClick)
+    }
     val tint = if (selected != false) colors.primary else colors.onSurface
     Box(Modifier.heightIn(min = 44.dp).clip(shape).then(interaction), contentAlignment = Alignment.Center) {
         Surface(shape = shape, color = if (selected == true) colors.primaryContainer else colors.surface,
             border = BorderStroke(1.dp, colors.outlineVariant)) {
             Row(Modifier.heightIn(min = 34.dp).padding(horizontal = 11.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (selected == null) LucideIcon(Glyph.PLUS, tint, size = 16)
+                if (add) LucideIcon(Glyph.PLUS, tint, size = 16)
                 Text(label, style = MaterialTheme.typography.labelLarge, color = tint)
             }
         }

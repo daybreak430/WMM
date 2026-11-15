@@ -1,9 +1,15 @@
 <resources>
-    <string name="app_name">WMM 记账</string>
+    <string name="app_name">记个账</string>
     <style name="Theme.WMM" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
         <item name="android:windowBackground">#F3F5F8</item>
-        <item name="android:colorAccent">#245FA6</item>
+        <item name="android:colorAccent">@color/brand_blue</item>
+    </style>
+    <style name="LedgerPickerLight" parent="android:style/Theme.Material.Light.Dialog.Alert">
+        <item name="android:colorAccent">@color/brand_blue</item>
+    </style>
+    <style name="LedgerPickerDark" parent="android:style/Theme.Material.Dialog.Alert">
+        <item name="android:colorAccent">@color/brand_blue_dark_theme</item>
     </style>
 </resources>

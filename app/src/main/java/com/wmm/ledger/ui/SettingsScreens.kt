@@ -3,6 +3,7 @@ package com.wmm.ledger.ui
 import android.content.Context
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -34,11 +35,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.wmm.ledger.Appearance
 import com.wmm.ledger.LedgerViewModel
 import com.wmm.ledger.data.Kind
 import com.wmm.ledger.data.LedgerSnapshot
 import com.wmm.ledger.data.Provider
-import java.time.LocalDate
 import kotlinx.coroutines.launch
 
 private class OpenLocal : ActivityResultContracts.OpenDocument() {
@@ -46,27 +47,23 @@ private class OpenLocal : ActivityResultContracts.OpenDocument() {
         super.createIntent(context, input).putExtra(Intent.EXTRA_LOCAL_ONLY, true)
 }
 
-private class SaveLocal : ActivityResultContracts.CreateDocument("application/json") {
-    override fun createIntent(context: Context, input: String): Intent =
-        super.createIntent(context, input).putExtra(Intent.EXTRA_LOCAL_ONLY, true)
-}
-
 @Composable
-fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, activeProvider: Provider, hasKey: Boolean,
-    fileBusy: Boolean, back: () -> Unit, tags: () -> Unit, openModel: () -> Unit) {
+internal fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, activeProvider: Provider, hasKey: Boolean,
+    fileBusy: Boolean, appearance: Appearance, back: () -> Unit, tags: () -> Unit, openModel: () -> Unit) {
     var editNickname by rememberSaveable { mutableStateOf(false) }
     var avatarOptions by rememberSaveable { mutableStateOf(false) }
+    var appearanceOptions by rememberSaveable { mutableStateOf(false) }
     var exportWarning by rememberSaveable { mutableStateOf(false) }
-    val avatarChooser = rememberLauncherForActivityResult(remember { OpenLocal() }) { uri ->
+    val avatarChooser = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) model.saveAvatar(uri)
     }
-    val backupCreator = rememberLauncherForActivityResult(remember { SaveLocal() }) { uri ->
-        if (uri != null) model.export(uri)
+    fun choosePhoto() = avatarChooser.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    fun openAvatar() {
+        if (data.profile.avatar == null) choosePhoto() else avatarOptions = true
     }
     val backupChooser = rememberLauncherForActivityResult(remember { OpenLocal() }) { uri ->
         if (uri != null) model.readBackup(uri)
     }
-    val colors = MaterialTheme.colorScheme
     Column(Modifier.fillMaxSize()) {
         PageHeader("个人设置", back)
         LazyColumn(contentPadding = PaddingValues(horizontal = PagePadding, vertical = 10.dp),
@@ -75,14 +72,19 @@ fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, activeProvider:
                 GroupCard {
                     Row(Modifier.fillMaxWidth().padding(15.dp), horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically) {
-                        UserAvatar(data.profile, { avatarOptions = true }, size = 55, description = "更换头像")
+                        UserAvatar(data.profile, ::openAvatar, size = 55, description = "头像")
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(data.profile.nickname.ifBlank { "未设置昵称" }, style = MaterialTheme.typography.titleMedium)
-                            Text("本机资料", color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                            TextButton(onClick = ::openAvatar, contentPadding = PaddingValues(horizontal = 0.dp)) {
+                                Text(if (data.profile.avatar == null) "上传头像" else "更换头像")
+                            }
                         }
                         IconButton(onClick = { editNickname = true }) { LucideIcon(Glyph.EDIT, description = "编辑昵称") }
                     }
                 }
+            }
+            item("appearance") {
+                GroupCard { SettingsRow("外观", end = appearance.title) { appearanceOptions = true } }
             }
             item("preferences") {
                 GroupCard {
@@ -111,10 +113,23 @@ fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, activeProvider:
             model.saveNickname(it) { editNickname = false }
         }
     }
+    if (appearanceOptions) {
+        AlertDialog(onDismissRequest = { appearanceOptions = false }, title = { Text("外观") }, text = {
+            Column {
+                Appearance.entries.forEachIndexed { index, option ->
+                    if (index > 0) Hairline()
+                    SettingsRow(option.title, end = if (option == appearance) "当前" else null) {
+                        model.selectAppearance(option)
+                        appearanceOptions = false
+                    }
+                }
+            }
+        }, confirmButton = { TextButton(onClick = { appearanceOptions = false }) { Text("取消") } })
+    }
     if (avatarOptions) {
         AlertDialog(onDismissRequest = { avatarOptions = false }, title = { Text("头像") }, text = {
             Column {
-                SettingsRow("选择照片") { avatarOptions = false; avatarChooser.launch(arrayOf("image/*")) }
+                SettingsRow("选择照片") { avatarOptions = false; choosePhoto() }
                 if (data.profile.avatar != null) {
                     Hairline()
                     SettingsRow("移除头像") { avatarOptions = false; model.saveAvatar(null) }
@@ -123,10 +138,10 @@ fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, activeProvider:
         }, confirmButton = { TextButton(onClick = { avatarOptions = false }) { Text("关闭") } })
     }
     if (exportWarning) {
-        ConfirmDialog("导出普通备份？", "备份文件未加密，包含账本、资产、个人资料和报告。请保存到只有你能访问的位置。",
-            "选择保存位置", { exportWarning = false }) {
+        ConfirmDialog("导出普通备份？", "备份文件未加密，包含账本、资产、个人资料和报告。请在分享面板中选择可信的接收方。",
+            "打开分享面板", { exportWarning = false }) {
             exportWarning = false
-            backupCreator.launch("WMM-备份-${LocalDate.now()}.json")
+            model.exportForSharing()
         }
     }
 }

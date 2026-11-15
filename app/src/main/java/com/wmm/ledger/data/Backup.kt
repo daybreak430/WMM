@@ -66,7 +66,7 @@ object Backup {
         require(root.string("format") == FORMAT)
         val version = root.number("version")
         if (version !in 1L..BACKUP_VERSION.toLong()) {
-            throw LedgerError("不支持这个备份版本。请使用兼容的 WMM 版本恢复。")
+            throw LedgerError("不支持这个备份版本。请使用兼容的「记个账」版本恢复。")
         }
         val tags = root.list("tags", 50_000) {
             Tag(id(), enumValueOf<Kind>(string("kind")).name, name(), flag("archived"))

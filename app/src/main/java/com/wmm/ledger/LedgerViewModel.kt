@@ -1,6 +1,7 @@
 package com.wmm.ledger
 
 import android.app.Application
+import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -15,6 +16,7 @@ import com.wmm.ledger.data.Period
 import com.wmm.ledger.data.Provider
 import com.wmm.ledger.data.Scene
 import com.wmm.ledger.data.Tag
+import com.wmm.ledger.data.prepareBackupShare
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -25,9 +27,21 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 
+internal enum class Appearance(val title: String) {
+    SYSTEM("跟随系统"), LIGHT("浅色"), DARK("深色"),
+}
+
 class LedgerViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = LedgerRepository(application)
     private val resolver = application.contentResolver
+    private val appearancePrefs = application.getSharedPreferences("appearance", Context.MODE_PRIVATE)
+    private val preferredAppearance = MutableStateFlow(
+        Appearance.entries.firstOrNull { it.name == appearancePrefs.getString("mode", null) } ?: Appearance.SYSTEM,
+    )
+    internal val appearance = preferredAppearance.asStateFlow()
+    private val backupShares = Channel<Uri>(Channel.BUFFERED)
+    val sharedBackups = backupShares.receiveAsFlow()
+
     private val ledger = MutableStateFlow<LedgerSnapshot?>(null)
     val data = ledger.asStateFlow()
     private val openError = MutableStateFlow(false)
@@ -100,6 +114,11 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
         notify(if (uri == null) "已移除头像" else "头像已更新")
     }
 
+    internal fun selectAppearance(appearance: Appearance) {
+        appearancePrefs.edit().putString("mode", appearance.name).apply()
+        preferredAppearance.value = appearance
+    }
+
     fun selectProvider(provider: Provider) {
         repository.secrets.provider = provider
         selectedProvider.value = provider
@@ -147,16 +166,13 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun export(uri: Uri) = fileOperation("导出失败，请检查存储空间或选择其他位置。") {
+    fun exportForSharing() = fileOperation("无法准备备份，请检查存储空间后重试。") {
         val snapshot = repository.snapshot()
-        withContext(Dispatchers.IO) {
-            val bytes = Backup.encode(snapshot)
-            requireNotNull(resolver.openOutputStream(uri, "wt")).use { it.write(bytes) }
-        }
-        notify("备份已导出")
+        val uri = withContext(Dispatchers.IO) { prepareBackupShare(getApplication(), snapshot) }
+        backupShares.send(uri)
     }
 
-    fun readBackup(uri: Uri) = fileOperation("无法读取备份。文件可能损坏或不是 WMM 备份。") {
+    fun readBackup(uri: Uri) = fileOperation("无法读取备份。文件可能损坏或不是「记个账」的备份。") {
         restorePreview.value = withContext(Dispatchers.IO) {
             requireNotNull(resolver.openInputStream(uri)).use(Backup::decode)
         }

@@ -1,11 +1,16 @@
 package com.wmm.ledger
 
+import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,7 +47,11 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.wmm.ledger.data.Period
 import com.wmm.ledger.ui.AssetsScreen
@@ -66,7 +75,22 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent { LedgerTheme { LedgerApp(viewModel()) } }
+        setContent {
+            val model: LedgerViewModel = viewModel()
+            val appearance by model.appearance.collectAsStateWithLifecycle()
+            val dark = when (appearance) {
+                Appearance.SYSTEM -> isSystemInDarkTheme()
+                Appearance.LIGHT -> false
+                Appearance.DARK -> true
+            }
+            LaunchedEffect(dark) {
+                enableEdgeToEdge(
+                    statusBarStyle = SystemBarStyle.auto(0, 0) { dark },
+                    navigationBarStyle = SystemBarStyle.auto(0xE6FFFFFF.toInt(), 0x801B273A.toInt()) { dark },
+                )
+            }
+            LedgerTheme(dark) { LedgerApp(model, appearance) }
+        }
     }
 }
 
@@ -75,7 +99,7 @@ private enum class Tab(val label: String, val icon: Glyph) {
 }
 
 @Composable
-private fun LedgerApp(model: LedgerViewModel) {
+private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
     val snapshot by model.data.collectAsStateWithLifecycle()
     val openError by model.unableToOpen.collectAsStateWithLifecycle()
     val provider by model.provider.collectAsStateWithLifecycle()
@@ -100,6 +124,25 @@ private fun LedgerApp(model: LedgerViewModel) {
     val day = if (followToday) today else LocalDate.parse(dayText).coerceAtMost(today)
     val navState = rememberSaveableStateHolder()
     val snackbar = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(model, context, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            model.sharedBackups.collect { uri ->
+                val share = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/json"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    clipData = ClipData.newUri(context.contentResolver, "记个账备份", uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                try {
+                    context.startActivity(Intent.createChooser(share, null))
+                } catch (_: ActivityNotFoundException) {
+                    snackbar.showSnackbar("此设备无法打开系统分享面板。")
+                }
+            }
+        }
+    }
     LaunchedEffect(model) { model.feedback.collect { snackbar.showSnackbar(it, withDismissAction = true) } }
 
     fun back() {
@@ -142,7 +185,7 @@ private fun LedgerApp(model: LedgerViewModel) {
                         EmptyPanel("无法打开账本", "请重新打开应用。若仍无法打开，请保留现有应用数据。")
                     }
                     data == null -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                    current == "settings" -> SettingsScreen(data, model, provider, provider in keys, fileBusy, ::back,
+                    current == "settings" -> SettingsScreen(data, model, provider, provider in keys, fileBusy, appearance, ::back,
                         tags = { parent = current; route = "tags" }, openModel = { parent = current; route = "model" })
                     current == "tags" -> TagsScreen(data, model, ::back)
                     current == "model" -> ModelSettings(model, provider, keys, ::back)

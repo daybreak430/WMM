@@ -4,6 +4,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -34,11 +36,12 @@ class RecordUiTest {
         ui.waitUntil(10_000) { ui.onAllNodesWithText(tag).fetchSemanticsNodes().isNotEmpty() }
         val scene = "出差${tag.takeLast(4)}"
         val combined = "$scene · $tag"
-        ui.onNodeWithText("场景").performScrollTo().performClick()
-        ui.onNodeWithText("新建场景").performClick()
+        ui.onNodeWithText("新建场景").performScrollTo().performClick()
         ui.onNodeWithText("场景名称").performTextInput(scene)
         ui.onNodeWithText("保存").performClick()
         ui.waitUntil(10_000) { ui.onAllNodesWithText(scene).fetchSemanticsNodes().isNotEmpty() }
+        ui.onNodeWithText(scene).assertIsOn().performClick().assertIsOff()
+        ui.onNodeWithText(scene).performClick().assertIsOn()
 
         ui.onNodeWithText("日期时间").performScrollTo().performClick()
         ui.onNodeWithText("日期").assertIsDisplayed()

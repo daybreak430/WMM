@@ -3,6 +3,6 @@
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
         <item name="android:windowBackground">#101722</item>
-        <item name="android:colorAccent">#ABCDFF</item>
+        <item name="android:colorAccent">@color/brand_blue_dark_theme</item>
     </style>
 </resources>

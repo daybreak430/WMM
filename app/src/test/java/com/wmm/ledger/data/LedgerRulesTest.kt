@@ -66,6 +66,26 @@ class LedgerRulesTest {
         assertEquals("1–7日", data.reportAnalysis(Period.MONTH, today, today).buckets.single().label)
     }
 
+    @Test fun trendAndMonthRollupUseCalendarDaysAndCountDirectionsSeparately() {
+        val end = LocalDate.of(2026, 1, 3)
+        val base = entry("base", 125, 1, null)
+        val data = LedgerSnapshot(entries = listOf(
+            base.copy(id = "excluded", day = "2025-12-27"),
+            base.copy(id = "first", day = "2025-12-28"),
+            base.copy(id = "income", day = "2026-01-03", cents = 900, kind = Kind.INCOME.name),
+            base.copy(id = "expense", day = "2026-01-03", cents = 200),
+            base.copy(id = "later", day = "2026-01-04"),
+        ))
+        val trend = data.recentCashflow(end)
+        assertEquals(7, trend.size)
+        assertEquals(LocalDate.of(2025, 12, 28), trend.first().date)
+        assertEquals(Cashflow(0, 125), trend.first().amount)
+        assertEquals(Cashflow(0, 0), trend[1].amount)
+        assertEquals(Cashflow(900, 200), trend.last().amount)
+        assertEquals(Cashflow(900, 200), data.monthCashflow(end))
+        assertEquals(700L, data.monthCashflow(end).net)
+    }
+
     private fun entry(id: String, amount: Long, time: Long, account: String?) =
         Entry(id, "EXPENSE", amount, "tag", account, "", time, "2026-01-01")
 }
