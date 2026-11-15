@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">WMM 记账</string>
+    <style name="Theme.WMM" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowBackground">#F8F7F3</item>
+    </style>
+</resources>

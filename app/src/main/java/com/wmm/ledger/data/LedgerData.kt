@@ -1,0 +1,93 @@
+package com.wmm.ledger.data
+
+import androidx.room.Dao
+import androidx.room.Database
+import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
+import androidx.room.Insert
+import androidx.room.PrimaryKey
+import androidx.room.Query
+import androidx.room.RoomDatabase
+import androidx.room.Upsert
+
+@Entity(tableName = "tags", indices = [Index(value = ["kind", "name"], unique = true)])
+data class Tag(
+    @PrimaryKey val id: String,
+    val kind: String,
+    val name: String,
+    val archived: Boolean = false,
+)
+
+@Entity(tableName = "accounts")
+data class Account(
+    @PrimaryKey val id: String,
+    val type: String,
+    val name: String,
+    val baselineCents: Long,
+    val calibratedAt: Long,
+    val archived: Boolean = false,
+)
+
+@Entity(
+    tableName = "entries",
+    foreignKeys = [
+        ForeignKey(entity = Account::class, parentColumns = ["id"], childColumns = ["accountId"]),
+        ForeignKey(entity = Tag::class, parentColumns = ["id"], childColumns = ["tagId"]),
+    ],
+    indices = [Index("tagId"), Index("accountId"), Index("day")],
+)
+data class Entry(
+    @PrimaryKey val id: String,
+    val kind: String,
+    val cents: Long,
+    val tagId: String,
+    val accountId: String?,
+    val note: String,
+    val occurredAt: Long,
+    val day: String,
+)
+
+@Entity(tableName = "reports", primaryKeys = ["period", "startDay"])
+data class Report(
+    val period: String,
+    val startDay: String,
+    val snapshotId: String,
+    val createdAt: Long,
+    val provider: String,
+    val content: String,
+)
+
+@Entity(tableName = "profile")
+data class Profile(@PrimaryKey val id: Int = 0, val nickname: String = "", val avatar: ByteArray? = null)
+
+@Dao
+interface LedgerDao {
+    @Query("SELECT * FROM tags ORDER BY name COLLATE NOCASE") suspend fun tags(): List<Tag>
+    @Query("SELECT * FROM accounts ORDER BY calibratedAt DESC, id") suspend fun accounts(): List<Account>
+    @Query("SELECT * FROM entries ORDER BY day DESC, occurredAt DESC, id") suspend fun entries(): List<Entry>
+    @Query("SELECT * FROM reports") suspend fun reports(): List<Report>
+    @Query("SELECT * FROM profile WHERE id = 0") suspend fun profile(): Profile?
+    @Query("SELECT * FROM entries WHERE id = :id") suspend fun entry(id: String): Entry?
+    @Query("SELECT * FROM tags WHERE id = :id") suspend fun tag(id: String): Tag?
+    @Query("SELECT * FROM accounts WHERE id = :id") suspend fun account(id: String): Account?
+    @Upsert suspend fun save(tag: Tag)
+    @Upsert suspend fun save(account: Account)
+    @Upsert suspend fun save(entry: Entry)
+    @Upsert suspend fun save(report: Report)
+    @Upsert suspend fun save(profile: Profile)
+    @Insert suspend fun restoreTags(tags: List<Tag>)
+    @Insert suspend fun restoreAccounts(accounts: List<Account>)
+    @Insert suspend fun restoreEntries(entries: List<Entry>)
+    @Insert suspend fun restoreReports(reports: List<Report>)
+    @Query("DELETE FROM entries WHERE id = :id") suspend fun deleteEntry(id: String)
+    @Query("DELETE FROM entries") suspend fun clearEntries()
+    @Query("DELETE FROM tags") suspend fun clearTags()
+    @Query("DELETE FROM accounts") suspend fun clearAccounts()
+    @Query("DELETE FROM reports") suspend fun clearReports()
+}
+
+@Database(entities = [Tag::class, Account::class, Entry::class, Report::class, Profile::class], version = 1)
+abstract class LedgerDatabase : RoomDatabase() {
+    abstract fun ledger(): LedgerDao
+}
