@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -21,7 +22,9 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -38,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -63,10 +67,10 @@ fun LedgerScreen(data: LedgerSnapshot, today: LocalDate, openSettings: () -> Uni
     record: () -> Unit, edit: (Entry) -> Unit) {
     val stats = remember(data, today) { data.stats(Period.MONTH, today, today) }
     val colors = MaterialTheme.colorScheme
+    val inset = LedgerPageInset()
     Column(Modifier.fillMaxSize()) {
         PageHeader("账本", mark = Glyph.BOOK) { UserAvatar(data.profile, openSettings) }
-        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(start = PagePadding, end = PagePadding,
-            top = 5.dp, bottom = 16.dp)) {
+        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(start = inset, end = inset, top = 4.dp, bottom = 14.dp)) {
             item("cover") {
                 BalancePanel {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -75,11 +79,13 @@ fun LedgerScreen(data: LedgerSnapshot, today: LocalDate, openSettings: () -> Uni
                         SummaryLabel("${today.year}.${today.monthValue.toString().padStart(2, '0')}", Glyph.CALENDAR)
                     }
                     AmountText(currency(stats.net), modifier = Modifier.fillMaxWidth().padding(top = 9.dp),
-                        style = HeroNumber.copy(textAlign = TextAlign.Center))
+                        style = LedgerBalanceNumber)
                     Spacer(Modifier.height(15.dp))
                     Hairline()
-                    Row(Modifier.fillMaxWidth().padding(top = 13.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
                         SummaryMetric(Kind.INCOME, stats.income, Modifier.weight(1f))
+                        VerticalDivider(Modifier.height(30.dp), color = colors.outlineVariant)
                         SummaryMetric(Kind.EXPENSE, stats.expense, Modifier.weight(1f))
                     }
                 }
@@ -98,7 +104,7 @@ fun LedgerScreen(data: LedgerSnapshot, today: LocalDate, openSettings: () -> Uni
                 ledgerRows(data.entries, data, today, edit)
             }
         }
-        PrimaryAction("记一笔", record, Modifier.fillMaxWidth().padding(horizontal = PagePadding, vertical = 10.dp), Glyph.PLUS)
+        PrimaryAction("记一笔", record, Modifier.fillMaxWidth().padding(horizontal = inset, vertical = 10.dp), Glyph.PLUS)
     }
 }
 
@@ -125,7 +131,8 @@ private fun SummaryMetric(kind: Kind, cents: Long, modifier: Modifier = Modifier
             LucideIcon(if (income) Glyph.INCOME else Glyph.EXPENSE, tint, size = 16)
             Text(kind.title, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
-        AmountText(currency(cents), color = if (income) colors.primary else colors.onSurface)
+        AmountText(currency(cents), color = if (income) colors.primary else colors.onSurface,
+            style = if (LocalLedgerRefinement.current) LedgerFlowNumber.copy(fontWeight = FontWeight(650)) else RowNumber)
     }
 }
 
@@ -146,13 +153,20 @@ fun LazyListScope.ledgerRows(entries: List<Entry>, data: LedgerSnapshot, today: 
         itemsIndexed(records, key = { _, entry -> "entry:${entry.id}" }) { position, entry ->
             val first = if (position == 0) 18.dp else 0.dp
             val last = if (position == records.lastIndex) 18.dp else 0.dp
-            Surface(
-                color = MaterialTheme.colorScheme.surface,
-                shape = RoundedCornerShape(topStart = first, topEnd = first, bottomStart = last, bottomEnd = last),
-            ) {
+            val colors = MaterialTheme.colorScheme
+            val refined = LocalLedgerRefinement.current
+            val shape = RoundedCornerShape(topStart = first, topEnd = first, bottomStart = last, bottomEnd = last)
+            // 列表按单条流水虚拟化；描边只在分组外沿，组内保留缩进分隔线。
+            val frame = if (refined) Modifier.clip(shape).background(colors.outlineVariant)
+                .padding(start = 1.dp, end = 1.dp, top = if (first > 0.dp) 1.dp else 0.dp,
+                    bottom = if (last > 0.dp) 1.dp else 0.dp) else Modifier
+            Surface(modifier = frame, color = colors.surface, shape = shape) {
                 Column {
                     LedgerRow(entry, tagById[entry.tagId]?.name.orEmpty(), entry.accountId?.let { accountById[it]?.name }, edit)
-                    if (position < records.lastIndex) Hairline(14)
+                    if (position < records.lastIndex) {
+                        if (refined) HorizontalDivider(Modifier.padding(start = 60.dp, end = 14.dp), color = colors.outlineVariant)
+                        else Hairline(14)
+                    }
                 }
             }
         }
@@ -163,9 +177,17 @@ fun LazyListScope.ledgerRows(entries: List<Entry>, data: LedgerSnapshot, today: 
 private fun LedgerRow(entry: Entry, tag: String, account: String?, edit: (Entry) -> Unit) {
     val income = entry.kind == Kind.INCOME.name
     val colors = MaterialTheme.colorScheme
-    Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { edit(entry) }.padding(horizontal = 14.dp, vertical = 11.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
-        IconBadge(if (income) Glyph.INCOME else Glyph.EXPENSE, emphasis = income)
+    val refined = LocalLedgerRefinement.current
+    val glyph = if (income) Glyph.INCOME else Glyph.EXPENSE
+    Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).clickable(role = Role.Button) { edit(entry) }
+        .padding(horizontal = 14.dp, vertical = if (refined) 10.dp else 11.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (refined) {
+            Box(Modifier.size(36.dp).background(if (income) colors.primaryContainer else colors.surfaceVariant,
+                RoundedCornerShape(11.dp)), contentAlignment = Alignment.Center) {
+                LucideIcon(glyph, if (income) colors.primary else colors.onSurfaceVariant, size = 18)
+            }
+        } else IconBadge(glyph, emphasis = income)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(tag, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val time = Instant.ofEpochMilli(entry.occurredAt).atZone(ZoneId.systemDefault()).format(TimeLabel)
@@ -175,7 +197,7 @@ private fun LedgerRow(entry: Entry, tag: String, account: String?, edit: (Entry)
         }
         AmountText((if (income) "+" else "−") + currency(entry.cents),
             if (income) colors.primary else colors.onSurface, Modifier.weight(.70f),
-            style = RowNumber.copy(textAlign = TextAlign.End))
+            style = (if (refined) LedgerFlowNumber else RowNumber).copy(textAlign = TextAlign.End))
     }
 }
 

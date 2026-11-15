@@ -50,7 +50,7 @@ import com.wmm.ledger.ui.ConfirmDialog
 import com.wmm.ledger.ui.EmptyPanel
 import com.wmm.ledger.ui.EntryEditor
 import com.wmm.ledger.ui.Glyph
-import com.wmm.ledger.ui.LedgerBackdrop
+import com.wmm.ledger.ui.LedgerScreenFrame
 import com.wmm.ledger.ui.LedgerScreen
 import com.wmm.ledger.ui.LedgerTheme
 import com.wmm.ledger.ui.LucideIcon
@@ -111,8 +111,8 @@ private fun LedgerApp(model: LedgerViewModel) {
 
     BackHandler(enabled = route != null || tab != Tab.LEDGER, onBack = ::back)
 
-    Box(Modifier.fillMaxSize()) {
-        LedgerBackdrop()
+    val refined = route == "new" || route?.startsWith("entry:") == true || (route == null && tab == Tab.LEDGER)
+    LedgerScreenFrame(refined) {
         Scaffold(
             containerColor = Color.Transparent,
             contentColor = MaterialTheme.colorScheme.onBackground,

@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -122,6 +123,50 @@ fun LedgerTheme(content: @Composable () -> Unit) {
                 medium = RoundedCornerShape(16.dp), large = RoundedCornerShape(24.dp),
                 extraLarge = RoundedCornerShape(28.dp),
             ),
+            content = content,
+        )
+    }
+}
+
+internal val LocalLedgerRefinement = staticCompositionLocalOf { false }
+
+private val RefinedLight = Light.copy(
+    primary = Color(0xFF2266B9), primaryContainer = Color(0xFFE4EFFF),
+    background = Color(0xFFF4F7FB), onBackground = Color(0xFF121E32), onSurface = Color(0xFF121E32),
+    surfaceContainerLow = Color(0xFFF4FAFF), surfaceContainerHighest = Color(0xFFDCE6F2),
+    onSurfaceVariant = Color(0xFF53647B), outline = Color(0xFF62748B), outlineVariant = Color(0xFFDFE7F2),
+    error = Color(0xFFAB3548),
+)
+private val RefinedDark = Dark.copy(
+    primary = Color(0xFF8DBBFF), onPrimary = Color(0xFF102440), primaryContainer = Color(0xFF243C5D),
+    background = Color(0xFF111A29), onBackground = Color(0xFFEDF4FF), onSurface = Color(0xFFEDF4FF),
+    surface = Color(0xFF1B273A), surfaceContainerHighest = Color(0xFF2A3950),
+    onSurfaceVariant = Color(0xFFAEBDD0), outline = Color(0xFF93A6BF), outlineVariant = Color(0xFF34455E),
+    error = Color(0xFFFFAFB7),
+)
+private val RefinedType = LedgerType.copy(
+    headlineSmall = TextStyle(fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight(650)),
+    titleLarge = TextStyle(fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight(650)),
+    titleMedium = TextStyle(fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.SemiBold),
+    bodySmall = TextStyle(fontSize = 12.sp, lineHeight = 17.sp, fontWeight = FontWeight.Medium),
+    labelLarge = TextStyle(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold),
+)
+
+internal val LedgerBalanceNumber = HeroNumber.copy(lineHeight = 50.sp, fontWeight = FontWeight(650), letterSpacing = (-2).sp)
+internal val LedgerFlowNumber = RowNumber.copy(fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.SemiBold)
+
+@Composable
+internal fun LedgerPageInset() = if (LocalLedgerRefinement.current && LocalConfiguration.current.screenWidthDp < 360) {
+    16.dp
+} else PagePadding
+
+@Composable
+internal fun LedgerScreenTheme(refined: Boolean, content: @Composable () -> Unit) {
+    val colors = if (!refined) MaterialTheme.colorScheme else if (LocalLedgerDark.current) RefinedDark else RefinedLight
+    CompositionLocalProvider(LocalLedgerRefinement provides refined) {
+        MaterialTheme(
+            colorScheme = colors,
+            typography = if (refined) RefinedType else MaterialTheme.typography,
             content = content,
         )
     }

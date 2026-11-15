@@ -30,6 +30,15 @@ class RecordUiTest {
         ui.onNodeWithText("标签名称").performTextInput(tag)
         ui.onNodeWithText("保存").performClick()
         ui.waitUntil(10_000) { ui.onAllNodesWithText(tag).fetchSemanticsNodes().isNotEmpty() }
+        ui.onNodeWithText("日期时间").performScrollTo().performClick()
+        ui.onNodeWithText("日期").assertIsDisplayed()
+        ui.onNodeWithText("时间").assertIsDisplayed()
+        ui.onNodeWithText("取消").performClick()
+
+        ui.onNodeWithText("备注").performScrollTo().performClick()
+        ui.onNodeWithText("备注内容").performTextInput("首笔账单")
+        ui.onNodeWithText("确认").performClick()
+        ui.onNodeWithText("首笔账单").assertIsDisplayed()
         ui.onNodeWithText("保存流水").assertIsEnabled().performClick()
         ui.waitUntil(10_000) { ui.onAllNodesWithText("最近流水").fetchSemanticsNodes().isNotEmpty() }
         ui.onNodeWithText(tag).assertIsDisplayed()
@@ -40,6 +49,7 @@ class RecordUiTest {
         ui.onNodeWithText(tag).performClick()
         ui.onNodeWithText("1 笔").assertIsDisplayed()
         ui.onNode(hasText(tag) and hasText("−¥12.35")).performClick()
+        ui.onNodeWithText("首笔账单").assertIsDisplayed()
         ui.onNodeWithContentDescription("删除流水").performClick()
         ui.onNodeWithText("删除").performClick()
         ui.waitUntil(10_000) { ui.onAllNodesWithText("0 笔").fetchSemanticsNodes().isNotEmpty() }

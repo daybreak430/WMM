@@ -55,7 +55,8 @@ fun PageHeader(title: String, back: (() -> Unit)? = null, mark: Glyph? = null, c
     end: @Composable () -> Unit = {}) {
     val colors = MaterialTheme.colorScheme
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 68.dp).padding(horizontal = PagePadding, vertical = 8.dp),
+        Modifier.fillMaxWidth().heightIn(min = if (LocalLedgerRefinement.current) 64.dp else 68.dp)
+            .padding(horizontal = LedgerPageInset(), vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -115,7 +116,11 @@ fun AmountText(amount: String, color: Color = MaterialTheme.colorScheme.onSurfac
         style = style.copy(color = color),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
-        autoSize = TextAutoSize.StepBased(minFontSize = (if (style.fontSize.value > 30) 23 else 12).sp,
+        autoSize = TextAutoSize.StepBased(minFontSize = when {
+            style.fontSize.value <= 30 -> 12.sp
+            LocalLedgerRefinement.current -> 30.sp
+            else -> 23.sp
+        },
             maxFontSize = style.fontSize, stepSize = 1.sp),
     )
 }

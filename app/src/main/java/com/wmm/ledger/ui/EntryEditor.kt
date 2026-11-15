@@ -1,5 +1,7 @@
 package com.wmm.ledger.ui
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -14,14 +16,12 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -37,7 +37,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.focus.FocusRequester
@@ -48,6 +50,8 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -65,6 +69,7 @@ import com.wmm.ledger.data.parseCents
 import com.wmm.ledger.data.validName
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
 import kotlinx.coroutines.delay
 
@@ -85,6 +90,8 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
     val time = Instant.ofEpochMilli(occurredAt).atZone(zone).toLocalTime()
     var tagDialog by rememberSaveable { mutableStateOf(false) }
     var accountDialog by rememberSaveable { mutableStateOf(false) }
+    var noteEditor by rememberSaveable { mutableStateOf(false) }
+    var dateEditor by rememberSaveable { mutableStateOf(false) }
     var deleteDialog by rememberSaveable { mutableStateOf(false) }
     var showTags by rememberSaveable { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
@@ -94,22 +101,11 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
     val visibleTags = if (showTags) tags else (tags.take(8) + listOfNotNull(currentTag)).distinctBy { it.id }
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = LocalFocusManager.current
-    val amountFocus = remember { FocusRequester() }
-    var requested by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        if (!requested && initial == null) {
-            requested = true
-            amountFocus.requestFocus()
-            delay(150)
-            if (!tagDialog) keyboard?.show()
-        }
-    }
-    val chooseDate = CalendarAction(day) { date ->
-        bookedDay = date.toString()
-        occurredAt = date.atTime(time).atZone(zone).toInstant().toEpochMilli()
-    }
-    val chooseTime = TimeAction(time) { changed ->
-        occurredAt = day.atTime(changed).atZone(zone).toInstant().toEpochMilli()
+    val pageInset = LedgerPageInset()
+    val colors = MaterialTheme.colorScheme
+    fun dismissKeyboard() {
+        focus.clearFocus()
+        keyboard?.hide()
     }
 
     Column(Modifier.fillMaxSize().imePadding()) {
@@ -118,9 +114,8 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
                 LucideIcon(Glyph.DELETE, MaterialTheme.colorScheme.error, "删除流水")
             }
         }
-        val colors = MaterialTheme.colorScheme
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())
-            .padding(horizontal = PagePadding, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            .padding(horizontal = pageInset, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             LedgerSegments(Kind.entries, kind, { it.title }) { option ->
                 if (option != kind) {
                     kindName = option.name
@@ -131,37 +126,9 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
             Column(Modifier.fillMaxWidth().padding(top = 7.dp),
                 verticalArrangement = Arrangement.spacedBy(3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 val amountError = amountText.isNotBlank() && cents == null
-                val amountColor = if (amountError) colors.error else colors.onSurface
                 Text("金额", color = if (amountError) colors.error else colors.onSurfaceVariant,
                     style = MaterialTheme.typography.labelLarge)
-                val inputStyle = HeroNumber.copy(fontSize = if (amountText.length > 11) 32.sp else 44.sp)
-                val amountWidth = rememberTextMeasurer().measure(
-                    AnnotatedString(amountText.ifEmpty { "0.00" }), inputStyle, maxLines = 1,
-                ).size.width
-                val preferredWidth = with(LocalDensity.current) { amountWidth.toDp() } + 6.dp
-                BasicTextField(
-                    value = amountText,
-                    onValueChange = { if (it.length <= 17) amountText = it },
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp).focusRequester(amountFocus)
-                        .testTag("entry-amount").semantics { contentDescription = "金额" },
-                    textStyle = inputStyle.copy(color = amountColor),
-                    singleLine = true,
-                    cursorBrush = SolidColor(colors.primary),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
-                    decorationBox = { inner ->
-                        BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            val textWidth = preferredWidth.coerceAtMost((maxWidth - 45.dp).coerceAtLeast(36.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text("¥", color = amountColor, style = MaterialTheme.typography.headlineLarge)
-                                Box(Modifier.width(textWidth), contentAlignment = Alignment.CenterStart) {
-                                    if (amountText.isEmpty()) Text("0.00", color = colors.outline, style = inputStyle)
-                                    inner()
-                                }
-                            }
-                        }
-                    },
-                )
+                EntryAmount(amountText, amountError, autoFocus = initial == null) { amountText = it }
                 Hairline()
                 if (amountError) Text("请输入有效金额，最多两位小数。", color = colors.error,
                     style = MaterialTheme.typography.bodySmall)
@@ -172,57 +139,35 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
                     else if (tagId == null) Text("必选", color = colors.onSurfaceVariant,
                         style = MaterialTheme.typography.labelMedium)
                 }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     visibleTags.forEach { tag ->
-                        FilterChip(
-                            selected = tagId == tag.id,
-                            onClick = {
-                                tagId = tag.id
-                                focus.clearFocus()
-                                keyboard?.hide()
-                            },
-                            shape = FieldShape,
-                            colors = FilterChipDefaults.filterChipColors(
-                                containerColor = colors.surface,
-                                selectedContainerColor = colors.primaryContainer,
-                                selectedLabelColor = colors.onPrimaryContainer,
-                            ),
-                            label = { Text(tag.name) },
-                        )
+                        EntryTagChip(tag.name, selected = tagId == tag.id) {
+                            tagId = tag.id
+                            dismissKeyboard()
+                        }
                     }
-                    AssistChip(
-                        onClick = {
-                            focus.clearFocus()
-                            keyboard?.hide()
-                            tagDialog = true
-                        },
-                        shape = FieldShape,
-                        colors = AssistChipDefaults.assistChipColors(
-                            containerColor = colors.surface, labelColor = colors.primary,
-                        ),
-                        label = { Text("新建标签") },
-                        leadingIcon = { LucideIcon(Glyph.PLUS, colors.primary, size = 16) },
-                    )
+                    EntryTagChip("新建标签") {
+                        dismissKeyboard()
+                        tagDialog = true
+                    }
                 }
             }
             GroupCard {
-                SettingsRow("账户", icon = Glyph.WALLET, end = account?.name ?: "不关联") {
-                    focus.clearFocus()
+                EntryDetailRow("账户", account?.name ?: "不关联", Glyph.WALLET) {
+                    dismissKeyboard()
                     accountDialog = true
                 }
                 Hairline(14)
-                Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp)) {
-                    TextButton(onClick = { focus.clearFocus(); chooseDate() }, modifier = Modifier.weight(1.5f)) {
-                        LucideIcon(Glyph.CALENDAR, colors.primary, size = 17)
-                        Text(" ${day.year}/${day.monthValue}/${day.dayOfMonth}", maxLines = 1)
-                    }
-                    TextButton(onClick = { focus.clearFocus(); chooseTime() }, modifier = Modifier.weight(1f)) {
-                        Text(time.format(TimeLabel))
-                    }
+                EntryDetailRow("日期时间", "${day.year}/${day.monthValue}/${day.dayOfMonth} ${time.format(TimeLabel)}", Glyph.CALENDAR) {
+                    dismissKeyboard()
+                    dateEditor = true
+                }
+                Hairline(14)
+                EntryDetailRow("备注", note.ifBlank { "选填" }, Glyph.EDIT) {
+                    dismissKeyboard()
+                    noteEditor = true
                 }
             }
-            OutlinedTextField(note, { if (it.length <= MAX_NOTE) note = it }, Modifier.fillMaxWidth(),
-                label = { Text("备注（选填）") }, maxLines = 3, shape = FieldShape, colors = ledgerFieldColors())
         }
         Surface(color = colors.background) {
             PrimaryAction(
@@ -237,7 +182,7 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
                         .invokeOnCompletion { saving = false }
                 },
                 enabled = cents != null && tagId != null && !saving,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = PagePadding, vertical = 10.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = pageInset, vertical = 10.dp),
             )
         }
     }
@@ -269,12 +214,148 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
             }
         }, confirmButton = { TextButton(onClick = { accountDialog = false }) { Text("关闭") } })
     }
+    if (dateEditor) {
+        EntryDateDialog(day, time, onDismiss = { dateEditor = false }) { changedDay, changedTime ->
+            if (changedDay != day || changedTime != time) {
+                bookedDay = changedDay.toString()
+                occurredAt = changedDay.atTime(changedTime).atZone(zone).toInstant().toEpochMilli()
+            }
+            dateEditor = false
+        }
+    }
+    if (noteEditor) {
+        EntryNoteDialog(note, onDismiss = { noteEditor = false }) {
+            note = it
+            noteEditor = false
+        }
+    }
     if (deleteDialog && initial != null) {
         ConfirmDialog("删除这笔流水？", "删除后会更新收支统计和关联账户余额。", "删除", { deleteDialog = false }) {
             deleteDialog = false
             model.deleteEntry(initial.id, back)
         }
     }
+}
+
+@Composable
+private fun EntryAmount(amount: String, error: Boolean, autoFocus: Boolean, onChange: (String) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val amountColor = if (error) colors.error else colors.onSurface
+    val currencyStyle = LedgerBalanceNumber.copy(
+        fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp,
+    )
+    val baseStyle = LedgerBalanceNumber.copy(fontSize = 46.sp, lineHeight = 54.sp)
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focusRequester = remember { FocusRequester() }
+    var requested by rememberSaveable { mutableStateOf(false) }
+    BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        val shown = AnnotatedString(amount.ifEmpty { "0.00" })
+        val symbolWidth = measurer.measure(AnnotatedString("¥"), currencyStyle).size.width
+        val available = with(density) { (maxWidth - 12.dp - symbolWidth.toDp()).coerceAtLeast(1.dp).toPx() }
+        // 根据实际字宽适配窄屏和字号缩放，金额过长时保留输入框的横向滚动。
+        val fullWidth = measurer.measure(shown, baseStyle, maxLines = 1).size.width.coerceAtLeast(1)
+        val inputStyle = baseStyle.copy(fontSize = (46 * (available / fullWidth)).coerceIn(30f, 46f).sp)
+        val measured = measurer.measure(shown, inputStyle, maxLines = 1).size.width
+        val textWidth = with(density) { (minOf(measured.toFloat(), available).toDp() + 6.dp) }
+        LaunchedEffect(Unit) {
+            if (autoFocus && !requested) {
+                requested = true
+                focusRequester.requestFocus()
+                delay(150)
+                keyboard?.show()
+            }
+        }
+        BasicTextField(
+            value = amount,
+            onValueChange = { if (it.length <= 17) onChange(it) },
+            modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp).focusRequester(focusRequester)
+                .testTag("entry-amount").semantics { contentDescription = "金额" },
+            textStyle = inputStyle.copy(color = amountColor),
+            singleLine = true,
+            cursorBrush = SolidColor(colors.primary),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
+            decorationBox = { inner ->
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
+                    Text("¥", color = if (amount.isEmpty()) colors.outline else amountColor, style = currencyStyle)
+                    Box(Modifier.width(textWidth), contentAlignment = Alignment.CenterStart) {
+                        if (amount.isEmpty()) Text("0.00", color = colors.outline, style = inputStyle)
+                        inner()
+                    }
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun EntryTagChip(label: String, selected: Boolean? = null, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(10.dp)
+    val interaction = if (selected != null) Modifier.selectable(selected, role = Role.RadioButton, onClick = onClick)
+        else Modifier.clickable(role = Role.Button, onClick = onClick)
+    val tint = if (selected != false) colors.primary else colors.onSurface
+    Box(Modifier.heightIn(min = 44.dp).clip(shape).then(interaction), contentAlignment = Alignment.Center) {
+        Surface(shape = shape, color = if (selected == true) colors.primaryContainer else colors.surface,
+            border = BorderStroke(1.dp, colors.outlineVariant)) {
+            Row(Modifier.heightIn(min = 34.dp).padding(horizontal = 11.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (selected == null) LucideIcon(Glyph.PLUS, tint, size = 16)
+                Text(label, style = MaterialTheme.typography.labelLarge, color = tint)
+            }
+        }
+    }
+}
+
+@Composable
+private fun EntryDetailRow(label: String, value: String, icon: Glyph, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Row(Modifier.fillMaxWidth().heightIn(min = 50.dp).clickable(role = Role.Button, onClick = onClick)
+        .padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        LucideIcon(icon, colors.onSurfaceVariant, size = 17)
+        Text(label, style = MaterialTheme.typography.titleMedium)
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+            Text(value, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        LucideIcon(Glyph.RIGHT, colors.onSurfaceVariant, size = 16)
+    }
+}
+
+@Composable
+private fun EntryDateDialog(day: LocalDate, time: LocalTime, onDismiss: () -> Unit,
+    onSave: (LocalDate, LocalTime) -> Unit) {
+    var dateText by rememberSaveable { mutableStateOf(day.toString()) }
+    var timeText by rememberSaveable { mutableStateOf(time.toString()) }
+    val pendingDay = LocalDate.parse(dateText)
+    val pendingTime = LocalTime.parse(timeText)
+    val chooseDate = CalendarAction(pendingDay) { dateText = it.toString() }
+    val chooseTime = TimeAction(pendingTime) { timeText = it.toString() }
+    AlertDialog(onDismissRequest = onDismiss, shape = CardShape, title = { Text("日期时间") },
+        text = {
+            GroupCard {
+                EntryDetailRow("日期", pendingDay.toString(), Glyph.CALENDAR, chooseDate)
+                Hairline(14)
+                EntryDetailRow("时间", pendingTime.format(TimeLabel), Glyph.EDIT, chooseTime)
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSave(pendingDay, pendingTime) }) { Text("确认") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } })
+}
+
+@Composable
+private fun EntryNoteDialog(note: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+    var draft by rememberSaveable { mutableStateOf(note) }
+    AlertDialog(onDismissRequest = onDismiss, shape = CardShape, title = { Text("备注") },
+        text = {
+            OutlinedTextField(draft, { if (it.length <= MAX_NOTE) draft = it }, Modifier.fillMaxWidth(),
+                label = { Text("备注内容") }, minLines = 2, maxLines = 4, shape = FieldShape, colors = ledgerFieldColors())
+        },
+        confirmButton = { TextButton(onClick = { onSave(draft) }) { Text("确认") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } })
 }
 
 @Composable
