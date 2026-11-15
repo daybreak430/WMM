@@ -53,7 +53,8 @@ import com.wmm.ledger.data.Period
 import com.wmm.ledger.data.PeriodStats
 import com.wmm.ledger.data.Provider
 import com.wmm.ledger.data.Report
-import com.wmm.ledger.data.TagTotal
+import com.wmm.ledger.data.Reports
+import com.wmm.ledger.data.reportAnalysis
 import com.wmm.ledger.data.currency
 import com.wmm.ledger.data.stats
 import java.time.Instant
@@ -139,6 +140,7 @@ private fun SummaryMetric(kind: Kind, cents: Long, modifier: Modifier = Modifier
 fun LazyListScope.ledgerRows(entries: List<Entry>, data: LedgerSnapshot, today: LocalDate, edit: (Entry) -> Unit) {
     val tagById = data.tags.associateBy { it.id }
     val accountById = data.accounts.associateBy { it.id }
+    val sceneById = data.scenes.associateBy { it.id }
     entries.groupBy { it.day }.toSortedMap(reverseOrder()).forEach { (date, records) ->
         item("day:$date") {
             val day = LocalDate.parse(date)
@@ -162,7 +164,10 @@ fun LazyListScope.ledgerRows(entries: List<Entry>, data: LedgerSnapshot, today: 
                     bottom = if (last > 0.dp) 1.dp else 0.dp) else Modifier
             Surface(modifier = frame, color = colors.surface, shape = shape) {
                 Column {
-                    LedgerRow(entry, tagById[entry.tagId]?.name.orEmpty(), entry.accountId?.let { accountById[it]?.name }, edit)
+                    val type = tagById[entry.tagId]?.name.orEmpty()
+                    val scene = sceneById[entry.sceneId]?.name
+                    val label = if (scene == null) type else "$scene · $type"
+                    LedgerRow(entry, label, accountById[entry.accountId]?.name, edit)
                     if (position < records.lastIndex) {
                         if (refined) HorizontalDivider(Modifier.padding(start = 60.dp, end = 14.dp), color = colors.outlineVariant)
                         else Hairline(14)
@@ -203,7 +208,8 @@ private fun LedgerRow(entry: Entry, tag: String, account: String?, edit: (Entry)
 
 @Composable
 fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: LocalDate, choosePeriod: (Period) -> Unit,
-    chooseDay: (LocalDate) -> Unit, drill: (String) -> Unit, busy: Boolean, hasKey: Boolean, consent: Boolean,
+    chooseDay: (LocalDate) -> Unit, drill: (String) -> Unit, drillScene: (String) -> Unit,
+    busy: Boolean, hasKey: Boolean, consent: Boolean,
     generate: (Boolean) -> Unit, openModel: () -> Unit) {
     val summary = remember(data, period, day, today) { data.stats(period, day, today) }
     val report = data.reports.firstOrNull { it.period == period.name && it.startDay == summary.start.toString() }
@@ -244,22 +250,31 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
                     if (tags.isNotEmpty()) {
                         item("tag-title:${kind.name}") { SectionTitle("${kind.title}标签") }
                         val total = if (kind == Kind.INCOME) summary.income else summary.expense
-                        items(tags, key = { "tag:${it.tag.id}" }) { tag -> TagRank(tag, total) { drill(tag.tag.id) } }
+                        items(tags, key = { "tag:${it.tag.id}" }) { row ->
+                            RankCard(row.tag.name, row.cents, total, kind == Kind.INCOME) { drill(row.tag.id) }
+                        }
                     }
                 }
             }
-            if (period != Period.YEAR) {
-                item("report") {
-                    ReportPanel(summary, report, busy, hasKey, openModel) {
-                        if (consent) generate(false) else consentDialog = true
-                    }
+            if (summary.sceneTotals.isNotEmpty()) {
+                item("scene-title") { SectionTitle("支出场景") }
+                items(summary.sceneTotals, key = { "scene:${it.scene.id}" }) { row ->
+                    RankCard(row.scene.name, row.cents, summary.expense) { drillScene(row.scene.id) }
+                }
+            }
+            item("report") {
+                val stale = report != null && remember(data, period, day, today) {
+                    Reports.signature(data.reportAnalysis(period, day, today))
+                } != report.snapshotId
+                ReportPanel(summary, report, stale, busy, hasKey, openModel) {
+                    if (consent) generate(false) else consentDialog = true
                 }
             }
         }
     }
     if (consentDialog) {
         ConfirmDialog("允许发送汇总？",
-            "仅向所选模型发送期间、笔数、收支金额和标签排行（含标签名）。不会发送流水明细、备注、账户或个人资料。",
+            "仅向所选模型发送收支汇总、分段和上期对比，以及含名称的类型标签、场景和组合排行。不会发送流水明细、备注、账户余额或个人资料。",
             "同意并生成", { consentDialog = false }) {
             consentDialog = false
             generate(true)
@@ -296,20 +311,19 @@ private fun StatsCover(summary: PeriodStats) {
 }
 
 @Composable
-private fun TagRank(total: TagTotal, kindTotal: Long, click: () -> Unit) {
+private fun RankCard(label: String, amount: Long, total: Long, income: Boolean = false, click: () -> Unit) {
     val colors = MaterialTheme.colorScheme
-    val income = total.tag.kind == Kind.INCOME.name
     Surface(onClick = click, shape = FieldShape, color = colors.surface,
         border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .68f))) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(total.tag.name, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
+                Text(label, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
-                AmountText(currency(total.cents), modifier = Modifier.weight(.72f),
+                AmountText(currency(amount), modifier = Modifier.weight(.72f),
                     style = RowNumber.copy(textAlign = TextAlign.End))
                 LucideIcon(Glyph.RIGHT, color = colors.onSurfaceVariant, size = 16)
             }
-            val fraction = total.cents.toFloat() / kindTotal.toFloat()
+            val fraction = amount.toFloat() / total.toFloat()
             Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(colors.outlineVariant)) {
                 Box(Modifier.fillMaxWidth(fraction.coerceIn(0f, 1f)).height(4.dp)
                     .background(if (income) colors.primary else colors.outline))
@@ -319,16 +333,17 @@ private fun TagRank(total: TagTotal, kindTotal: Long, click: () -> Unit) {
 }
 
 @Composable
-private fun ReportPanel(summary: PeriodStats, report: Report?, busy: Boolean, hasKey: Boolean, openModel: () -> Unit,
+private fun ReportPanel(summary: PeriodStats, report: Report?, stale: Boolean, busy: Boolean,
+    hasKey: Boolean, openModel: () -> Unit,
     generate: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     GroupCard {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 IconBadge(Glyph.SPARK, emphasis = true)
-                Text(if (summary.period == Period.DAY) "AI 日报" else "AI 月报", Modifier.weight(1f),
+                Text("AI ${summary.period.title}报", Modifier.weight(1f),
                     style = MaterialTheme.typography.titleMedium)
-                if (report != null && remember(summary) { summary.signature() } != report.snapshotId) {
+                if (stale) {
                     Text("汇总已更新", color = colors.error, style = MaterialTheme.typography.bodySmall)
                 }
             }
@@ -361,12 +376,13 @@ fun periodLabel(period: Period, date: LocalDate): String = when (period) {
 }
 
 @Composable
-fun TagDrillScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: LocalDate, id: String, back: () -> Unit,
-    edit: (Entry) -> Unit) {
+fun TagDrillScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: LocalDate, id: String,
+    scene: Boolean, back: () -> Unit, edit: (Entry) -> Unit) {
     val stat = remember(data, today, period, day) { data.stats(period, day, today) }
-    val filtered = stat.entries.filter { it.tagId == id }
+    val filtered = stat.entries.filter { if (scene) it.sceneId == id else it.tagId == id }
+    val title = if (scene) data.scenes.firstOrNull { it.id == id }?.name else data.tags.firstOrNull { it.id == id }?.name
     Column {
-        PageHeader(data.tags.firstOrNull { it.id == id }?.name ?: "标签流水", back)
+        PageHeader(title ?: "标签流水", back)
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = PagePadding, vertical = 10.dp)) {
             item("summary") {
                 BalancePanel {

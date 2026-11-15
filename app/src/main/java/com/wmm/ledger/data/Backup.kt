@@ -13,7 +13,7 @@ import java.time.ZoneOffset
 import java.util.Locale
 
 private const val FORMAT = "wmm-ledger"
-private const val BACKUP_VERSION = 1
+private const val BACKUP_VERSION = 2
 const val MAX_BACKUP_BYTES = 32 * 1024 * 1024
 const val MAX_AVATAR_BYTES = 256 * 1024
 
@@ -36,6 +36,9 @@ object Backup {
         put("tags", array(data.tags) {
             put("id", it.id); put("kind", it.kind); put("name", it.name); put("archived", it.archived)
         })
+        put("scenes", array(data.scenes) {
+            put("id", it.id); put("name", it.name)
+        })
         put("accounts", array(data.accounts) {
             put("id", it.id); put("type", it.type); put("name", it.name)
             put("baselineCents", it.baselineCents); put("calibratedAt", it.calibratedAt); put("archived", it.archived)
@@ -44,6 +47,7 @@ object Backup {
             put("id", it.id); put("kind", it.kind); put("cents", it.cents); put("tagId", it.tagId)
             put("accountId", it.accountId ?: JSONObject.NULL); put("note", it.note)
             put("occurredAt", it.occurredAt); put("day", it.day)
+            put("sceneId", it.sceneId ?: JSONObject.NULL)
         })
         put("reports", array(data.reports) {
             put("period", it.period); put("startDay", it.startDay); put("snapshotId", it.snapshotId)
@@ -60,12 +64,16 @@ object Backup {
         val root = tokens.nextValue() as JSONObject
         require(tokens.nextClean() == '\u0000')
         require(root.string("format") == FORMAT)
-        if (root.number("version") != BACKUP_VERSION.toLong()) {
+        val version = root.number("version")
+        if (version !in 1L..BACKUP_VERSION.toLong()) {
             throw LedgerError("不支持这个备份版本。请使用兼容的 WMM 版本恢复。")
         }
         val tags = root.list("tags", 50_000) {
             Tag(id(), enumValueOf<Kind>(string("kind")).name, name(), flag("archived"))
         }
+        val scenes = if (version == 1L) emptyList() else root.list("scenes", 50_000) { Scene(id(), name()) }
+        val sceneIds = scenes.mapTo(mutableSetOf()) { it.id }
+        require(sceneIds.size == scenes.size && scenes.distinctBy { it.name.lowercase(Locale.ROOT) }.size == scenes.size)
         val accounts = root.list("accounts", 50_000) {
             Account(id(), enumValueOf<AccountType>(string("type")).name, name(),
                 number("baselineCents").also { require(it in -MAX_CENTS..MAX_CENTS) }, time("calibratedAt"), flag("archived"))
@@ -78,17 +86,20 @@ object Backup {
             val kind = enumValueOf<Kind>(string("kind")).name
             val tagId = id("tagId").also { require(tagsById[it]?.kind == kind) }
             val accountId = nullableString("accountId").also { require(it == null || it in accountsById) }
+            val sceneId = if (version == 1L) null else nullableString("sceneId")
+            require(sceneId == null || kind == Kind.EXPENSE.name && sceneId in sceneIds)
             val occurredAt = time("occurredAt")
             val bookingDay = day("day")
             // 时区可能与当前手机不同；允许 UTC 日期前后一天，但拒绝不一致的日期和时间。
             val utcDay = Instant.ofEpochMilli(occurredAt).atOffset(ZoneOffset.UTC).toLocalDate()
             require(bookingDay in utcDay.minusDays(1)..utcDay.plusDays(1))
             Entry(id(), kind, number("cents").also { require(it in 1..MAX_CENTS) }, tagId, accountId,
-                string("note").also { require(it.length <= MAX_NOTE) }, occurredAt, bookingDay.toString())
+                string("note").also { require(it.length <= MAX_NOTE) }, occurredAt, bookingDay.toString(), sceneId)
         }
         require(entries.distinctBy { it.id }.size == entries.size)
         val reports = root.list("reports", 50_000) {
-            val period = enumValueOf<Period>(string("period")).also { require(it != Period.YEAR) }
+            val period = enumValueOf<Period>(string("period"))
+            require(version >= 2L || period != Period.YEAR)
             val start = day("startDay").also { require(it == period.start(it)) }
             val signature = string("snapshotId").also { require(it.matches(Regex("[a-f0-9]{64}"))) }
             Report(period.name, start.toString(), signature, time("createdAt"),
@@ -101,7 +112,7 @@ object Backup {
             val avatar = nullableString("avatar")?.let(::decodeAvatar)
             Profile(nickname = nickname, avatar = avatar)
         }
-        return LedgerSnapshot(entries, tags, accounts, reports, profile)
+        return LedgerSnapshot(entries, tags, accounts, reports, profile, scenes)
     }
 
     private fun decodeAvatar(raw: String): ByteArray {

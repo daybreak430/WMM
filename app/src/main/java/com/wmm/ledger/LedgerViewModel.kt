@@ -13,6 +13,7 @@ import com.wmm.ledger.data.LedgerRepository
 import com.wmm.ledger.data.LedgerSnapshot
 import com.wmm.ledger.data.Period
 import com.wmm.ledger.data.Provider
+import com.wmm.ledger.data.Scene
 import com.wmm.ledger.data.Tag
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -62,9 +63,12 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
     fun archiveTag(id: String, archive: Boolean) =
         perform("无法修改标签。") { repository.archiveTag(id, archive) }
 
+    fun saveScene(name: String, done: (Scene) -> Unit) =
+        perform("无法保存场景。") { done(repository.saveScene(name)) }
+
     fun saveEntry(id: String?, kind: Kind, amount: Long, tag: String, account: String?, note: String, at: Long,
-        day: LocalDate, done: () -> Unit) = perform("无法保存流水。") {
-        repository.saveEntry(id, kind, amount, tag, account, note, at, day)
+        day: LocalDate, sceneId: String?, done: () -> Unit) = perform("无法保存流水。") {
+        repository.saveEntry(id, kind, amount, tag, account, note, at, day, sceneId)
         done()
         notify("已保存")
     }

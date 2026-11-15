@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -63,7 +65,9 @@ import com.wmm.ledger.data.LedgerRepository
 import com.wmm.ledger.data.LedgerSnapshot
 import com.wmm.ledger.data.MAX_NAME
 import com.wmm.ledger.data.MAX_NOTE
+import com.wmm.ledger.data.Scene
 import com.wmm.ledger.data.editableAmount
+import com.wmm.ledger.data.frequentScenes
 import com.wmm.ledger.data.frequentTags
 import com.wmm.ledger.data.parseCents
 import com.wmm.ledger.data.validName
@@ -81,6 +85,7 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
     var amountText by rememberSaveable { mutableStateOf(initial?.let { editableAmount(it.cents) } ?: "") }
     val cents = parseCents(amountText)
     var tagId by rememberSaveable { mutableStateOf(initial?.tagId) }
+    var sceneId by rememberSaveable { mutableStateOf(initial?.sceneId) }
     var accountId by rememberSaveable { mutableStateOf(initial?.accountId) }
     var note by rememberSaveable { mutableStateOf(initial?.note.orEmpty()) }
     var occurredAt by rememberSaveable { mutableStateOf(initial?.occurredAt ?: System.currentTimeMillis()) }
@@ -89,6 +94,8 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
     val zone = ZoneId.systemDefault()
     val time = Instant.ofEpochMilli(occurredAt).atZone(zone).toLocalTime()
     var tagDialog by rememberSaveable { mutableStateOf(false) }
+    var scenePicker by rememberSaveable { mutableStateOf(false) }
+    var newScene by rememberSaveable { mutableStateOf(false) }
     var accountDialog by rememberSaveable { mutableStateOf(false) }
     var noteEditor by rememberSaveable { mutableStateOf(false) }
     var dateEditor by rememberSaveable { mutableStateOf(false) }
@@ -96,6 +103,7 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
     var showTags by rememberSaveable { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     val tags = remember(data, kind, initial?.tagId) { data.frequentTags(kind, initial?.tagId) }
+    val scene = data.scenes.firstOrNull { it.id == sceneId }
     val account = data.accounts.firstOrNull { it.id == accountId }
     val currentTag = tags.firstOrNull { it.id == tagId }
     val visibleTags = if (showTags) tags else (tags.take(8) + listOfNotNull(currentTag)).distinctBy { it.id }
@@ -134,7 +142,7 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
                     style = MaterialTheme.typography.bodySmall)
             }
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                SectionTitle("标签") {
+                SectionTitle("类型标签") {
                     if (tags.size > 8) TextButton(onClick = { showTags = !showTags }) { Text(if (showTags) "收起" else "全部") }
                     else if (tagId == null) Text("必选", color = colors.onSurfaceVariant,
                         style = MaterialTheme.typography.labelMedium)
@@ -153,6 +161,13 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
                 }
             }
             GroupCard {
+                if (kind == Kind.EXPENSE) {
+                    EntryDetailRow("场景", scene?.name ?: "选填", Glyph.TAG) {
+                        dismissKeyboard()
+                        scenePicker = true
+                    }
+                    Hairline(14)
+                }
                 EntryDetailRow("账户", account?.name ?: "不关联", Glyph.WALLET) {
                     dismissKeyboard()
                     accountDialog = true
@@ -178,7 +193,8 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
                     saving = true
                     focus.clearFocus()
                     keyboard?.hide()
-                    model.saveEntry(initial?.id, kind, saveCents, selected, accountId, note, occurredAt, day, back)
+                    model.saveEntry(initial?.id, kind, saveCents, selected, accountId, note, occurredAt, day,
+                        sceneId.takeIf { kind == Kind.EXPENSE }, back)
                         .invokeOnCompletion { saving = false }
                 },
                 enabled = cents != null && tagId != null && !saving,
@@ -191,6 +207,24 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
             model.saveTag(kind, name, null) { tag ->
                 tagId = tag.id
                 tagDialog = false
+            }
+        }
+    }
+    if (scenePicker && kind == Kind.EXPENSE) {
+        val scenes = remember(data) { data.frequentScenes() }
+        ScenePicker(scenes, sceneId, onDismiss = { scenePicker = false }, onNew = {
+            scenePicker = false
+            newScene = true
+        }) {
+            sceneId = it
+            scenePicker = false
+        }
+    }
+    if (newScene && kind == Kind.EXPENSE) {
+        NameDialog("新建场景", "场景名称", "", onDismiss = { newScene = false }) { name ->
+            model.saveScene(name) {
+                sceneId = it.id
+                newScene = false
             }
         }
     }
@@ -235,6 +269,25 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
             model.deleteEntry(initial.id, back)
         }
     }
+}
+
+@Composable
+private fun ScenePicker(scenes: List<Scene>, selectedId: String?, onDismiss: () -> Unit, onNew: () -> Unit,
+    onSelect: (String?) -> Unit) {
+    AlertDialog(onDismissRequest = onDismiss, shape = CardShape, title = { Text("选择场景") },
+        text = {
+            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 320.dp)) {
+                item {
+                    SettingsRow("不填场景", end = if (selectedId == null) "当前" else null) { onSelect(null) }
+                }
+                items(scenes, key = { it.id }) { scene ->
+                    Hairline()
+                    SettingsRow(scene.name, end = if (scene.id == selectedId) "当前" else null) { onSelect(scene.id) }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onNew) { Text("新建场景") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } })
 }
 
 @Composable

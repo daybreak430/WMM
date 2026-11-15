@@ -12,6 +12,7 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
 
@@ -25,18 +26,19 @@ class LedgerRepository(context: Context) {
         val key = secrets.databaseKey(!app.getDatabasePath(DATABASE_NAME).exists())
         Room.databaseBuilder(app, LedgerDatabase::class.java, DATABASE_NAME)
             .openHelperFactory(SupportOpenHelperFactory(key))
+            .addMigrations(MIGRATION_1_2)
             .build()
     }
     private val dao get() = database.ledger()
 
     suspend fun observe() = withContext(Dispatchers.IO) {
-        database.invalidationTracker.createFlow("entries", "tags", "accounts", "reports", "profile")
+        database.invalidationTracker.createFlow("entries", "tags", "accounts", "reports", "profile", "scenes")
             .conflate().map { snapshot() }.flowOn(Dispatchers.IO)
     }
 
     suspend fun snapshot(): LedgerSnapshot = withContext(Dispatchers.IO) {
         database.withTransaction {
-            LedgerSnapshot(dao.entries(), dao.tags(), dao.accounts(), dao.reports(), dao.profile() ?: Profile())
+            LedgerSnapshot(dao.entries(), dao.tags(), dao.accounts(), dao.reports(), dao.profile() ?: Profile(), dao.scenes())
         }
     }
 
@@ -57,9 +59,19 @@ class LedgerRepository(context: Context) {
         database.withTransaction { dao.tag(id)?.let { dao.save(it.copy(archived = archive)) } }
     }
 
+    suspend fun saveScene(name: String): Scene = withContext(Dispatchers.IO) {
+        val trimmed = name.trim()
+        if (!validName(trimmed)) throw LedgerError("场景名称需为 1–$MAX_NAME 个字。")
+        database.withTransaction {
+            val key = trimmed.lowercase(Locale.ROOT)
+            dao.scenes().firstOrNull { it.name.lowercase(Locale.ROOT) == key }
+                ?: Scene(newId(), trimmed).also { dao.addScene(it) }
+        }
+    }
+
     suspend fun saveEntry(
         id: String?, kind: Kind, cents: Long, tagId: String, accountId: String?,
-        note: String, occurredAt: Long, day: LocalDate,
+        note: String, occurredAt: Long, day: LocalDate, sceneId: String? = null,
     ) = withContext(Dispatchers.IO) {
         if (cents !in 1..MAX_CENTS) throw LedgerError("请输入有效金额，最多两位小数。")
         if (day !in FIRST_DAY..LAST_DAY || occurredAt > System.currentTimeMillis()) throw LedgerError("请选择有效的发生日期和时间。")
@@ -71,7 +83,11 @@ class LedgerRepository(context: Context) {
                 val account = dao.account(accountId)
                 if (account == null || account.archived && old?.accountId != accountId) throw LedgerError("请选择可用账户。")
             }
-            dao.save(Entry(id ?: newId(), kind.name, cents, tagId, accountId, note.trim().take(MAX_NOTE), occurredAt, day.toString()))
+            if (sceneId != null && (kind != Kind.EXPENSE || dao.scene(sceneId) == null)) {
+                throw LedgerError("请选择一个有效的支出场景。")
+            }
+            dao.save(Entry(id ?: newId(), kind.name, cents, tagId, accountId, note.trim().take(MAX_NOTE),
+                occurredAt, day.toString(), sceneId))
         }
     }
 
@@ -114,9 +130,11 @@ class LedgerRepository(context: Context) {
         database.withTransaction {
             dao.clearEntries()
             dao.clearTags()
+            dao.clearScenes()
             dao.clearAccounts()
             dao.clearReports()
             dao.restoreTags(snapshot.tags)
+            dao.restoreScenes(snapshot.scenes)
             dao.restoreAccounts(snapshot.accounts)
             dao.restoreEntries(snapshot.entries)
             dao.restoreReports(snapshot.reports)
@@ -130,16 +148,17 @@ class LedgerRepository(context: Context) {
     }
 
     suspend fun generate(period: Period, day: LocalDate) = withContext(Dispatchers.IO) {
-        require(period != Period.YEAR)
+        if (!secrets.hasReportConsent()) throw LedgerError("请先确认报告的数据发送范围。")
         val restoreVersion = restoreCount.get()
-        val summary = snapshot().stats(period, day, LocalDate.now())
+        val analysis = snapshot().reportAnalysis(period, day, LocalDate.now())
+        val summary = analysis.current
         if (summary.entries.isEmpty()) throw LedgerError("这个期间没有流水。")
         val provider = secrets.provider
         val key = secrets.modelKey(provider) ?: throw LedgerError("请先在设置中保存 ${provider.title} 的 API Key。")
-        val reply = modelClient.complete(provider, key, summary)
+        val reply = modelClient.complete(provider, key, analysis)
         database.withTransaction {
             if (restoreVersion != restoreCount.get()) throw LedgerError("账本已恢复，请重新生成报告。")
-            dao.save(Report(period.name, summary.start.toString(), summary.signature(), System.currentTimeMillis(), provider.name, reply))
+            dao.save(Report(period.name, summary.start.toString(), Reports.signature(analysis), System.currentTimeMillis(), provider.name, reply))
         }
     }
 

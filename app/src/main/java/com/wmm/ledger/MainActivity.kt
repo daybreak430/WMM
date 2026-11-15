@@ -155,9 +155,12 @@ private fun LedgerApp(model: LedgerViewModel) {
                             LaunchedEffect(current) { if (route == current) back() }
                         }
                     }
-                    current?.startsWith("tag:") == true -> TagDrillScreen(data, today, period, day, current.substringAfter(':'), ::back) {
-                        parent = current
-                        route = "entry:${it.id}"
+                    current != null && (current.startsWith("tag:") || current.startsWith("scene:")) -> {
+                        TagDrillScreen(data, today, period, day, current.substringAfter(':'),
+                            scene = current.startsWith("scene:"), back = ::back) {
+                            parent = current
+                            route = "entry:${it.id}"
+                        }
                     }
                     else -> navState.SaveableStateProvider(tab.name) {
                         when (tab) {
@@ -170,7 +173,7 @@ private fun LedgerApp(model: LedgerViewModel) {
                             Tab.STATS -> StatsScreen(data, today, period, day, { periodName = it.name }, {
                                 dayText = it.toString()
                                 followToday = it == today
-                            }, { route = "tag:$it" }, generating, provider in keys, model.hasReportConsent(),
+                            }, { route = "tag:$it" }, { route = "scene:$it" }, generating, provider in keys, model.hasReportConsent(),
                                 { agreed -> model.generate(period, day, agreed) }, { route = "model" })
                             Tab.ASSETS -> AssetsScreen(data, model)
                         }

@@ -26,13 +26,15 @@ class StorageAndModelTest {
         val now = System.currentTimeMillis()
         val originalData = LedgerSnapshot(
             tags = listOf(Tag("tag", "EXPENSE", "电影", true)),
-            entries = listOf(Entry("entry", "EXPENSE", 5_000, "tag", "card", "不可发送的备注", now, today.toString())),
+            entries = listOf(Entry("entry", "EXPENSE", 5_000, "tag", "card", "不可发送的备注", now, today.toString(), "trip")),
+            scenes = listOf(Scene("trip", "出差")),
             accounts = listOf(Account("card", "SAVINGS", "我的卡", 500_000, now - 3_600_000)),
             profile = Profile(nickname = "仅本地"),
         )
-        val stats = originalData.stats(Period.DAY, today, today)
+        val analysis = originalData.reportAnalysis(Period.YEAR, today, today)
         val complete = originalData.copy(reports = listOf(
-            Report(Period.DAY.name, today.toString(), stats.signature(), now, Provider.DEEPSEEK.name, "已有报告"),
+            Report(Period.YEAR.name, today.withDayOfYear(1).toString(), Reports.signature(analysis),
+                now, Provider.DEEPSEEK.name, "已有年报"),
         ))
         original.replace(complete)
         original.secrets.saveModelKey(Provider.DEEPSEEK, "synthetic-test-key")
@@ -47,6 +49,7 @@ class StorageAndModelTest {
         val actual = restored.snapshot()
         assertEquals(complete.entries, actual.entries)
         assertEquals(complete.tags, actual.tags)
+        assertEquals(complete.scenes, actual.scenes)
         assertEquals(complete.accounts, actual.accounts)
         assertEquals(complete.reports, actual.reports)
         assertEquals(complete.profile.nickname, actual.profile.nickname)
@@ -54,9 +57,18 @@ class StorageAndModelTest {
         assertFalse(restored.secrets.hasKey(Provider.DEEPSEEK))
 
         val broken = JSONObject(encoded.decodeToString())
-        broken.getJSONArray("entries").getJSONObject(0).put("accountId", "missing")
+        broken.getJSONArray("entries").getJSONObject(0).put("sceneId", "missing")
         assertTrue(runCatching { restored.replace(Backup.decode(broken.toString().byteInputStream())) }.isFailure)
         assertEquals(complete.entries, restored.snapshot().entries)
+
+        val legacy = JSONObject(encoded.decodeToString()).put("version", 1).apply {
+            remove("scenes")
+            put("reports", org.json.JSONArray())
+            getJSONArray("entries").getJSONObject(0).remove("sceneId")
+        }
+        val imported = Backup.decode(legacy.toString().byteInputStream())
+        assertTrue(imported.scenes.isEmpty())
+        assertEquals(complete.entries.map { it.copy(sceneId = null) }, imported.entries)
     }
 
     @Test fun accountRelinkAndDeletionRespectPersistedCalibration() = runBlocking {
@@ -85,26 +97,37 @@ class StorageAndModelTest {
         val today = LocalDate.now()
         val data = LedgerSnapshot(
             entries = listOf(Entry("raw-entry-id", "EXPENSE", 2123, "tag", "private-card-id",
-                "private-note", 1000, today.toString())),
-            tags = listOf(Tag("tag", "EXPENSE", "通勤")),
+                "private-note", 1000, today.toString(), "private-scene-id")),
+            tags = listOf(Tag("tag", "EXPENSE", "晚餐")),
+            scenes = listOf(Scene("private-scene-id", "出差")),
             accounts = listOf(Account("private-card-id", "SAVINGS", "private-account-name", 123_456, 0)),
             profile = Profile(nickname = "private-profile"),
         )
-        val stats = data.stats(Period.DAY, today, today)
+        val analysis = data.reportAnalysis(Period.YEAR, today, today)
+        val noteEdit = data.copy(entries = data.entries.map { it.copy(note = "变动", accountId = null) })
+        val sceneEdit = data.copy(entries = data.entries.map { it.copy(sceneId = null) })
+        assertEquals(Reports.signature(analysis), Reports.signature(noteEdit.reportAnalysis(Period.YEAR, today, today)))
+        assertNotEquals(Reports.signature(analysis), Reports.signature(sceneEdit.reportAnalysis(Period.YEAR, today, today)))
         for (provider in Provider.entries) {
-            val request = Reports.request(provider, stats)
+            val request = Reports.request(provider, analysis)
             assertEquals(provider.model, request.getString("model"))
             val payload = request.getJSONArray("messages").getJSONObject(1).getString("content")
             val fields = JSONObject(payload)
             assertEquals("21.23", fields.getString("支出_元"))
-            assertEquals("通勤", fields.getJSONArray("常用标签").getJSONObject(0).getString("标签"))
-            listOf("raw-entry-id", "private-card-id", "private-note", "private-account-name", "private-profile", "1234.56")
+            val group = fields.getJSONArray("场景与类型组合排行").getJSONObject(0)
+            assertEquals("晚餐", group.getString("类型标签"))
+            assertEquals("出差", group.getString("场景"))
+            assertEquals("100.0", group.getString("占对应总额_%"))
+            assertEquals(1, fields.getJSONArray("期间分段").length())
+            assertFalse(fields.has("上一完整期间"))
+            listOf("raw-entry-id", "private-scene-id", "private-card-id", "private-note", "private-account-name",
+                "private-profile", "1234.56", "occurredAt")
                 .forEach { assertFalse(payload.contains(it)) }
             assertEquals("测试连接", Reports.request(provider, null).getJSONArray("messages")
                 .getJSONObject(1).getString("content"))
         }
-        assertTrue(Reports.request(Provider.DEEPSEEK, stats).has("thinking"))
-        assertFalse(Reports.request(Provider.MINIMAX, stats).has("thinking"))
+        assertTrue(Reports.request(Provider.DEEPSEEK, analysis).has("thinking"))
+        assertFalse(Reports.request(Provider.MINIMAX, analysis).has("thinking"))
         assertEquals("观察", Reports.readReply(200,
             """{"choices":[{"message":{"content":"观察","reasoning_content":"不展示"},"finish_reason":"stop"}]}"""))
         assertTrue((runCatching { Reports.readReply(401, "") }.exceptionOrNull() as LedgerError).display.contains("Key"))

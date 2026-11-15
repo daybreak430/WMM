@@ -1,7 +1,6 @@
 package com.wmm.ledger.data
 
 import java.math.BigDecimal
-import java.security.MessageDigest
 import java.time.LocalDate
 import java.util.Locale
 
@@ -35,9 +34,13 @@ data class LedgerSnapshot(
     val accounts: List<Account> = emptyList(),
     val reports: List<Report> = emptyList(),
     val profile: Profile = Profile(),
+    val scenes: List<Scene> = emptyList(),
 )
 
 data class TagTotal(val tag: Tag, val cents: Long, val count: Int)
+
+data class SceneTotal(val scene: Scene, val cents: Long, val count: Int)
+data class SceneTypeTotal(val scene: Scene, val tag: Tag, val cents: Long, val count: Int)
 
 data class PeriodStats(
     val period: Period,
@@ -47,20 +50,11 @@ data class PeriodStats(
     val expense: Long,
     val tagTotals: List<TagTotal>,
     val inProgress: Boolean,
+    val sceneTotals: List<SceneTotal>,
+    val sceneTypeTotals: List<SceneTypeTotal>,
 ) {
     val net get() = income - expense
 
-    // 签名只覆盖报告实际使用的汇总字段。改备注或关联账户不会使旧报告失效。
-    fun signature(): String {
-        val value = buildString {
-            append("${period.name}|${start}|${entries.size}|$income|$expense|$inProgress")
-            tagTotals.forEach {
-                append("|${it.tag.kind}|${it.tag.name.length}:${it.tag.name}|${it.cents}|${it.count}")
-            }
-        }
-        return MessageDigest.getInstance("SHA-256").digest(value.toByteArray())
-            .joinToString("") { "%02x".format(it) }
-    }
 }
 
 const val MAX_CENTS = 99_999_999_999L
@@ -96,11 +90,22 @@ fun LedgerSnapshot.stats(period: Period, day: LocalDate, today: LocalDate): Peri
     val totals = selected.groupBy { it.tagId }.mapNotNull { (id, entries) ->
         byTag[id]?.let { TagTotal(it, entries.sumOf(Entry::cents), entries.size) }
     }.sortedWith(compareBy<TagTotal> { it.tag.kind }.thenByDescending { it.cents }.thenBy { it.tag.name })
+    val byScene = scenes.associateBy { it.id }
+    val expenses = selected.filter { it.kind == Kind.EXPENSE.name }
+    val bySceneEntries = expenses.mapNotNull { entry -> byScene[entry.sceneId]?.let { it to entry } }
+        .groupBy({ it.first }, { it.second })
+    val sceneTotals = bySceneEntries.map { (scene, records) -> SceneTotal(scene, records.sumOf(Entry::cents), records.size) }
+        .sortedWith(compareByDescending<SceneTotal> { it.cents }.thenBy { it.scene.name })
+    val sceneTypeTotals = bySceneEntries.flatMap { (scene, records) ->
+        records.groupBy { it.tagId }.mapNotNull { (tagId, group) ->
+            byTag[tagId]?.let { SceneTypeTotal(scene, it, group.sumOf(Entry::cents), group.size) }
+        }
+    }.sortedWith(compareByDescending<SceneTypeTotal> { it.cents }.thenBy { it.scene.name }.thenBy { it.tag.name })
     return PeriodStats(
         period, start, selected,
         selected.filter { it.kind == Kind.INCOME.name }.sumOf(Entry::cents),
-        selected.filter { it.kind == Kind.EXPENSE.name }.sumOf(Entry::cents),
-        totals, period.start(today) == start,
+        expenses.sumOf(Entry::cents),
+        totals, period.start(today) == start, sceneTotals, sceneTypeTotals,
     )
 }
 
@@ -121,4 +126,9 @@ fun LedgerSnapshot.frequentTags(kind: Kind, keepId: String? = null): List<Tag> {
     val usage = entries.groupingBy { it.tagId }.eachCount()
     return tags.filter { it.kind == kind.name && (!it.archived || it.id == keepId) }
         .sortedWith(compareByDescending<Tag> { usage[it.id] ?: 0 }.thenBy { it.name })
+}
+
+fun LedgerSnapshot.frequentScenes(): List<Scene> {
+    val usage = entries.mapNotNull { it.sceneId }.groupingBy { it }.eachCount()
+    return scenes.sortedWith(compareByDescending<Scene> { usage[it.id] ?: 0 }.thenBy { it.name })
 }

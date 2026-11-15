@@ -37,8 +37,8 @@ class Secrets(context: Context) {
         check(preferences.edit().remove("key_${provider.name}").commit())
     }
 
-    fun hasReportConsent(): Boolean = preferences.getBoolean("report_consent_v1", false)
-    fun setReportConsent() { preferences.edit().putBoolean("report_consent_v1", true).apply() }
+    fun hasReportConsent(): Boolean = preferences.getBoolean("report_consent_v2", false)
+    fun setReportConsent() { preferences.edit().putBoolean("report_consent_v2", true).apply() }
 
     @Synchronized
     private fun write(slot: String, data: ByteArray) {

@@ -1,7 +1,6 @@
 package com.wmm.ledger.data
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 import java.time.LocalDate
@@ -42,12 +41,29 @@ class LedgerRulesTest {
         assertEquals(200L, snapshot.stats(Period.YEAR, newYear, newYear).net)
         assertEquals(emptyList<Tag>(), snapshot.frequentTags(Kind.EXPENSE))
         assertEquals("tag", snapshot.frequentTags(Kind.EXPENSE, "tag").single().id)
-        val report = snapshot.stats(Period.MONTH, newYear, newYear)
-        val noteEdit = snapshot.copy(entries = records.map { it.copy(note = "变动") })
-        assertEquals(report.signature(), noteEdit.stats(Period.MONTH, newYear, newYear).signature())
-        assertNotEquals(report.signature(), snapshot.stats(Period.MONTH, newYear, newYear.plusMonths(1)).signature())
-        assertNotEquals(report.signature(), snapshot.copy(tags = snapshot.tags.map { it.copy(name = it.name + "改") })
-            .stats(Period.MONTH, newYear, newYear).signature())
+    }
+
+    @Test fun reportGroupsYearByMonthAndOnlyComparesCompletePeriods() {
+        val today = LocalDate.of(2026, 11, 15)
+        val base = entry("base", 500, 1, null).copy(day = "2025-01-01", sceneId = "trip")
+        val old = base.copy(id = "old", day = "2024-12-31", cents = 900)
+        val later = base.copy(id = "later", day = "2025-12-01", cents = 300, sceneId = null)
+        val current = base.copy(id = "current", day = "2026-11-01", cents = 200)
+        val data = LedgerSnapshot(
+            entries = listOf(old, base, later, current),
+            tags = listOf(Tag("tag", Kind.EXPENSE.name, "晚餐")),
+            scenes = listOf(Scene("trip", "出差")),
+        )
+        val completed = data.reportAnalysis(Period.YEAR, LocalDate.of(2025, 12, 31), today)
+        assertEquals(listOf("2025-01", "2025-12"), completed.buckets.map { it.label })
+        assertEquals(listOf(500L, 300L), completed.buckets.map { it.expense })
+        assertEquals(900L, completed.previous?.expense)
+        assertEquals(800L, completed.current.expense)
+        assertEquals(500L, completed.current.sceneTypeTotals.single().cents)
+        assertEquals("晚餐", completed.current.sceneTypeTotals.single().tag.name)
+        assertNull(data.reportAnalysis(Period.YEAR, today, today).previous)
+        assertNull(data.reportAnalysis(Period.MONTH, today.minusMonths(1), today).previous)
+        assertEquals("1–7日", data.reportAnalysis(Period.MONTH, today, today).buckets.single().label)
     }
 
     private fun entry(id: String, amount: Long, time: Long, account: String?) =

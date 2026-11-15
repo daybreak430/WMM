@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -12,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import org.junit.Rule
@@ -20,7 +22,7 @@ import org.junit.Test
 class RecordUiTest {
     @get:Rule val ui = createAndroidComposeRule<MainActivity>()
 
-    @Test fun firstEntryUsesNewTagThenShowsInStatsAndCanBeRemoved() {
+    @Test fun firstEntryUsesNewTagAndSceneThenShowsInStatsAndCanBeRemoved() {
         val tag = "验收${System.nanoTime().toString().takeLast(8)}"
         ui.waitUntil(10_000) { ui.onAllNodesWithText("记一笔").fetchSemanticsNodes().isNotEmpty() }
         ui.onNodeWithText("记一笔").performClick()
@@ -30,6 +32,14 @@ class RecordUiTest {
         ui.onNodeWithText("标签名称").performTextInput(tag)
         ui.onNodeWithText("保存").performClick()
         ui.waitUntil(10_000) { ui.onAllNodesWithText(tag).fetchSemanticsNodes().isNotEmpty() }
+        val scene = "出差${tag.takeLast(4)}"
+        val combined = "$scene · $tag"
+        ui.onNodeWithText("场景").performScrollTo().performClick()
+        ui.onNodeWithText("新建场景").performClick()
+        ui.onNodeWithText("场景名称").performTextInput(scene)
+        ui.onNodeWithText("保存").performClick()
+        ui.waitUntil(10_000) { ui.onAllNodesWithText(scene).fetchSemanticsNodes().isNotEmpty() }
+
         ui.onNodeWithText("日期时间").performScrollTo().performClick()
         ui.onNodeWithText("日期").assertIsDisplayed()
         ui.onNodeWithText("时间").assertIsDisplayed()
@@ -41,20 +51,34 @@ class RecordUiTest {
         ui.onNodeWithText("首笔账单").assertIsDisplayed()
         ui.onNodeWithText("保存流水").assertIsEnabled().performClick()
         ui.waitUntil(10_000) { ui.onAllNodesWithText("最近流水").fetchSemanticsNodes().isNotEmpty() }
-        ui.onNodeWithText(tag).assertIsDisplayed()
-        ui.onNode(hasText(tag) and hasText("−¥12.35")).assertIsDisplayed()
+        ui.onNodeWithText(combined).assertIsDisplayed()
+        ui.onNode(hasText(combined) and hasText("−¥12.35")).assertIsDisplayed()
 
         ui.onNodeWithText("收支统计").performClick()
         ui.onNodeWithText("月").assertIsDisplayed()
+        ui.onNode(hasScrollAction()).performScrollToNode(hasText(scene))
+        ui.onNodeWithText(scene).performClick()
+        ui.onNode(hasText(combined) and hasText("−¥12.35")).assertIsDisplayed()
+        ui.onNodeWithContentDescription("返回").performClick()
+
+        ui.onNode(hasScrollAction()).performScrollToNode(hasText(tag))
         ui.onNodeWithText(tag).performClick()
         ui.onNodeWithText("1 笔").assertIsDisplayed()
-        ui.onNode(hasText(tag) and hasText("−¥12.35")).performClick()
+        ui.onNode(hasText(combined) and hasText("−¥12.35")).performClick()
         ui.onNodeWithText("首笔账单").assertIsDisplayed()
+        ui.onNodeWithText(scene).assertIsDisplayed()
+        ui.onNodeWithText("收入").performClick()
+        ui.onNodeWithText("场景").assertDoesNotExist()
+        ui.onNodeWithText("支出").performClick()
+        ui.onNodeWithText(scene).assertIsDisplayed()
         ui.onNodeWithContentDescription("删除流水").performClick()
         ui.onNodeWithText("删除").performClick()
         ui.waitUntil(10_000) { ui.onAllNodesWithText("0 笔").fetchSemanticsNodes().isNotEmpty() }
         ui.runOnUiThread { ui.activity.onBackPressedDispatcher.onBackPressed() }
-        ui.onNodeWithText("这个期间没有流水").assertIsDisplayed()
+        ui.onNode(hasScrollAction()).performScrollToNode(hasText("年"))
+        ui.onNodeWithText("年").performClick()
+        ui.onNode(hasScrollAction()).performScrollToNode(hasText("AI 年报"))
+        ui.onNodeWithText("AI 年报").assertIsDisplayed()
     }
 
     @Test fun assetAccountCanBeAddedAndCalibratedFromItsCard() {
