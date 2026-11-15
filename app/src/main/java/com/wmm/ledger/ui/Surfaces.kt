@@ -112,14 +112,14 @@ fun PrimaryAction(text: String, onClick: () -> Unit, modifier: Modifier = Modifi
         enabled = enabled,
         shape = ActionShape,
         colors = ButtonDefaults.buttonColors(
-            containerColor = colors.inverseSurface,
-            contentColor = colors.inverseOnSurface,
+            containerColor = colors.primary,
+            contentColor = colors.onPrimary,
             disabledContainerColor = colors.surfaceContainerHighest,
             disabledContentColor = colors.onSurfaceVariant,
         ),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (glyph != null) LineIcon(glyph, if (enabled) colors.inverseOnSurface else colors.onSurfaceVariant, size = 20)
+            if (glyph != null) LucideIcon(glyph, if (enabled) colors.onPrimary else colors.onSurfaceVariant, size = 20)
             Text(text, style = MaterialTheme.typography.labelLarge)
         }
     }

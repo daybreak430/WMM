@@ -115,7 +115,7 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
     Column(Modifier.fillMaxSize().imePadding()) {
         PageHeader(if (initial == null) "记一笔" else "编辑流水", back, centered = true) {
             if (initial != null) IconButton(onClick = { deleteDialog = true }) {
-                LineIcon(Glyph.DELETE, MaterialTheme.colorScheme.error, "删除流水")
+                LucideIcon(Glyph.DELETE, MaterialTheme.colorScheme.error, "删除流水")
             }
         }
         val colors = MaterialTheme.colorScheme
@@ -201,7 +201,7 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
                             containerColor = colors.surface, labelColor = colors.primary,
                         ),
                         label = { Text("新建标签") },
-                        leadingIcon = { LineIcon(Glyph.PLUS, colors.primary, size = 16) },
+                        leadingIcon = { LucideIcon(Glyph.PLUS, colors.primary, size = 16) },
                     )
                 }
             }
@@ -213,7 +213,7 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
                 Hairline(14)
                 Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp)) {
                     TextButton(onClick = { focus.clearFocus(); chooseDate() }, modifier = Modifier.weight(1.5f)) {
-                        LineIcon(Glyph.CALENDAR, colors.primary, size = 17)
+                        LucideIcon(Glyph.CALENDAR, colors.primary, size = 17)
                         Text(" ${day.year}/${day.monthValue}/${day.dayOfMonth}", maxLines = 1)
                     }
                     TextButton(onClick = { focus.clearFocus(); chooseTime() }, modifier = Modifier.weight(1f)) {

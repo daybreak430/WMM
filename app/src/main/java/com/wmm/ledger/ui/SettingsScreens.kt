@@ -80,7 +80,7 @@ fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, activeProvider:
                             Text(data.profile.nickname.ifBlank { "未设置昵称" }, style = MaterialTheme.typography.titleMedium)
                             Text("本机资料", color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                         }
-                        IconButton(onClick = { editNickname = true }) { LineIcon(Glyph.EDIT, description = "编辑昵称") }
+                        IconButton(onClick = { editNickname = true }) { LucideIcon(Glyph.EDIT, description = "编辑昵称") }
                     }
                 }
             }
@@ -96,9 +96,9 @@ fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, activeProvider:
             }
             item("backup") {
                 GroupCard {
-                    SettingsRow("导出备份", icon = Glyph.BOX, enabled = !fileBusy) { exportWarning = true }
+                    SettingsRow("导出备份", icon = Glyph.DOWNLOAD, enabled = !fileBusy) { exportWarning = true }
                     Hairline(14)
-                    SettingsRow("从备份恢复", enabled = !fileBusy, icon = Glyph.BOOK) {
+                    SettingsRow("从备份恢复", enabled = !fileBusy, icon = Glyph.UPLOAD) {
                         backupChooser.launch(arrayOf("application/json", "application/octet-stream", "text/plain"))
                     }
                 }
@@ -214,7 +214,7 @@ fun TagsScreen(data: LedgerSnapshot, model: LedgerViewModel, back: () -> Unit) {
     var open by rememberSaveable { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize()) {
         PageHeader("标签管理", back) {
-            IconButton(onClick = { edit = "new" }) { LineIcon(Glyph.PLUS, description = "添加标签") }
+            IconButton(onClick = { edit = "new" }) { LucideIcon(Glyph.PLUS, description = "添加标签") }
         }
         LazyColumn(contentPadding = PaddingValues(horizontal = PagePadding, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(9.dp)) {

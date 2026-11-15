@@ -14,7 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -56,8 +56,8 @@ fun AssetsScreen(data: LedgerSnapshot, model: LedgerViewModel) {
     var accountArchive by rememberSaveable { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize()) {
         PageHeader("资产", end = {
-            FilledTonalButton(onClick = { accountEditor = "new" }) {
-                LineIcon(Glyph.PLUS, MaterialTheme.colorScheme.onSecondaryContainer, size = 17)
+            Button(onClick = { accountEditor = "new" }, shape = FieldShape) {
+                LucideIcon(Glyph.PLUS, MaterialTheme.colorScheme.onPrimary, size = 17)
                 Text("添加账户", Modifier.padding(start = 4.dp))
             }
         })
@@ -148,7 +148,7 @@ private fun AccountCard(account: Account, balance: Long, open: () -> Unit) {
                 }
             }
             AmountText(currency(balance), modifier = Modifier.weight(.68f), style = RowNumber.copy(textAlign = TextAlign.End))
-            LineIcon(Glyph.RIGHT, colors.onSurfaceVariant, size = 16)
+            LucideIcon(Glyph.RIGHT, colors.onSurfaceVariant, size = 16)
         }
     }
 }

@@ -20,7 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Button
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -88,7 +88,7 @@ fun LedgerScreen(data: LedgerSnapshot, today: LocalDate, openSettings: () -> Uni
                 SectionTitle("最近流水", Modifier.padding(top = 14.dp, bottom = 2.dp)) {
                     TextButton(onClick = openStats) {
                         Text("收支统计")
-                        LineIcon(Glyph.RIGHT, color = colors.primary, size = 15)
+                        LucideIcon(Glyph.RIGHT, color = colors.primary, size = 15)
                     }
                 }
             }
@@ -109,7 +109,7 @@ fun SummaryLabel(text: String, icon: Glyph? = null) {
         border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .62f))) {
         Row(Modifier.padding(horizontal = 9.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (icon != null) LineIcon(icon, colors.primary, size = 15)
+            if (icon != null) LucideIcon(icon, colors.primary, size = 15)
             Text(text, color = colors.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
         }
     }
@@ -122,7 +122,7 @@ private fun SummaryMetric(kind: Kind, cents: Long, modifier: Modifier = Modifier
     val tint = if (income) colors.primary else colors.onSurfaceVariant
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            LineIcon(if (income) Glyph.INCOME else Glyph.EXPENSE, tint, size = 16)
+            LucideIcon(if (income) Glyph.INCOME else Glyph.EXPENSE, tint, size = 16)
             Text(kind.title, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
         AmountText(currency(cents), color = if (income) colors.primary else colors.onSurface)
@@ -198,16 +198,16 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         val previous = period.step(summary.start, -1)
                         IconButton(onClick = { chooseDay(previous) }, enabled = previous >= FIRST_DAY) {
-                            LineIcon(Glyph.LEFT, description = "上一${period.title}")
+                            LucideIcon(Glyph.LEFT, description = "上一${period.title}")
                         }
                         val label = periodLabel(period, summary.start)
                         TextButton(onClick = calendar, modifier = Modifier.weight(1f)) {
-                            LineIcon(Glyph.CALENDAR, color = colors.primary, size = 17)
+                            LucideIcon(Glyph.CALENDAR, color = colors.primary, size = 17)
                             Text(label, Modifier.padding(start = 7.dp), style = MaterialTheme.typography.labelLarge)
                         }
                         val next = period.step(summary.start, 1)
                         IconButton(onClick = { chooseDay(next) }, enabled = next <= today) {
-                            LineIcon(Glyph.RIGHT, color = if (next <= today) colors.onSurface else colors.outlineVariant,
+                            LucideIcon(Glyph.RIGHT, color = if (next <= today) colors.onSurface else colors.outlineVariant,
                                 description = "下一${period.title}")
                         }
                     }
@@ -285,7 +285,7 @@ private fun TagRank(total: TagTotal, kindTotal: Long, click: () -> Unit) {
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                 AmountText(currency(total.cents), modifier = Modifier.weight(.72f),
                     style = RowNumber.copy(textAlign = TextAlign.End))
-                LineIcon(Glyph.RIGHT, color = colors.onSurfaceVariant, size = 16)
+                LucideIcon(Glyph.RIGHT, color = colors.onSurfaceVariant, size = 16)
             }
             val fraction = total.cents.toFloat() / kindTotal.toFloat()
             Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(colors.outlineVariant)) {
@@ -320,7 +320,7 @@ private fun ReportPanel(summary: PeriodStats, report: Report?, busy: Boolean, ha
             if (!hasKey) {
                 OutlinedButton(onClick = openModel) { Text("设置模型") }
             } else {
-                FilledTonalButton(onClick = generate, enabled = !busy && summary.entries.isNotEmpty()) {
+                Button(onClick = generate, enabled = !busy && summary.entries.isNotEmpty(), shape = FieldShape) {
                     if (busy) {
                         CircularProgressIndicator(Modifier.size(15.dp), strokeWidth = 2.dp)
                         Spacer(Modifier.size(8.dp))

@@ -65,7 +65,7 @@ fun PageHeader(title: String, back: (() -> Unit)? = null, mark: Glyph? = null, c
                     modifier = Modifier.size(40.dp), shape = CircleShape, color = colors.surface,
                     border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .65f)),
                 ) {
-                    Box(contentAlignment = Alignment.Center) { LineIcon(Glyph.BACK, description = "返回", size = 19) }
+                    Box(contentAlignment = Alignment.Center) { LucideIcon(Glyph.BACK, description = "返回", size = 19) }
                 }
             }
         }
@@ -74,7 +74,7 @@ fun PageHeader(title: String, back: (() -> Unit)? = null, mark: Glyph? = null, c
                 modifier = Modifier.size(38.dp), shape = FieldShape, color = colors.surface,
                 border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .50f)),
             ) {
-                Box(contentAlignment = Alignment.Center) { LineIcon(mark, color = colors.primary, size = 21) }
+                Box(contentAlignment = Alignment.Center) { LucideIcon(mark, color = colors.primary, size = 21) }
             }
         }
         Text(title, Modifier.weight(1f),
@@ -99,7 +99,7 @@ fun UserAvatar(profile: Profile, onClick: () -> Unit, size: Int = 44, descriptio
             border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .75f)),
         ) {
             Box(contentAlignment = Alignment.Center) {
-                if (image == null) LineIcon(Glyph.PERSON, colors.primary, description, size = 21)
+                if (image == null) LucideIcon(Glyph.PERSON, colors.primary, description, size = 21)
                 else Image(image, description, Modifier.size(size.dp), contentScale = ContentScale.Crop)
             }
         }
@@ -166,7 +166,7 @@ fun SettingsRow(title: String, description: String? = null, icon: Glyph? = null,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        LineIcon(Glyph.RIGHT, colors.onSurfaceVariant, size = 17)
+        LucideIcon(Glyph.RIGHT, colors.onSurfaceVariant, size = 17)
     }
 }
 

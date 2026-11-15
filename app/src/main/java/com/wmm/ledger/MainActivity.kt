@@ -26,6 +26,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -51,7 +53,7 @@ import com.wmm.ledger.ui.Glyph
 import com.wmm.ledger.ui.LedgerBackdrop
 import com.wmm.ledger.ui.LedgerScreen
 import com.wmm.ledger.ui.LedgerTheme
-import com.wmm.ledger.ui.LineIcon
+import com.wmm.ledger.ui.LucideIcon
 import com.wmm.ledger.ui.ModelSettings
 import com.wmm.ledger.ui.SettingsScreen
 import com.wmm.ledger.ui.StatsScreen
@@ -114,7 +116,18 @@ private fun LedgerApp(model: LedgerViewModel) {
         Scaffold(
             containerColor = Color.Transparent,
             contentColor = MaterialTheme.colorScheme.onBackground,
-            snackbarHost = { SnackbarHost(snackbar) },
+            snackbarHost = {
+                SnackbarHost(snackbar) { data ->
+                    Snackbar(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        dismissAction = {
+                            IconButton(onClick = data::dismiss) {
+                                LucideIcon(Glyph.CLOSE, MaterialTheme.colorScheme.inverseOnSurface, "关闭提示", size = 19)
+                            }
+                        },
+                    ) { Text(data.visuals.message) }
+                }
+            },
             bottomBar = {
                 if (route == null && snapshot != null) {
                     LedgerNavigation(tab) { tabName = it.name }
@@ -198,7 +211,7 @@ private fun LedgerNavigation(selected: Tab, onSelect: (Tab) -> Unit) {
                         color = if (active) colors.primaryContainer else Color.Transparent,
                         shape = RoundedCornerShape(9.dp),
                     ) {
-                        Box(contentAlignment = Alignment.Center) { LineIcon(item.icon, tint, size = 20) }
+                        Box(contentAlignment = Alignment.Center) { LucideIcon(item.icon, tint, size = 20) }
                     }
                     Text(item.label, modifier = Modifier.padding(top = 2.dp), color = tint,
                         style = MaterialTheme.typography.labelMedium)
