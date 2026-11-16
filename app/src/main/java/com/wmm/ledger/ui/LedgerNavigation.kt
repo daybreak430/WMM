@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.selectable
@@ -53,6 +52,8 @@ import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
@@ -79,8 +80,9 @@ internal enum class Tab(val label: String, val icon: Glyph) {
 internal val NavigationBottomGap = 6.dp
 internal val NavigationTopGap = 5.dp
 private const val RECORD_DESCRIPTION = "记一笔"
-private const val RECORD_ICON_SIZE = 23
-private val RecordButtonSize = 52.dp
+private const val RECORD_ICON_SIZE = 19
+private val RecordButtonWidth = 44.dp
+private val RecordButtonHeight = 34.dp
 
 @Composable
 internal fun ledgerNavigationHeight(): Dp {
@@ -177,8 +179,8 @@ private fun GlassNavigationControls(
         val gap = 5.dp
         val available = maxWidth - gap * 2
         val density = LocalDensity.current
-        val width = (available - RecordButtonSize) / 2
-        val step = with(density) { (width + RecordButtonSize + gap * 2).toPx().coerceAtLeast(1f) }
+        val width = (available - RecordButtonWidth) / 2
+        val step = with(density) { (width + RecordButtonWidth + gap * 2).toPx().coerceAtLeast(1f) }
         val direction = if (LocalLayoutDirection.current == LayoutDirection.Ltr) 1f else -1f
         GlassSelectionCapsule(
             backdrop,
@@ -231,7 +233,7 @@ private fun GlassNavigationControls(
             horizontalArrangement = Arrangement.spacedBy(gap),
         ) {
             for (tab in Tab.entries) {
-                if (tab == Tab.STATS) Spacer(Modifier.width(RecordButtonSize))
+                if (tab == Tab.STATS) Spacer(Modifier.width(RecordButtonWidth))
                 val active = tab == selected
                 val focused = tab.ordinal == highlighted
                 val tint = if (focused) activeInk else idleInk
@@ -253,7 +255,10 @@ private fun GlassNavigationControls(
                 }
             }
         }
-        RecordNavigationButton(onRecord, Modifier.align(Alignment.Center).size(RecordButtonSize))
+        RecordNavigationButton(
+            onRecord,
+            Modifier.align(Alignment.Center).width(RecordButtonWidth).height(RecordButtonHeight),
+        )
     }
 }
 
@@ -318,13 +323,13 @@ private fun RecordNavigationButton(onRecord: () -> Unit, modifier: Modifier = Mo
         modifier.graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(CircleShape)
             .background(colors.primary)
+            .semantics { contentDescription = RECORD_DESCRIPTION }
             .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onRecord),
         contentAlignment = Alignment.Center,
     ) {
         LucideIcon(
             Glyph.PLUS,
             colors.onPrimary,
-            description = RECORD_DESCRIPTION,
             size = RECORD_ICON_SIZE,
         )
     }
