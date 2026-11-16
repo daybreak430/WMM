@@ -184,8 +184,11 @@ class LedgerRepository(context: Context) {
     internal suspend fun recognizeBill(uri: Uri, provider: Provider): RecognizedBill = withContext(Dispatchers.IO) {
         val key = secrets.modelKey(provider) ?: throw LedgerError("请先在设置中保存 ${provider.title} 的 API Key。")
         val source = readBillSource(app, uri)
-        val reply = modelClient.send(provider, key, BillImport.request(provider, source, LocalDate.now()), readTimeout = 120_000)
-        BillImport.parse(reply, source.fingerprint, snapshot().entries)
+        val labels = BillLabels(snapshot())
+        val request = BillImport.request(provider, source, LocalDate.now(), labels)
+        val reply = modelClient.send(provider, key, request, readTimeout = 120_000)
+        val current = snapshot()
+        BillImport.parse(reply, source.fingerprint, current.entries, BillLabels(current))
     }
 
     internal suspend fun importBill(rows: List<BillRow>): Int = database.withTransaction {

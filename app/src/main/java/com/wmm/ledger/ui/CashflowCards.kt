@@ -21,7 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -69,11 +69,12 @@ internal fun PeriodCashflowBoard(period: Period, start: LocalDate, current: Bool
 }
 
 @Composable
-internal fun WeekTrend(days: List<DailyCashflow>, selected: LocalDate, today: LocalDate, choose: (LocalDate) -> Unit) {
+internal fun WeekTrend(days: List<DailyCashflow>, anchor: LocalDate, today: LocalDate) {
     val colors = MaterialTheme.colorScheme
     val expenseColor = if (LocalLedgerDark.current) Color(0xFFA7B9D2) else Color(0xFF637895)
     val peak = days.maxOf { maxOf(it.amount.income, it.amount.expense) }
-    val selectedDay = days.first { it.date == selected }
+    var selected by rememberSaveable(days.first().date.toString()) { mutableStateOf(anchor.toString()) }
+    val selectedDay = days.first { it.date.toString() == selected }
     GroupCard {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             SectionTitle("周内收支趋势")
@@ -92,13 +93,13 @@ internal fun WeekTrend(days: List<DailyCashflow>, selected: LocalDate, today: Lo
                 }
             }) {
                 days.forEach { item ->
-                    val active = selected == item.date
+                    val active = selectedDay.date == item.date
                     val date = item.date.shortDate()
                     Column(
                         Modifier.weight(1f).clip(FieldShape)
                             .selectable(
                                 selected = active, interactionSource = null, indication = null,
-                                role = Role.Tab, enabled = item.date <= today, onClick = { choose(item.date) },
+                                role = Role.Tab, enabled = item.date <= today, onClick = { selected = item.date.toString() },
                             )
                             .semantics {
                                 contentDescription = "${item.date}，收入 ${currency(item.amount.income)}，支出 ${currency(item.amount.expense)}"

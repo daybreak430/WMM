@@ -18,6 +18,7 @@ import com.wmm.ledger.data.Scene
 import com.wmm.ledger.data.Tag
 import java.time.LocalDate
 import java.time.ZoneId
+import org.junit.Assert.assertThrows
 import org.junit.Rule
 import org.junit.Test
 
@@ -58,8 +59,7 @@ class StatsChartsUiTest {
             ui.onNodeWithText("周").performClick()
             list.performScrollToNode(hasText("AI 周报"))
             ui.onNodeWithText("AI 周报").assertIsDisplayed()
-            list.performScrollToNode(hasText("AI 日报"))
-            ui.onNodeWithText("AI 日报").assertIsDisplayed()
+            assertThrows(AssertionError::class.java) { list.performScrollToNode(hasText("AI 日报")) }
             list.performScrollToNode(unassigned)
             ui.onNode(unassigned and hasText("25%") and hasText("¥20.00")).assertIsDisplayed()
             list.performScrollToNode(hasText(travel.name))

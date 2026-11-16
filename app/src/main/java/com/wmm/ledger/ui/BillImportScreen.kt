@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -36,16 +37,19 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wmm.ledger.LedgerViewModel
 import com.wmm.ledger.data.BILL_MIME_TYPES
+import com.wmm.ledger.data.BillLabels
 import com.wmm.ledger.data.BillRow
 import com.wmm.ledger.data.Kind
+import com.wmm.ledger.data.LedgerSnapshot
 import com.wmm.ledger.data.MAX_NAME
 import com.wmm.ledger.data.MAX_NOTE
 import com.wmm.ledger.data.Provider
 import com.wmm.ledger.data.currency
 import com.wmm.ledger.data.parseCents
+import com.wmm.ledger.data.validName
 
 @Composable
-internal fun BillImportScreen(model: LedgerViewModel, provider: Provider, hasKey: Boolean,
+internal fun BillImportScreen(data: LedgerSnapshot, model: LedgerViewModel, provider: Provider, hasKey: Boolean,
     back: () -> Unit, openModel: () -> Unit) {
     val state by model.billImport.collectAsStateWithLifecycle()
     var upload by rememberSaveable { mutableStateOf<String?>(null) }
@@ -54,6 +58,7 @@ internal fun BillImportScreen(model: LedgerViewModel, provider: Provider, hasKey
     val chooser = rememberLauncherForActivityResult(remember { OpenLocal() }) { uri -> upload = uri?.toString() }
     val selected = state.rows.filter { it.selected }
     val review = state.rows.isNotEmpty()
+    val labels = remember(data.entries, data.tags, data.scenes) { BillLabels(data) }
     val colors = MaterialTheme.colorScheme
 
     Column(Modifier.fillMaxSize().imePadding()) {
@@ -69,7 +74,7 @@ internal fun BillImportScreen(model: LedgerViewModel, provider: Provider, hasKey
                 LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(PagePadding, 10.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     item {
-                        Text("核对流水", style = MaterialTheme.typography.titleMedium)
+                        Text("核对 AI 建议", style = MaterialTheme.typography.titleMedium)
                         Text("已选 ${selected.size} / ${state.rows.size} 笔", Modifier.padding(top = 4.dp),
                             style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                         if (state.skippedCurrency > 0) {
@@ -79,14 +84,16 @@ internal fun BillImportScreen(model: LedgerViewModel, provider: Provider, hasKey
                         }
                     }
                     items(state.rows, key = { it.id }) { row ->
-                        BillReviewRow(row, enabled = !state.saving,
+                        BillReviewRow(row, archivedType = labels.isArchived(row.kind, row.type), enabled = !state.saving,
                             toggle = { model.changeBillRow(row.copy(selected = it)) },
                             edit = { editing = row.id })
                     }
                 }
                 Column(Modifier.fillMaxWidth().padding(horizontal = PagePadding, vertical = 8.dp)) {
                     PrimaryAction(if (state.saving) "正在导入" else "导入 ${selected.size} 笔",
-                        onClick = { confirmSave = true }, enabled = !state.saving && selected.isNotEmpty() && selected.all { it.isReady() },
+                        onClick = { confirmSave = true },
+                        enabled = !state.saving && selected.isNotEmpty() &&
+                            selected.all { it.isReady() && !labels.isArchived(it.kind, it.type) },
                         modifier = Modifier.fillMaxWidth())
                     TextButton(onClick = model::discardBill, enabled = !state.saving,
                         modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("放弃预览") }
@@ -112,14 +119,14 @@ internal fun BillImportScreen(model: LedgerViewModel, provider: Provider, hasKey
 
     upload?.let { uri ->
         ConfirmDialog("发送所选账单？",
-            "将所选截图、PDF 页面图像或文件文本发送至 ${provider.title} 识别。核对后可导入本机账本。",
+            "将所选文件的图像或文本，以及账本的场景和类型名称发送至 ${provider.title}，用于识别流水和推荐标签。",
             "发送并识别", { upload = null }) {
             upload = null
             model.scanBill(Uri.parse(uri), provider)
         }
     }
     state.rows.firstOrNull { it.id == editing }?.let { row ->
-        BillRowDialog(row, dismiss = { editing = null }) { edited ->
+        BillRowDialog(row, labels, dismiss = { editing = null }) { edited ->
             model.changeBillRow(edited)
             editing = null
         }
@@ -135,10 +142,11 @@ internal fun BillImportScreen(model: LedgerViewModel, provider: Provider, hasKey
 }
 
 @Composable
-private fun BillReviewRow(row: BillRow, enabled: Boolean, toggle: (Boolean) -> Unit, edit: () -> Unit) {
+private fun BillReviewRow(row: BillRow, archivedType: Boolean, enabled: Boolean, toggle: (Boolean) -> Unit, edit: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val status = when {
         row.alreadyImported -> "已导入"
+        archivedType -> "类型已归档，需改选"
         !row.isReady() -> "待核对"
         row.duplicate -> "可能重复"
         else -> null
@@ -147,15 +155,14 @@ private fun BillReviewRow(row: BillRow, enabled: Boolean, toggle: (Boolean) -> U
         Row(Modifier.fillMaxWidth().padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = row.selected, onCheckedChange = toggle, enabled = enabled && !row.alreadyImported)
             Column(Modifier.weight(1f).padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                val label = listOfNotNull(row.scene.takeIf { it.isNotBlank() && row.kind == Kind.EXPENSE },
-                    row.type.takeIf { it.isNotBlank() }).joinToString(" · ")
-                Text(label.ifBlank { "类型待填写" }, style = MaterialTheme.typography.titleSmall)
+                val label = billLabel(row.type.ifBlank { "类型待填写" }, row.scene.takeIf { row.kind != Kind.INCOME }.orEmpty())
+                Text(label, style = MaterialTheme.typography.titleSmall)
                 val amount = parseCents(row.amount)?.let(::currency) ?: "金额待核对"
                 val occurred = listOf(row.date, row.time).filter { it.isNotBlank() }.joinToString(" ")
                 Text(listOfNotNull(row.kind?.title, amount, occurred.ifBlank { "日期待核对" })
                     .joinToString(" · "), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 if (row.note.isNotBlank()) Text(row.note, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                if (status != null) Text(status, color = if (row.isReady()) colors.onSurfaceVariant else colors.error,
+                if (status != null) Text(status, color = if (row.isReady() && !archivedType) colors.onSurfaceVariant else colors.error,
                     style = MaterialTheme.typography.labelSmall)
             }
             IconButton(onClick = edit, enabled = enabled && !row.alreadyImported) {
@@ -166,7 +173,7 @@ private fun BillReviewRow(row: BillRow, enabled: Boolean, toggle: (Boolean) -> U
 }
 
 @Composable
-private fun BillRowDialog(row: BillRow, dismiss: () -> Unit, save: (BillRow) -> Unit) {
+internal fun BillRowDialog(row: BillRow, labels: BillLabels, dismiss: () -> Unit, save: (BillRow) -> Unit) {
     var kindName by rememberSaveable { mutableStateOf(row.kind?.name) }
     var amount by rememberSaveable { mutableStateOf(row.amount) }
     var date by rememberSaveable { mutableStateOf(row.date) }
@@ -174,22 +181,75 @@ private fun BillRowDialog(row: BillRow, dismiss: () -> Unit, save: (BillRow) -> 
     var type by rememberSaveable { mutableStateOf(row.type) }
     var scene by rememberSaveable { mutableStateOf(row.scene) }
     var note by rememberSaveable { mutableStateOf(row.note) }
+    var picker by rememberSaveable { mutableStateOf<String?>(null) }
     val kind = kindName?.let(Kind::valueOf)
     val updated = row.copy(kind = kind, amount = amount, date = date, time = time, type = type, scene = scene, note = note)
-    LedgerAlertDialog(onDismissRequest = dismiss, title = { Text("核对流水") }, text = {
+    val suggestion = billLabel(row.suggestedType, row.suggestedScene)
+    LedgerAlertDialog(onDismissRequest = dismiss, title = { Text("编辑待导入流水") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            LedgerSegments(Kind.entries, kind, { it?.title.orEmpty() }) { kindName = it?.name }
+            if (suggestion.isNotEmpty()) Text("AI 建议 · $suggestion", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            LedgerSegments(Kind.entries, kind, { it?.title.orEmpty() }) { chosen ->
+                if (chosen?.name != kindName) {
+                    kindName = chosen?.name
+                    type = ""
+                    if (chosen != Kind.EXPENSE) scene = ""
+                }
+            }
+            if (kind == Kind.EXPENSE) {
+                SettingsRow("场景", end = scene.ifBlank { "无场景" }) { picker = "场景" }
+                Hairline(14)
+            }
+            SettingsRow("类型", end = type.ifBlank { "待选择" }, enabled = kind != null) { picker = "类型" }
+            if (labels.isArchived(kind, type)) Text("这个类型已归档，请改选", color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall)
             BillField("金额", amount, 18, KeyboardType.Decimal) { amount = it }
             BillField("日期 YYYY-MM-DD", date, 10) { date = it }
             BillField("时间 HH:mm（选填）", time, 8) { time = it }
-            BillField("类型", type, MAX_NAME) { type = it }
-            if (kind == Kind.EXPENSE) BillField("场景（选填）", scene, MAX_NAME) { scene = it }
             BillField("备注", note, MAX_NOTE) { note = it }
         }
     }, confirmButton = {
-        TextButton(onClick = { save(updated) }, enabled = updated.isReady()) { Text("保存修改") }
+        TextButton(onClick = { save(updated) }, enabled = updated.isReady() && !labels.isArchived(kind, type)) { Text("保存修改") }
+    }, dismissButton = { TextButton(onClick = dismiss) { Text("取消") } })
+    picker?.let { title ->
+        val forScene = title == "场景"
+        BillLabelPicker(title, if (forScene) labels.scenes else labels.types(kind),
+            current = if (forScene) scene else type, optional = forScene,
+            canCreate = { forScene || !labels.isArchived(kind, it) },
+            dismiss = { picker = null }) { name ->
+            if (forScene) scene = name else type = name
+            picker = null
+        }
+    }
+}
+
+@Composable
+private fun BillLabelPicker(title: String, names: List<String>, current: String, optional: Boolean,
+    canCreate: (String) -> Boolean, dismiss: () -> Unit, choose: (String) -> Unit) {
+    var input by rememberSaveable { mutableStateOf("") }
+    val name = input.trim()
+    val matches = remember(names, name) { names.filter { it.contains(name, ignoreCase = true) } }
+    LedgerAlertDialog(onDismissRequest = dismiss, title = { Text("选择$title") }, text = {
+        Column {
+            BillField("搜索或输入新$title", input, MAX_NAME) { input = it }
+            LazyColumn(Modifier.heightIn(max = 255.dp).padding(top = 8.dp)) {
+                if (optional && name.isBlank()) item {
+                    SettingsRow("无场景", end = if (current.isBlank()) "当前" else null) { choose("") }
+                }
+                items(matches, key = { it }) { option ->
+                    SettingsRow(option, end = if (option == current) "当前" else null) { choose(option) }
+                }
+            }
+        }
+    }, confirmButton = {
+        if (validName(name) && matches.none { it.equals(name, ignoreCase = true) }) {
+            TextButton(onClick = { choose(name) }, enabled = canCreate(name)) { Text("使用新$title") }
+        }
     }, dismissButton = { TextButton(onClick = dismiss) { Text("取消") } })
 }
+
+private fun billLabel(type: String, scene: String): String =
+    listOf(scene, type).filter { it.isNotBlank() }.joinToString(" · ")
 
 @Composable
 private fun BillField(label: String, value: String, limit: Int, keyboard: KeyboardType = KeyboardType.Text,

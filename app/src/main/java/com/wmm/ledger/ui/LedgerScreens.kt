@@ -213,22 +213,13 @@ private fun LedgerRow(entry: Entry, tag: String, account: String?, edit: (Entry)
 fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: LocalDate, choosePeriod: (Period) -> Unit,
     chooseDay: (LocalDate) -> Unit, drill: (String) -> Unit, drillScene: (String) -> Unit,
     busy: Boolean, hasKey: Boolean, consent: Boolean,
-    generate: (Period, LocalDate, Boolean) -> Unit, openModel: () -> Unit) {
+    generate: (Boolean) -> Unit, openModel: () -> Unit) {
     val summary = remember(data, period, day, today) { data.stats(period, day, today) }
     val calendar = CalendarAction(day, today, chooseDay)
-    var consentTarget by rememberSaveable { mutableStateOf<String?>(null) }
-    var weekDay by rememberSaveable(summary.start.toString()) { mutableStateOf<String?>(null) }
-    val reportDay = weekDay?.let(LocalDate::parse) ?: day
+    var consentDialog by rememberSaveable { mutableStateOf(false) }
     val colors = MaterialTheme.colorScheme
     val trend = remember(data.entries, summary.start, period) {
         if (period == Period.WEEK) data.weekCashflow(summary.start) else emptyList()
-    }
-    val dailySummary = remember(data, reportDay, today, period) {
-        if (period == Period.WEEK) data.stats(Period.DAY, reportDay, today) else null
-    }
-    fun requestReport(forSummary: PeriodStats) {
-        if (consent) generate(forSummary.period, forSummary.start, false)
-        else consentTarget = "${forSummary.period.name}:${forSummary.start}"
     }
     val expenses = remember(summary) { summary.tagTotals.filter { it.tag.kind == Kind.EXPENSE.name } }
     val income = remember(summary) { summary.tagTotals.filter { it.tag.kind == Kind.INCOME.name } }
@@ -270,7 +261,7 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
             }
             if (period == Period.WEEK) item("week-trend") {
                 Box(Modifier.padding(top = 12.dp)) {
-                    WeekTrend(trend, reportDay, today) { weekDay = it.toString() }
+                    WeekTrend(trend, day, today)
                 }
             }
             if (summary.entries.isEmpty()) {
@@ -285,18 +276,19 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
             shareSection("支出场景占比", Glyph.BOX, "scene", "支出合计", summary.expense, sceneRanks, drillScene)
             shareSection("收入类型占比", Glyph.INCOME, "income", "收入合计", summary.income,
                 income.map { RankedAmount(it.tag.id, it.tag.name, it.cents) }, drill)
-            item("report") { PeriodReport(data, today, summary, busy, hasKey, openModel) { requestReport(summary) } }
-            if (dailySummary != null) item("daily-report") {
-                PeriodReport(data, today, dailySummary, busy, hasKey, openModel) { requestReport(dailySummary) }
+            item("report") {
+                PeriodReport(data, today, summary, busy, hasKey, openModel) {
+                    if (consent) generate(false) else consentDialog = true
+                }
             }
         }
     }
-    consentTarget?.let { target ->
+    if (consentDialog) {
         ConfirmDialog("允许发送汇总？",
             "仅向所选模型发送收支汇总、分段和上期对比，以及含名称的类型标签、场景和组合排行。不会发送流水明细、备注、账户余额或个人资料。",
-            "同意并生成", { consentTarget = null }) {
-            consentTarget = null
-            generate(Period.valueOf(target.substringBefore(':')), LocalDate.parse(target.substringAfter(':')), true)
+            "同意并生成", { consentDialog = false }) {
+            consentDialog = false
+            generate(true)
         }
     }
 }
@@ -322,11 +314,7 @@ private fun ReportPanel(summary: PeriodStats, report: Report?, stale: Boolean, b
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 IconBadge(Glyph.SPARK, emphasis = true)
-                Column(Modifier.weight(1f)) {
-                    Text("AI ${summary.period.title}报", style = MaterialTheme.typography.titleMedium)
-                    if (summary.period == Period.DAY) Text(periodLabel(Period.DAY, summary.start),
-                        style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
-                }
+                Text("AI ${summary.period.title}报", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                 if (stale) {
                     Text("可重新生成", color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }

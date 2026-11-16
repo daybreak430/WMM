@@ -233,7 +233,7 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
                                                 followToday = it == today
                                             }, { route = "tag:$it" }, { route = "scene:$it" }, generating,
                                                 provider in keys, model.hasReportConsent(),
-                                                model::generate,
+                                                { agreed -> model.generate(period, day, agreed) },
                                                 { route = "model" })
                                             Tab.ASSETS -> AssetsScreen(data, model)
                                         }
@@ -253,7 +253,7 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
                                         importBill = { parent = current; route = "bill-import" })
                                     current == "tags" -> TagsScreen(data, model, ::back)
                                     current == "model" -> ModelSettings(model, provider, keys, ::back)
-                                    current == "bill-import" -> BillImportScreen(model, provider, provider in keys, ::back) {
+                                    current == "bill-import" -> BillImportScreen(data, model, provider, provider in keys, ::back) {
                                         parent = current
                                         route = "model"
                                     }

@@ -212,8 +212,14 @@ class StorageAndModelTest {
             }
             val photo = readBillSource(context, Uri.fromFile(png))
             assertEquals("image/png", photo.images.single().mime)
+            val labels = BillLabels(LedgerSnapshot(
+                tags = listOf(Tag("e", Kind.EXPENSE.name, "工作餐"), Tag("i", Kind.INCOME.name, "报销"),
+                    Tag("a", Kind.EXPENSE.name, "旧标签", archived = true)),
+                scenes = listOf(Scene("trip", "出差")),
+                profile = Profile(nickname = "本机昵称"),
+            ))
             for (provider in Provider.entries) {
-                val request = BillImport.request(provider, pages, LocalDate.of(2026, 1, 2))
+                val request = BillImport.request(provider, pages, LocalDate.of(2026, 1, 2), labels)
                 val messages = request.getJSONArray("messages")
                 val parts = messages.getJSONObject(1).getJSONArray("content")
                 assertEquals("text", parts.getJSONObject(0).getString("type"))
@@ -221,7 +227,12 @@ class StorageAndModelTest {
                 assertTrue(parts.getJSONObject(1).getJSONObject("image_url").getString("url")
                     .startsWith("data:image/jpeg;base64,"))
                 assertEquals(provider == Provider.DEEPSEEK, request.has("response_format"))
-                val textParts = BillImport.request(provider, text, LocalDate.of(2026, 1, 2))
+                val reference = JSONObject(parts.getJSONObject(2).getString("text").substringAfter("："))
+                assertEquals("工作餐", reference.getJSONArray("支出类型").getString(0))
+                assertEquals("报销", reference.getJSONArray("收入类型").getString(0))
+                assertEquals("出差", reference.getJSONArray("支出场景").getString(0))
+                assertFalse(request.toString().contains("旧标签") || request.toString().contains("本机昵称"))
+                val textParts = BillImport.request(provider, text, LocalDate.of(2026, 1, 2), labels)
                     .getJSONArray("messages").getJSONObject(1).getJSONArray("content")
                 assertEquals(text.text, textParts.getJSONObject(0).getString("text"))
             }
@@ -235,32 +246,43 @@ class StorageAndModelTest {
         val day = LocalDate.of(2026, 1, 2)
         val stamp = day.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
         val transit = Tag("transit", Kind.EXPENSE.name, "地铁")
+        val businessMeal = Tag("meal", Kind.EXPENSE.name, "工作餐")
+        val travel = Scene("travel", "出差")
         val archived = Tag("archived", Kind.EXPENSE.name, "已归档", archived = true)
         val manual = Entry("manual", Kind.EXPENSE.name, 500, transit.id, null, "", stamp, day.toString())
-        repository.replace(LedgerSnapshot(entries = listOf(manual), tags = listOf(transit, archived)))
+        val original = LedgerSnapshot(entries = listOf(manual), tags = listOf(transit, businessMeal, archived),
+            scenes = listOf(travel))
+        repository.replace(original)
+        val labels = BillLabels(original)
         val reply = """{"more":false,"rows":[
             {"currency":"CNY","kind":"EXPENSE","amount":"5.00","date":"2026-01-02","time":"","type":"地铁"},
             {"currency":"CNY","kind":"EXPENSE","amount":"18.50","date":"2026-01-02","time":"12:40","type":"午餐","scene":"出差"},
-            {"currency":"CNY","kind":"INCOME","amount":"99.00","date":"","time":"","type":"退款"},
+            {"currency":"CNY","kind":"INCOME","amount":"99.00","date":"","time":"","type":"退款","scene":"出差"},
             {"currency":"USD","kind":"EXPENSE","amount":"10.00","date":"2026-01-02","type":"食物"}
         ]}"""
-        val preview = BillImport.parse(reply, "test-file", repository.snapshot().entries)
+        val preview = BillImport.parse(reply, "test-file", repository.snapshot().entries, labels)
         assertEquals(1, preview.skippedCurrency)
         assertTrue(preview.rows[0].duplicate && !preview.rows[0].selected)
         assertFalse(preview.rows[2].isReady())
-        val lunch = preview.rows[1]
+        assertEquals("", preview.rows[2].scene)
+        val lunch = preview.rows[1].copy(type = businessMeal.name, scene = "")
+        assertEquals("午餐", lunch.suggestedType)
+        assertEquals("出差", lunch.suggestedScene)
         val refund = preview.rows[2].copy(date = day.toString())
         assertTrue(runCatching { repository.importBill(listOf(lunch, lunch.copy(id = "other", type = archived.name))) }.isFailure)
         assertEquals(listOf(manual), repository.snapshot().entries)
-        assertTrue(repository.snapshot().scenes.isEmpty())
+        assertEquals(listOf(travel), repository.snapshot().scenes)
+        assertTrue(repository.snapshot().tags.none { it.name == "午餐" })
         assertEquals(2, repository.importBill(listOf(lunch, refund)))
         assertEquals(0, repository.importBill(listOf(lunch, refund)))
         val snapshot = repository.snapshot()
         assertEquals(3, snapshot.entries.size)
         assertEquals(1, snapshot.scenes.size)
         assertEquals(1_850L, snapshot.entries.single { it.id == lunch.id }.cents)
+        assertEquals(businessMeal.id, snapshot.entries.single { it.id == lunch.id }.tagId)
+        assertEquals(null, snapshot.entries.single { it.id == lunch.id }.sceneId)
         assertTrue(snapshot.entries.all { it.accountId == null })
-        assertTrue(BillImport.parse(reply, "test-file", snapshot.entries).rows[1].alreadyImported)
+        assertTrue(BillImport.parse(reply, "test-file", snapshot.entries, labels).rows[1].alreadyImported)
     }
 
     private fun isolated(): Context {
