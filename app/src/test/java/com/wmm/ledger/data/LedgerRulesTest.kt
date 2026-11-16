@@ -65,22 +65,28 @@ class LedgerRulesTest {
         assertEquals("1–7日", data.reportAnalysis(Period.MONTH, today, today).buckets.single().label)
     }
 
-    @Test fun trendUsesSevenCalendarDaysAndCountsDirectionsSeparately() {
+    @Test fun trendAndStatsUseMondayToSundayAcrossYearBoundary() {
         val end = LocalDate.of(2026, 1, 3)
         val base = entry("base", 125, 1, null)
         val data = LedgerSnapshot(entries = listOf(
-            base.copy(id = "excluded", day = "2025-12-27"),
-            base.copy(id = "first", day = "2025-12-28"),
+            base.copy(id = "excluded", day = "2025-12-28"),
+            base.copy(id = "first", day = "2025-12-29"),
             base.copy(id = "income", day = "2026-01-03", cents = 900, kind = Kind.INCOME.name),
             base.copy(id = "expense", day = "2026-01-03", cents = 200),
-            base.copy(id = "later", day = "2026-01-04"),
+            base.copy(id = "later", day = "2026-01-05"),
         ))
-        val trend = data.recentCashflow(end)
+        val trend = data.weekCashflow(end)
         assertEquals(7, trend.size)
-        assertEquals(LocalDate.of(2025, 12, 28), trend.first().date)
+        assertEquals(LocalDate.of(2025, 12, 29), trend.first().date)
         assertEquals(Cashflow(0, 125), trend.first().amount)
         assertEquals(Cashflow(0, 0), trend[1].amount)
-        assertEquals(Cashflow(900, 200), trend.last().amount)
+        assertEquals(Cashflow(900, 200), trend[5].amount)
+        assertEquals(LocalDate.of(2026, 1, 4), trend.last().date)
+        val summary = data.reportAnalysis(Period.WEEK, end, LocalDate.of(2026, 1, 5))
+        assertEquals(325L, summary.current.expense)
+        assertEquals(900L, summary.current.income)
+        assertEquals(listOf("2025-12-29", "2026-01-03"), summary.buckets.map { it.label })
+        assertEquals(125L, summary.previous?.expense)
     }
 
     private fun entry(id: String, amount: Long, time: Long, account: String?) =

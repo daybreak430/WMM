@@ -2,6 +2,10 @@ package com.wmm.ledger.data
 
 import android.content.Context
 import android.content.ContextWrapper
+import android.graphics.Bitmap
+import android.graphics.Paint
+import android.graphics.pdf.PdfDocument
+import android.net.Uri
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
@@ -15,6 +19,8 @@ import org.junit.runner.RunWith
 import java.io.File
 import java.time.LocalDate
 import java.util.UUID
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 @RunWith(AndroidJUnit4::class)
 class StorageAndModelTest {
@@ -169,6 +175,92 @@ class StorageAndModelTest {
             .exceptionOrNull() as LedgerError).display.contains("余额"))
         assertTrue(runCatching { Reports.readReply(200, """{"choices":[{"message":{"content":"片段"},"finish_reason":"length"}]}""") }
             .exceptionOrNull() is LedgerError)
+    }
+
+    @Test fun billSourcesPrepareLocalTextAndPageImagesForBothProviders() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val folder = java.nio.file.Files.createTempDirectory(context.cacheDir.toPath(), "bill-test").toFile()
+        try {
+            val csv = File(folder, "bill.csv").apply {
+                writeBytes("日期,金额,备注\n2026-01-02,18.50,咖啡".toByteArray(charset("GB18030")))
+            }
+            val text = readBillSource(context, Uri.fromFile(csv))
+            assertTrue(text.text.orEmpty().contains("18.50,咖啡"))
+            val word = File(folder, "bill.docx")
+            ZipOutputStream(word.outputStream()).use { zip ->
+                zip.putNextEntry(ZipEntry("word/document.xml"))
+                zip.write("""<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>咖啡 18.50</w:t></w:r></w:p></w:body></w:document>""".toByteArray())
+                zip.closeEntry()
+            }
+            assertEquals("咖啡 18.50", readBillSource(context, Uri.fromFile(word)).text?.trim())
+            val pdf = File(folder, "bill.pdf")
+            val document = PdfDocument()
+            try {
+                val page = document.startPage(PdfDocument.PageInfo.Builder(300, 420, 1).create())
+                page.canvas.drawText("18.50", 40f, 40f, Paint())
+                document.finishPage(page)
+                pdf.outputStream().use(document::writeTo)
+            } finally {
+                document.close()
+            }
+            val pages = readBillSource(context, Uri.fromFile(pdf))
+            assertEquals("image/jpeg", pages.images.single().mime)
+            val png = File(folder, "bill.png")
+            Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).also { bitmap ->
+                png.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                bitmap.recycle()
+            }
+            val photo = readBillSource(context, Uri.fromFile(png))
+            assertEquals("image/png", photo.images.single().mime)
+            for (provider in Provider.entries) {
+                val request = BillImport.request(provider, pages, LocalDate.of(2026, 1, 2))
+                val messages = request.getJSONArray("messages")
+                val parts = messages.getJSONObject(1).getJSONArray("content")
+                assertEquals("text", parts.getJSONObject(0).getString("type"))
+                assertEquals("image_url", parts.getJSONObject(1).getString("type"))
+                assertTrue(parts.getJSONObject(1).getJSONObject("image_url").getString("url")
+                    .startsWith("data:image/jpeg;base64,"))
+                assertEquals(provider == Provider.DEEPSEEK, request.has("response_format"))
+                val textParts = BillImport.request(provider, text, LocalDate.of(2026, 1, 2))
+                    .getJSONArray("messages").getJSONObject(1).getJSONArray("content")
+                assertEquals(text.text, textParts.getJSONObject(0).getString("text"))
+            }
+        } finally {
+            folder.deleteRecursively()
+        }
+    }
+
+    @Test fun billImportFlagsDuplicatesAndCommitsTheReviewedBatchAtomically() = runBlocking {
+        val repository = LedgerRepository(isolated())
+        val day = LocalDate.of(2026, 1, 2)
+        val stamp = day.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val transit = Tag("transit", Kind.EXPENSE.name, "地铁")
+        val archived = Tag("archived", Kind.EXPENSE.name, "已归档", archived = true)
+        val manual = Entry("manual", Kind.EXPENSE.name, 500, transit.id, null, "", stamp, day.toString())
+        repository.replace(LedgerSnapshot(entries = listOf(manual), tags = listOf(transit, archived)))
+        val reply = """{"more":false,"rows":[
+            {"currency":"CNY","kind":"EXPENSE","amount":"5.00","date":"2026-01-02","time":"","type":"地铁"},
+            {"currency":"CNY","kind":"EXPENSE","amount":"18.50","date":"2026-01-02","time":"12:40","type":"午餐","scene":"出差"},
+            {"currency":"CNY","kind":"INCOME","amount":"99.00","date":"","time":"","type":"退款"},
+            {"currency":"USD","kind":"EXPENSE","amount":"10.00","date":"2026-01-02","type":"食物"}
+        ]}"""
+        val preview = BillImport.parse(reply, "test-file", repository.snapshot().entries)
+        assertEquals(1, preview.skippedCurrency)
+        assertTrue(preview.rows[0].duplicate && !preview.rows[0].selected)
+        assertFalse(preview.rows[2].isReady())
+        val lunch = preview.rows[1]
+        val refund = preview.rows[2].copy(date = day.toString())
+        assertTrue(runCatching { repository.importBill(listOf(lunch, lunch.copy(id = "other", type = archived.name))) }.isFailure)
+        assertEquals(listOf(manual), repository.snapshot().entries)
+        assertTrue(repository.snapshot().scenes.isEmpty())
+        assertEquals(2, repository.importBill(listOf(lunch, refund)))
+        assertEquals(0, repository.importBill(listOf(lunch, refund)))
+        val snapshot = repository.snapshot()
+        assertEquals(3, snapshot.entries.size)
+        assertEquals(1, snapshot.scenes.size)
+        assertEquals(1_850L, snapshot.entries.single { it.id == lunch.id }.cents)
+        assertTrue(snapshot.entries.all { it.accountId == null })
+        assertTrue(BillImport.parse(reply, "test-file", snapshot.entries).rows[1].alreadyImported)
     }
 
     private fun isolated(): Context {

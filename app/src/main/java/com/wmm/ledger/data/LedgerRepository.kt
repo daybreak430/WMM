@@ -1,6 +1,7 @@
 package com.wmm.ledger.data
 
 import android.content.Context
+import android.net.Uri
 import androidx.room.Room
 import androidx.room.withTransaction
 import kotlinx.coroutines.Dispatchers
@@ -178,6 +179,42 @@ class LedgerRepository(context: Context) {
 
     suspend fun testModel(provider: Provider, key: String) = withContext(Dispatchers.IO) {
         modelClient.complete(provider, key, null)
+    }
+
+    internal suspend fun recognizeBill(uri: Uri, provider: Provider): RecognizedBill = withContext(Dispatchers.IO) {
+        val key = secrets.modelKey(provider) ?: throw LedgerError("请先在设置中保存 ${provider.title} 的 API Key。")
+        val source = readBillSource(app, uri)
+        val reply = modelClient.send(provider, key, BillImport.request(provider, source, LocalDate.now()), readTimeout = 120_000)
+        BillImport.parse(reply, source.fingerprint, snapshot().entries)
+    }
+
+    internal suspend fun importBill(rows: List<BillRow>): Int = database.withTransaction {
+        val now = System.currentTimeMillis()
+        val zone = ZoneId.systemDefault()
+        if (rows.size !in 1..BILL_ROW_LIMIT || rows.distinctBy { it.id }.size != rows.size ||
+            rows.any { !it.isReady(now, zone) }) throw LedgerError("请检查待导入流水的金额、日期、方向和类型。")
+        val tags = dao.tags().associateBy { it.kind to it.name.lowercase(Locale.ROOT) }.toMutableMap()
+        val scenes = dao.scenes().associateBy { it.name.lowercase(Locale.ROOT) }.toMutableMap()
+        var count = 0
+        for (row in rows) {
+            // 同一次识别重新提交时保留已导入流水，包括用户之后对它做的编辑。
+            if (dao.entry(row.id) != null) continue
+            val kind = checkNotNull(row.kind)
+            val name = row.type.trim()
+            val tagKey = kind.name to name.lowercase(Locale.ROOT)
+            val tag = tags.getOrPut(tagKey) { Tag(newId(), kind.name, name).also { dao.save(it) } }
+            if (tag.archived) throw LedgerError("类型「${tag.name}」已归档，请在预览中改用其他类型。")
+            val sceneName = row.scene.trim()
+            val scene = if (kind == Kind.EXPENSE && sceneName.isNotEmpty()) {
+                scenes.getOrPut(sceneName.lowercase(Locale.ROOT)) {
+                    Scene(newId(), sceneName).also { dao.addScene(it) }
+                }
+            } else null
+            dao.save(Entry(row.id, kind.name, checkNotNull(parseCents(row.amount.trim())), tag.id, null,
+                row.note.trim(), checkNotNull(row.stamp(now, zone)), row.date.trim(), scene?.id))
+            count++
+        }
+        count
     }
 
     suspend fun generate(period: Period, day: LocalDate) = withContext(Dispatchers.IO) {

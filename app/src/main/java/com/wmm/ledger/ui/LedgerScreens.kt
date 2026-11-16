@@ -57,7 +57,7 @@ import com.wmm.ledger.data.Provider
 import com.wmm.ledger.data.Report
 import com.wmm.ledger.data.Reports
 import com.wmm.ledger.data.reportAnalysis
-import com.wmm.ledger.data.recentCashflow
+import com.wmm.ledger.data.weekCashflow
 import com.wmm.ledger.data.currency
 import com.wmm.ledger.data.stats
 import java.time.Instant
@@ -213,14 +213,22 @@ private fun LedgerRow(entry: Entry, tag: String, account: String?, edit: (Entry)
 fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: LocalDate, choosePeriod: (Period) -> Unit,
     chooseDay: (LocalDate) -> Unit, drill: (String) -> Unit, drillScene: (String) -> Unit,
     busy: Boolean, hasKey: Boolean, consent: Boolean,
-    generate: (Boolean) -> Unit, openModel: () -> Unit) {
+    generate: (Period, LocalDate, Boolean) -> Unit, openModel: () -> Unit) {
     val summary = remember(data, period, day, today) { data.stats(period, day, today) }
-    val report = data.reports.firstOrNull { it.period == period.name && it.startDay == summary.start.toString() }
     val calendar = CalendarAction(day, today, chooseDay)
-    var consentDialog by rememberSaveable { mutableStateOf(false) }
+    var consentTarget by rememberSaveable { mutableStateOf<String?>(null) }
+    var weekDay by rememberSaveable(summary.start.toString()) { mutableStateOf<String?>(null) }
+    val reportDay = weekDay?.let(LocalDate::parse) ?: day
     val colors = MaterialTheme.colorScheme
     val trend = remember(data.entries, summary.start, period) {
-        if (period == Period.DAY) data.recentCashflow(summary.start) else emptyList()
+        if (period == Period.WEEK) data.weekCashflow(summary.start) else emptyList()
+    }
+    val dailySummary = remember(data, reportDay, today, period) {
+        if (period == Period.WEEK) data.stats(Period.DAY, reportDay, today) else null
+    }
+    fun requestReport(forSummary: PeriodStats) {
+        if (consent) generate(forSummary.period, forSummary.start, false)
+        else consentTarget = "${forSummary.period.name}:${forSummary.start}"
     }
     val expenses = remember(summary) { summary.tagTotals.filter { it.tag.kind == Kind.EXPENSE.name } }
     val income = remember(summary) { summary.tagTotals.filter { it.tag.kind == Kind.INCOME.name } }
@@ -235,7 +243,7 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
             item("filters") {
                 Column(Modifier.padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     LedgerSegments(
-                        Period.entries, period, { it.title },
+                        listOf(Period.WEEK, Period.MONTH, Period.YEAR), period, { it.title },
                         containerColor = if (LocalLedgerDark.current) colors.surfaceContainerHigh else colors.surface,
                         onSelect = choosePeriod,
                     )
@@ -258,10 +266,11 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
                 }
             }
             item("rollup") {
-                if (period == Period.DAY) {
-                    SevenDayTrend(trend)
-                } else {
-                    PeriodCashflowBoard(period, summary.start, summary.inProgress, Cashflow(summary.income, summary.expense))
+                PeriodCashflowBoard(period, summary.start, summary.inProgress, Cashflow(summary.income, summary.expense))
+            }
+            if (period == Period.WEEK) item("week-trend") {
+                Box(Modifier.padding(top = 12.dp)) {
+                    WeekTrend(trend, reportDay, today) { weekDay = it.toString() }
                 }
             }
             if (summary.entries.isEmpty()) {
@@ -276,25 +285,31 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
             shareSection("支出场景占比", Glyph.BOX, "scene", "支出合计", summary.expense, sceneRanks, drillScene)
             shareSection("收入类型占比", Glyph.INCOME, "income", "收入合计", summary.income,
                 income.map { RankedAmount(it.tag.id, it.tag.name, it.cents) }, drill)
-            item("report") {
-                val stale = report != null && remember(data, period, day, today) {
-                    Reports.signature(data.reportAnalysis(period, day, today))
-                } != report.snapshotId
-                Box(Modifier.padding(top = 18.dp)) {
-                    ReportPanel(summary, report, stale, busy, hasKey, openModel) {
-                        if (consent) generate(false) else consentDialog = true
-                    }
-                }
+            item("report") { PeriodReport(data, today, summary, busy, hasKey, openModel) { requestReport(summary) } }
+            if (dailySummary != null) item("daily-report") {
+                PeriodReport(data, today, dailySummary, busy, hasKey, openModel) { requestReport(dailySummary) }
             }
         }
     }
-    if (consentDialog) {
+    consentTarget?.let { target ->
         ConfirmDialog("允许发送汇总？",
             "仅向所选模型发送收支汇总、分段和上期对比，以及含名称的类型标签、场景和组合排行。不会发送流水明细、备注、账户余额或个人资料。",
-            "同意并生成", { consentDialog = false }) {
-            consentDialog = false
-            generate(true)
+            "同意并生成", { consentTarget = null }) {
+            consentTarget = null
+            generate(Period.valueOf(target.substringBefore(':')), LocalDate.parse(target.substringAfter(':')), true)
         }
+    }
+}
+
+@Composable
+private fun PeriodReport(data: LedgerSnapshot, today: LocalDate, summary: PeriodStats, busy: Boolean, hasKey: Boolean,
+    openModel: () -> Unit, generate: () -> Unit) {
+    val report = data.reports.firstOrNull { it.period == summary.period.name && it.startDay == summary.start.toString() }
+    val stale = report != null && remember(data, summary.period, summary.start, today) {
+        Reports.signature(data.reportAnalysis(summary.period, summary.start, today))
+    } != report.snapshotId
+    Box(Modifier.padding(top = 18.dp)) {
+        ReportPanel(summary, report, stale, busy, hasKey, openModel, generate)
     }
 }
 
@@ -307,8 +322,11 @@ private fun ReportPanel(summary: PeriodStats, report: Report?, stale: Boolean, b
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 IconBadge(Glyph.SPARK, emphasis = true)
-                Text("AI ${summary.period.title}报", Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleMedium)
+                Column(Modifier.weight(1f)) {
+                    Text("AI ${summary.period.title}报", style = MaterialTheme.typography.titleMedium)
+                    if (summary.period == Period.DAY) Text(periodLabel(Period.DAY, summary.start),
+                        style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                }
                 if (stale) {
                     Text("可重新生成", color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
@@ -340,6 +358,14 @@ private fun ReportPanel(summary: PeriodStats, report: Report?, stale: Boolean, b
 
 fun periodLabel(period: Period, date: LocalDate): String = when (period) {
     Period.DAY -> "${date.year}年${date.monthValue}月${date.dayOfMonth}日"
+    Period.WEEK -> {
+        val start = Period.WEEK.start(date)
+        val end = start.plusDays(6)
+        val last = if (end.year == start.year) {
+            if (end.month == start.month) "${end.dayOfMonth}日" else "${end.monthValue}月${end.dayOfMonth}日"
+        } else periodLabel(Period.DAY, end)
+        "${periodLabel(Period.DAY, start)}–$last"
+    }
     Period.MONTH -> "${date.year}年${date.monthValue}月"
     Period.YEAR -> "${date.year}年"
 }

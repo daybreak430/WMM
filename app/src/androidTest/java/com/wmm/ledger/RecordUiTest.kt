@@ -97,15 +97,16 @@ class RecordUiTest {
             ui.onNodeWithText("本月收支看板").assertIsDisplayed()
             ui.onNodeWithText("最近流水").assertDoesNotExist()
 
-            ui.onNodeWithText("日").performClick()
+            ui.onNodeWithText("周").performClick()
             ui.mainClock.advanceTimeByFrame()
-            ui.onNodeWithText("近 7 天收支趋势").assertIsDisplayed()
+            ui.onNodeWithText("本周收支看板").assertIsDisplayed()
+            ui.onNodeWithText("周内收支趋势").assertIsDisplayed()
             ui.onNodeWithText("本月收支看板").assertDoesNotExist()
 
             ui.onNodeWithText("年").performClick()
             ui.mainClock.advanceTimeByFrame()
             ui.onNodeWithText("本年收支看板").assertIsDisplayed()
-            ui.onNodeWithText("近 7 天收支趋势").assertDoesNotExist()
+            ui.onNodeWithText("周内收支趋势").assertDoesNotExist()
 
             ui.onNodeWithContentDescription("上一年").performClick()
             ui.mainClock.advanceTimeByFrame()

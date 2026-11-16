@@ -46,14 +46,15 @@ import com.mohamedrejeb.compose.dnd.DragAndDropContainer
 import com.mohamedrejeb.compose.dnd.scroll.dragAutoScroll
 import kotlinx.coroutines.launch
 
-private class OpenLocal : ActivityResultContracts.OpenDocument() {
+internal class OpenLocal : ActivityResultContracts.OpenDocument() {
     override fun createIntent(context: Context, input: Array<String>): Intent =
         super.createIntent(context, input).putExtra(Intent.EXTRA_LOCAL_ONLY, true)
 }
 
 @Composable
 internal fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, activeProvider: Provider, hasKey: Boolean,
-    fileBusy: Boolean, appearance: Appearance, back: () -> Unit, tags: () -> Unit, openModel: () -> Unit) {
+    fileBusy: Boolean, appearance: Appearance, back: () -> Unit, tags: () -> Unit, openModel: () -> Unit,
+    importBill: () -> Unit) {
     var editNickname by rememberSaveable { mutableStateOf(false) }
     var avatarOptions by rememberSaveable { mutableStateOf(false) }
     var appearanceOptions by rememberSaveable { mutableStateOf(false) }
@@ -95,6 +96,8 @@ internal fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, active
                     SettingsRow("标签管理", icon = Glyph.TAG, onClick = tags)
                     Hairline(14)
                     SettingsRow("AI 模型", icon = Glyph.SPARK, end = if (hasKey) activeProvider.title else "未配置", onClick = openModel)
+                    Hairline(14)
+                    SettingsRow("AI 导入账单", icon = Glyph.UPLOAD, onClick = importBill)
                 }
             }
             item("backup-title") {

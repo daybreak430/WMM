@@ -44,12 +44,16 @@ import java.time.LocalDate
 @Composable
 internal fun PeriodCashflowBoard(period: Period, start: LocalDate, current: Boolean, cashflow: Cashflow) {
     val colors = MaterialTheme.colorScheme
-    val yearly = period == Period.YEAR
-    val title = when {
-        yearly -> if (current) "本年收支看板" else "年度收支看板"
+    val title = when (period) {
+        Period.WEEK -> if (current) "本周收支看板" else "周度收支看板"
+        Period.YEAR -> if (current) "本年收支看板" else "年度收支看板"
         else -> if (current) "本月收支看板" else "月度收支看板"
     }
-    val badge = if (yearly) "${start.year}" else "${start.year}.${start.monthValue.toString().padStart(2, '0')}"
+    val badge = when (period) {
+        Period.WEEK -> "${start.shortDate()}–${start.plusDays(6).shortDate()}"
+        Period.YEAR -> "${start.year}"
+        else -> "${start.year}.${start.monthValue.toString().padStart(2, '0')}"
+    }
     GroupCard {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             SectionTitle(title) { SummaryLabel(badge, Glyph.CALENDAR) }
@@ -65,16 +69,14 @@ internal fun PeriodCashflowBoard(period: Period, start: LocalDate, current: Bool
 }
 
 @Composable
-internal fun SevenDayTrend(days: List<DailyCashflow>) {
+internal fun WeekTrend(days: List<DailyCashflow>, selected: LocalDate, today: LocalDate, choose: (LocalDate) -> Unit) {
     val colors = MaterialTheme.colorScheme
     val expenseColor = if (LocalLedgerDark.current) Color(0xFFA7B9D2) else Color(0xFF637895)
     val peak = days.maxOf { maxOf(it.amount.income, it.amount.expense) }
-    val end = days.last().date
-    var selected by rememberSaveable(end) { mutableIntStateOf(days.lastIndex) }
-    val selectedDay = days[selected]
+    val selectedDay = days.first { it.date == selected }
     GroupCard {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            SectionTitle("近 7 天收支趋势")
+            SectionTitle("周内收支趋势")
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
                 TrendLegend("收入", colors.primary)
                 TrendLegend("支出", expenseColor)
@@ -89,14 +91,14 @@ internal fun SevenDayTrend(days: List<DailyCashflow>) {
                     drawLine(colors.outlineVariant, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.dp.toPx())
                 }
             }) {
-                days.forEachIndexed { index, item ->
-                    val active = selected == index
+                days.forEach { item ->
+                    val active = selected == item.date
                     val date = item.date.shortDate()
                     Column(
                         Modifier.weight(1f).clip(FieldShape)
                             .selectable(
                                 selected = active, interactionSource = null, indication = null,
-                                role = Role.Tab, onClick = { selected = index },
+                                role = Role.Tab, enabled = item.date <= today, onClick = { choose(item.date) },
                             )
                             .semantics {
                                 contentDescription = "${item.date}，收入 ${currency(item.amount.income)}，支出 ${currency(item.amount.expense)}"

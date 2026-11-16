@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.wmm.ledger.data.AccountType
 import com.wmm.ledger.data.Avatar
 import com.wmm.ledger.data.Backup
+import com.wmm.ledger.data.BillRow
 import com.wmm.ledger.data.Kind
 import com.wmm.ledger.data.LedgerError
 import com.wmm.ledger.data.LedgerRepository
@@ -30,6 +31,13 @@ import java.time.LocalDate
 internal enum class Appearance(val title: String) {
     SYSTEM("跟随系统"), LIGHT("浅色"), DARK("深色"),
 }
+
+internal data class BillImportState(
+    val rows: List<BillRow> = emptyList(),
+    val skippedCurrency: Int = 0,
+    val scanning: Boolean = false,
+    val saving: Boolean = false,
+)
 
 class LedgerViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = LedgerRepository(application)
@@ -56,6 +64,8 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
     val fileBusy = restoringFile.asStateFlow()
     private val restorePreview = MutableStateFlow<LedgerSnapshot?>(null)
     val pendingRestore = restorePreview.asStateFlow()
+    private val billState = MutableStateFlow(BillImportState())
+    internal val billImport = billState.asStateFlow()
     private val messages = Channel<String>(Channel.BUFFERED)
     val feedback = messages.receiveAsFlow()
 
@@ -163,6 +173,40 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun hasReportConsent() = repository.secrets.hasReportConsent()
+
+    internal fun scanBill(uri: Uri, provider: Provider) {
+        val current = billState.value
+        if (current.scanning || current.saving) return
+        billState.value = current.copy(scanning = true)
+        perform("无法识别账单，请检查文件或网络后重试。", onFailure = { billState.value = current }) {
+            val recognized = repository.recognizeBill(uri, provider)
+            billState.value = BillImportState(recognized.rows, recognized.skippedCurrency)
+        }
+    }
+
+    internal fun changeBillRow(row: BillRow) {
+        val current = billState.value
+        if (current.scanning || current.saving) return
+        billState.value = current.copy(rows = current.rows.map { if (it.id == row.id) row else it })
+    }
+
+    internal fun discardBill() {
+        val current = billState.value
+        if (!current.scanning && !current.saving) billState.value = BillImportState()
+    }
+
+    internal fun saveBill() {
+        val current = billState.value
+        if (current.scanning || current.saving) return
+        val selected = current.rows.filter { it.selected }
+        if (selected.isEmpty() || selected.any { !it.isReady() }) return
+        billState.value = current.copy(saving = true)
+        perform("导入失败，账本没有改动。", onFailure = { billState.value = current }) {
+            val count = repository.importBill(selected)
+            billState.value = BillImportState()
+            notify(if (count == 0) "所选流水已导入。" else "已导入 $count 笔流水。")
+        }
+    }
 
     fun generate(period: Period, day: LocalDate, consent: Boolean = false) {
         if (generatingReport.value) return

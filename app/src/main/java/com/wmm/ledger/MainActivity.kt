@@ -68,6 +68,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.wmm.ledger.data.Period
 import com.wmm.ledger.ui.AssetsScreen
+import com.wmm.ledger.ui.BillImportScreen
 import com.wmm.ledger.ui.ConfirmDialog
 import com.wmm.ledger.ui.EmptyPanel
 import com.wmm.ledger.ui.EntryEditor
@@ -138,7 +139,7 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
             delay(15_000)
         }
     }
-    val period = Period.valueOf(periodName)
+    val period = Period.valueOf(periodName).let { if (it == Period.DAY) Period.WEEK else it }
     val day = if (followToday) today else LocalDate.parse(dayText).coerceAtMost(today)
     val navState = rememberSaveableStateHolder()
     val snackbar = remember { SnackbarHostState() }
@@ -169,8 +170,9 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
         if (route != null) {
             focus.clearFocus(force = true)
             keyboard?.hide()
-            route = parent
-            parent = null
+            val returnTo = parent
+            route = returnTo
+            parent = if (returnTo == "bill-import") "settings" else null
         } else {
             tabName = Tab.LEDGER.name
         }
@@ -231,7 +233,7 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
                                                 followToday = it == today
                                             }, { route = "tag:$it" }, { route = "scene:$it" }, generating,
                                                 provider in keys, model.hasReportConsent(),
-                                                { agreed -> model.generate(period, day, agreed) },
+                                                model::generate,
                                                 { route = "model" })
                                             Tab.ASSETS -> AssetsScreen(data, model)
                                         }
@@ -247,9 +249,14 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
                                     current == "settings" -> SettingsScreen(data, model, provider, provider in keys,
                                         fileBusy, appearance, ::back,
                                         tags = { parent = current; route = "tags" },
-                                        openModel = { parent = current; route = "model" })
+                                        openModel = { parent = current; route = "model" },
+                                        importBill = { parent = current; route = "bill-import" })
                                     current == "tags" -> TagsScreen(data, model, ::back)
                                     current == "model" -> ModelSettings(model, provider, keys, ::back)
+                                    current == "bill-import" -> BillImportScreen(model, provider, provider in keys, ::back) {
+                                        parent = current
+                                        route = "model"
+                                    }
                                     current == "new" -> EntryEditor(data, null, model) { if (route == current) back() }
                                     current.startsWith("entry:") -> {
                                         // 离场动画仍使用打开时的流水，删除记录后画面不会突然变空。

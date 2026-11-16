@@ -19,6 +19,9 @@ fun LedgerSnapshot.reportAnalysis(period: Period, day: LocalDate, today: LocalDa
     } else null
     val buckets = when (period) {
         Period.DAY -> emptyList()
+        Period.WEEK -> current.entries.groupBy { it.day }.toSortedMap().map { (date, records) ->
+            cashflowBucket(date, records)
+        }
         Period.MONTH -> current.entries.groupBy { (LocalDate.parse(it.day).dayOfMonth - 1) / 7 }
             .toSortedMap().map { (week, records) ->
                 val first = week * 7 + 1

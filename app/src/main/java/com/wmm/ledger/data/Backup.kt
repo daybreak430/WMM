@@ -13,7 +13,7 @@ import java.time.ZoneOffset
 import java.util.Locale
 
 private const val FORMAT = "wmm-ledger"
-private const val BACKUP_VERSION = 4
+private const val BACKUP_VERSION = 5
 const val MAX_BACKUP_BYTES = 32 * 1024 * 1024
 const val MAX_AVATAR_BYTES = 256 * 1024
 
@@ -114,6 +114,7 @@ object Backup {
         val reports = root.list("reports", 50_000) {
             val period = enumValueOf<Period>(string("period"))
             require(version >= 2L || period != Period.YEAR)
+            require(version >= 5L || period != Period.WEEK)
             val start = day("startDay").also { require(it == period.start(it)) }
             val signature = string("snapshotId").also { require(it.matches(Regex("[a-f0-9]{64}"))) }
             Report(period.name, start.toString(), signature, time("createdAt"),

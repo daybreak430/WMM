@@ -2,6 +2,8 @@ package com.wmm.ledger.data
 
 import java.math.BigDecimal
 import java.time.LocalDate
+import java.time.DayOfWeek
+import java.time.temporal.TemporalAdjusters
 import java.util.Locale
 
 enum class Kind(val title: String) {
@@ -13,16 +15,18 @@ enum class AccountType(val title: String) {
 }
 
 enum class Period(val title: String) {
-    DAY("日"), MONTH("月"), YEAR("年");
+    DAY("日"), WEEK("周"), MONTH("月"), YEAR("年");
 
     fun start(day: LocalDate): LocalDate = when (this) {
         DAY -> day
+        WEEK -> day.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
         MONTH -> day.withDayOfMonth(1)
         YEAR -> day.withDayOfYear(1)
     }
 
     fun step(day: LocalDate, amount: Long): LocalDate = when (this) {
         DAY -> day.plusDays(amount)
+        WEEK -> day.plusWeeks(amount)
         MONTH -> day.plusMonths(amount)
         YEAR -> day.plusYears(amount)
     }

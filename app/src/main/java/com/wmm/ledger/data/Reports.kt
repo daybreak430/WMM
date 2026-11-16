@@ -7,7 +7,6 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import java.net.SocketTimeoutException
 import java.net.URL
-import java.security.MessageDigest
 import javax.net.ssl.HttpsURLConnection
 
 enum class Provider(val title: String, val host: String, val path: String, val model: String) {
@@ -79,9 +78,8 @@ object Reports {
         }
 
     // 汇总数据或提示词更新时提示重新生成，备注和账户改动不影响报告有效性。
-    fun signature(analysis: ReportAnalysis): String = MessageDigest.getInstance("SHA-256")
-        .digest("$ANALYSIS_VERSION|${payload(analysis)}".toByteArray())
-        .joinToString("") { "%02x".format(it) }
+    fun signature(analysis: ReportAnalysis): String =
+        sha256("$ANALYSIS_VERSION|${payload(analysis)}".toByteArray())
 
     fun request(provider: Provider, analysis: ReportAnalysis?): JSONObject = JSONObject().apply {
         put("model", provider.model)
@@ -108,6 +106,7 @@ object Reports {
             Period.DAY -> "写日报时，优先从「场景与类型组合排行」找当天钱具体花在了哪个场合、哪类事情上，用「场景·类型」讲在一起。" +
                 "有足够数据时，可以看看同一种类型在不同场景的差别，或同一个场景里的不同花法，再用笔数和金额分辨是多笔累积还是一笔突出。" +
                 "若只有一个组合，把这笔或这组说清楚就够了。缺少场景时只说账本里有依据的类型。组合排行的占比以全部支出为分母。"
+            Period.WEEK -> "写自然周总结时结合每日分段和场景·类型组合，看看哪些天或场合带动了支出。"
             Period.MONTH -> "结合分段、频次、金额与场景，看这个月重复出现的模式和少数拉高支出的项目。"
             Period.YEAR -> "顺着月度分布找起伏、收入节奏、支出高峰和全年的收支关系。"
         }
@@ -153,19 +152,22 @@ object Reports {
 }
 
 class ModelClient {
-    fun complete(provider: Provider, key: String, analysis: ReportAnalysis?): String {
+    fun complete(provider: Provider, key: String, analysis: ReportAnalysis?): String =
+        send(provider, key, Reports.request(provider, analysis))
+
+    internal fun send(provider: Provider, key: String, request: JSONObject, readTimeout: Int = 60_000): String {
         try {
             val connection = URL(provider.endpoint).openConnection() as HttpsURLConnection
             try {
-                // 禁止跳转，Key 和账本摘要只发往固定的官方主机。
+                // 禁止跳转，Key 和用户授权发送的数据只发往固定的官方主机。
                 connection.instanceFollowRedirects = false
                 connection.connectTimeout = 12_000
-                connection.readTimeout = 60_000
+                connection.readTimeout = readTimeout
                 connection.requestMethod = "POST"
                 connection.doOutput = true
                 connection.setRequestProperty("Authorization", "Bearer $key")
                 connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                val body = Reports.request(provider, analysis).toString().toByteArray()
+                val body = request.toString().toByteArray()
                 connection.setFixedLengthStreamingMode(body.size)
                 connection.outputStream.use { it.write(body) }
                 val status = connection.responseCode
