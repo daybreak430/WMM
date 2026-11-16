@@ -48,6 +48,8 @@ import com.wmm.ledger.LedgerViewModel
 import com.wmm.ledger.data.Kind
 import com.wmm.ledger.data.LedgerSnapshot
 import com.wmm.ledger.data.Provider
+import com.wmm.ledger.data.currency
+import com.wmm.ledger.data.netAssetTotal
 import com.wmm.ledger.data.orderedTags
 import com.mohamedrejeb.compose.dnd.DragAndDropContainer
 import com.mohamedrejeb.compose.dnd.scroll.dragAutoScroll
@@ -68,6 +70,7 @@ internal fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, active
     var avatarOptions by rememberSaveable { mutableStateOf(false) }
     var exportWarning by rememberSaveable { mutableStateOf(false) }
     val habitLocation by model.habitLocation.collectAsStateWithLifecycle()
+    val netAssetAmount = remember(data) { currency(data.netAssetTotal()) }
     var explainLocation by rememberSaveable { mutableStateOf(false) }
     val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         if (it) model.setHabitLocation(true)
@@ -101,26 +104,31 @@ internal fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, active
                     }
                 }
             }
-            item("appearance") {
+            item("assets") {
                 GroupCard {
-                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("外观", style = MaterialTheme.typography.titleMedium)
-                        LedgerSegments(Appearance.entries, appearance, { it.title }, onSelect = model::selectAppearance)
-                    }
+                    SettingsRow("资产", description = "净资产总额", icon = Glyph.WALLET,
+                        endContent = { AmountText(netAssetAmount) }, onClick = assets)
                 }
+            }
+            item("labels") {
+                GroupCard { SettingsRow("标签管理", icon = Glyph.TAG, onClick = tags) }
             }
             item("preferences") {
                 GroupCard {
-                    SettingsRow("资产", icon = Glyph.WALLET, onClick = assets)
-                    Hairline(14)
-                    SettingsRow("标签管理", icon = Glyph.TAG, onClick = tags)
-                    Hairline(14)
                     SettingsRow("AI 模型", icon = Glyph.SPARK, end = if (hasKey) activeProvider.title else "未配置", onClick = openModel)
                     Hairline(14)
                     SettingsRow("AI 导入账单", icon = Glyph.UPLOAD, onClick = importBill)
                     Hairline(14)
                     SettingsRow("按位置推荐分类", icon = Glyph.MAP_PIN, end = if (habitLocation) "开启" else "关闭") {
                         if (habitLocation) model.setHabitLocation(false) else explainLocation = true
+                    }
+                }
+            }
+            item("appearance") {
+                GroupCard {
+                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("外观", style = MaterialTheme.typography.titleMedium)
+                        LedgerSegments(Appearance.entries, appearance, { it.title }, onSelect = model::selectAppearance)
                     }
                 }
             }

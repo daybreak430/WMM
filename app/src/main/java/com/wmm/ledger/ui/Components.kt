@@ -151,7 +151,7 @@ fun EmptyPanel(title: String, detail: String? = null, glyph: Glyph = Glyph.BOOK)
 
 @Composable
 fun SettingsRow(title: String, description: String? = null, icon: Glyph? = null, enabled: Boolean = true,
-    end: String? = null, onClick: () -> Unit) {
+    end: String? = null, endContent: (@Composable () -> Unit)? = null, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth().clickable(enabled = enabled, role = Role.Button, onClick = onClick)
         .padding(horizontal = 14.dp, vertical = 13.dp),
@@ -162,7 +162,11 @@ fun SettingsRow(title: String, description: String? = null, icon: Glyph? = null,
                 color = if (enabled) colors.onSurface else colors.onSurfaceVariant)
             if (description != null) Text(description, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
         }
-        if (end != null) {
+        if (endContent != null) {
+            Box(Modifier.weight(1.15f), contentAlignment = Alignment.CenterEnd) {
+                endContent()
+            }
+        } else if (end != null) {
             Box(Modifier.weight(.52f), contentAlignment = Alignment.CenterEnd) {
                 Text(end, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)

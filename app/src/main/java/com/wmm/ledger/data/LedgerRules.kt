@@ -125,6 +125,9 @@ fun LedgerSnapshot.accountBalances(): Map<String, Long> {
     return balances
 }
 
+internal fun LedgerSnapshot.netAssetTotal(balances: Map<String, Long> = accountBalances()): Long =
+    accounts.sumOf { account -> if (account.archived) 0L else balances[account.id] ?: 0L }
+
 fun LedgerSnapshot.orderedTags(kind: Kind): List<Tag> {
     val usage = entries.groupingBy { it.tagId }.eachCount()
     return tags.filter { it.kind == kind.name && !it.archived }

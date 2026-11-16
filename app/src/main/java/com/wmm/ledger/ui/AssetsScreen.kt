@@ -38,6 +38,7 @@ import com.wmm.ledger.data.MAX_NAME
 import com.wmm.ledger.data.accountBalances
 import com.wmm.ledger.data.currency
 import com.wmm.ledger.data.editableAmount
+import com.wmm.ledger.data.netAssetTotal
 import com.wmm.ledger.data.parseCents
 import com.wmm.ledger.data.validName
 import com.mohamedrejeb.compose.dnd.DragAndDropContainer
@@ -82,7 +83,7 @@ fun AssetsScreen(data: LedgerSnapshot, model: LedgerViewModel, back: () -> Unit)
                                 style = MaterialTheme.typography.labelLarge)
                             SummaryLabel("${active.size} 个账户", Glyph.WALLET)
                         }
-                        AmountText(currency(active.sumOf { balances[it.id] ?: 0L }),
+                        AmountText(currency(data.netAssetTotal(balances)),
                             modifier = Modifier.fillMaxWidth().padding(top = 5.dp), style = HeroNumber)
                     }
                 }

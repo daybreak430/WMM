@@ -23,6 +23,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import java.time.LocalDate
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
@@ -186,13 +187,25 @@ class RecordUiTest {
 
     @Test fun recordActionOpensFromStatsAndReturnsToTheSameTab() {
         ui.waitUntil(10_000) { ui.onAllNodesWithText("记一笔").fetchSemanticsNodes().isNotEmpty() }
+        val ledger = ui.onNode(hasText("账本") and hasClickAction())
         val stats = ui.onNode(hasText("统计") and hasClickAction())
-        stats.performClick()
         val record = ui.onNodeWithText("记一笔")
-        val distance = record.fetchSemanticsNode().boundsInRoot.center.x - stats.fetchSemanticsNode().boundsInRoot.center.x
+        val ledgerX = ledger.fetchSemanticsNode().boundsInRoot.center.x
+        val statsX = stats.fetchSemanticsNode().boundsInRoot.center.x
+        val recordX = record.fetchSemanticsNode().boundsInRoot.center.x
+        assertEquals((ledgerX + statsX) / 2, recordX, 1f)
+
+        stats.performClick()
         stats.performTouchInput {
             down(center)
-            repeat(8) { step -> moveTo(center + Offset(distance * (step + 1) / 8, 0f)) }
+            repeat(8) { step -> moveTo(center + Offset((recordX - statsX) * (step + 1) / 8, 0f)) }
+            up()
+        }
+        ui.onNodeWithText("本月收支看板").assertIsDisplayed()
+
+        record.performTouchInput {
+            down(center)
+            repeat(8) { step -> moveTo(center + Offset((ledgerX - recordX) * (step + 1) / 8, 0f)) }
             up()
         }
         ui.onNodeWithText("本月收支看板").assertIsDisplayed()

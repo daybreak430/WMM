@@ -82,11 +82,14 @@ class LedgerReorderingUiTest {
         val tag = Tag("expense", Kind.EXPENSE.name, "旧账测试")
         val primary = Account("a", "SAVINGS", "常用银行卡", 10_000, now)
         val secondary = Account("b", "PREPAID", "备用充值卡", 5_000, now)
+        val archived = Account("archived", "SAVINGS", "归档卡", 8_000, now, archived = true)
         val old = Entry("old", Kind.EXPENSE.name, 500, tag.id, null, "", now, day)
-        withLedger(LedgerSnapshot(entries = listOf(old), tags = listOf(tag), accounts = listOf(primary, secondary))) { repository, _ ->
+        withLedger(LedgerSnapshot(entries = listOf(old), tags = listOf(tag),
+            accounts = listOf(primary, secondary, archived))) { repository, _ ->
             ui.waitUntil(10_000) { ui.onNodeWithText("记一笔").isDisplayed() }
             ui.onNodeWithContentDescription("个人设置").performClick()
-            ui.onNodeWithText("资产").performScrollTo().performClick()
+            ui.onNode(hasText("资产") and hasText("¥150.00")).assertIsDisplayed().performClick()
+            ui.onNodeWithText("¥150.00").assertIsDisplayed()
             drag(primary.name, secondary.name)
             ui.waitUntil(8_000) { runBlocking { repository.snapshot().accounts.first().id == secondary.id } }
             assertTrue(position(secondary.name).y < position(primary.name).y)
