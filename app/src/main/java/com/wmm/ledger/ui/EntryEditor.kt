@@ -11,11 +11,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
@@ -47,6 +49,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.LookaheadScope
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -156,39 +159,55 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
     val focus = LocalFocusManager.current
     val pageInset = LedgerPageInset()
     val colors = MaterialTheme.colorScheme
+    val isNew = initial == null
     fun dismissKeyboard() {
         focus.clearFocus()
         keyboard?.hide()
     }
+    val selectKind: (Kind) -> Unit = { option ->
+        if (option.name != kindName) {
+            kindName = option.name
+            manualTagId = null
+            tagChosen = false
+            showTags = false
+        }
+    }
 
     Column(Modifier.fillMaxSize().imePadding()) {
-        PageHeader(if (initial == null) "记一笔" else "编辑流水", back, centered = true) {
-            if (initial != null) IconButton(onClick = { deleteDialog = true }) {
-                LucideIcon(Glyph.DELETE, MaterialTheme.colorScheme.error, "删除流水")
+        if (isNew) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = pageInset, vertical = 5.dp)
+                    .semantics { paneTitle = "记一笔" },
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                PageBackButton(back)
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    Box(Modifier.widthIn(max = 186.dp)) { EntryKindSelector(kind, selectKind) }
+                }
+                Spacer(Modifier.width(48.dp))
+            }
+        } else {
+            PageHeader("编辑流水", back, centered = true) {
+                IconButton(onClick = { deleteDialog = true }) {
+                    LucideIcon(Glyph.DELETE, colors.error, "删除流水")
+                }
             }
         }
         Column(Modifier.weight(1f)
             .dragAutoScroll(tagDrag, scroll, Orientation.Vertical)
             .dragAutoScroll(sceneDrag, scroll, Orientation.Vertical)
             .verticalScroll(scroll)
-            .padding(horizontal = pageInset, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            LedgerSegments(
-                Kind.entries, kind, { it.title },
-                containerColor = if (LocalLedgerDark.current) colors.surfaceContainerHigh else colors.surface,
-            ) { option ->
-                if (option != kind) {
-                    kindName = option.name
-                    manualTagId = null
-                    tagChosen = false
-                    showTags = false
-                }
-            }
-            Column(Modifier.fillMaxWidth().padding(top = 7.dp),
-                verticalArrangement = Arrangement.spacedBy(3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            .padding(horizontal = pageInset, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(if (isNew) 12.dp else 16.dp)) {
+            if (!isNew) EntryKindSelector(kind, selectKind)
+            Column(Modifier.fillMaxWidth().padding(top = if (isNew) 2.dp else 7.dp),
+                verticalArrangement = Arrangement.spacedBy(if (isNew) 2.dp else 3.dp),
+                horizontalAlignment = Alignment.CenterHorizontally) {
                 val amountError = amountText.isNotBlank() && cents == null
                 Text("金额", color = if (amountError) colors.error else colors.onSurfaceVariant,
-                    style = MaterialTheme.typography.labelLarge)
-                EntryAmount(amountText, amountError, autoFocus = initial == null) { amountText = it }
+                    style = if (isNew) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge)
+                EntryAmount(amountText, amountError, compact = isNew) { amountText = it }
                 Hairline()
                 if (amountError) Text("请输入有效金额，最多两位小数。", color = colors.error,
                     style = MaterialTheme.typography.bodySmall)
@@ -406,13 +425,25 @@ private fun EntryTagGroup(
 }
 
 @Composable
-private fun EntryAmount(amount: String, error: Boolean, autoFocus: Boolean, onChange: (String) -> Unit) {
+private fun EntryKindSelector(kind: Kind, select: (Kind) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    LedgerSegments(
+        Kind.entries, kind, { it.title },
+        containerColor = if (LocalLedgerDark.current) colors.surfaceContainerHigh else colors.surface,
+        onSelect = select,
+    )
+}
+
+@Composable
+private fun EntryAmount(amount: String, error: Boolean, compact: Boolean, onChange: (String) -> Unit) {
     val colors = MaterialTheme.colorScheme
     val amountColor = if (error) colors.error else colors.onSurface
     val currencyStyle = LedgerBalanceNumber.copy(
-        fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp,
+        fontSize = if (compact) 24.sp else 28.sp, lineHeight = if (compact) 29.sp else 34.sp,
+        fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp,
     )
-    val baseStyle = LedgerBalanceNumber.copy(fontSize = 46.sp, lineHeight = 54.sp)
+    val baseStyle = LedgerBalanceNumber.copy(fontSize = if (compact) 40.sp else 46.sp,
+        lineHeight = if (compact) 46.sp else 54.sp)
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -424,11 +455,12 @@ private fun EntryAmount(amount: String, error: Boolean, autoFocus: Boolean, onCh
         val available = with(density) { (maxWidth - 12.dp - symbolWidth.toDp()).coerceAtLeast(1.dp).toPx() }
         // 根据实际字宽适配窄屏和字号缩放，金额过长时保留输入框的横向滚动。
         val fullWidth = measurer.measure(shown, baseStyle, maxLines = 1).size.width.coerceAtLeast(1)
-        val inputStyle = baseStyle.copy(fontSize = (46 * (available / fullWidth)).coerceIn(30f, 46f).sp)
+        val maxFontSize = baseStyle.fontSize.value
+        val inputStyle = baseStyle.copy(fontSize = (maxFontSize * (available / fullWidth)).coerceIn(30f, maxFontSize).sp)
         val measured = measurer.measure(shown, inputStyle, maxLines = 1).size.width
         val textWidth = with(density) { (minOf(measured.toFloat(), available).toDp() + 6.dp) }
         LaunchedEffect(Unit) {
-            if (autoFocus && !requested) {
+            if (compact && !requested) {
                 requested = true
                 focusRequester.requestFocus()
                 delay(150)
@@ -438,7 +470,7 @@ private fun EntryAmount(amount: String, error: Boolean, autoFocus: Boolean, onCh
         BasicTextField(
             value = amount,
             onValueChange = { if (it.length <= 17) onChange(it) },
-            modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp).focusRequester(focusRequester)
+            modifier = Modifier.fillMaxWidth().heightIn(min = if (compact) 50.dp else 60.dp).focusRequester(focusRequester)
                 .testTag("entry-amount").semantics { contentDescription = "金额" },
             textStyle = inputStyle.copy(color = amountColor),
             singleLine = true,

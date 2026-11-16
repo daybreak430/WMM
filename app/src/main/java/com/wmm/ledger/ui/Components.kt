@@ -59,15 +59,7 @@ fun PageHeader(title: String, back: (() -> Unit)? = null, mark: Glyph? = null, c
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (back != null) {
-            IconButton(onClick = back, modifier = Modifier.size(48.dp)) {
-                Surface(
-                    modifier = Modifier.size(40.dp), shape = CircleShape, color = colors.surface,
-                ) {
-                    Box(contentAlignment = Alignment.Center) { LucideIcon(Glyph.BACK, description = "返回", size = 19) }
-                }
-            }
-        }
+        if (back != null) PageBackButton(back)
         if (mark != null) {
             Surface(
                 modifier = Modifier.size(38.dp), shape = FieldShape, color = colors.surface,
@@ -80,6 +72,15 @@ fun PageHeader(title: String, back: (() -> Unit)? = null, mark: Glyph? = null, c
             textAlign = if (centered) TextAlign.Center else TextAlign.Start,
             maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (centered) Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { end() } else end()
+    }
+}
+
+@Composable
+internal fun PageBackButton(onClick: () -> Unit) {
+    IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
+        Surface(Modifier.size(40.dp), shape = CircleShape, color = MaterialTheme.colorScheme.surface) {
+            Box(contentAlignment = Alignment.Center) { LucideIcon(Glyph.BACK, description = "返回", size = 19) }
+        }
     }
 }
 
