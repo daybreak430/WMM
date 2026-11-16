@@ -231,7 +231,12 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
         LazyColumn(contentPadding = PaddingValues(horizontal = PagePadding, vertical = 10.dp)) {
             item("filters") {
                 Column(Modifier.padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    LedgerSegments(Period.entries, period, { it.title }, animateSelection = false, onSelect = choosePeriod)
+                    LedgerSegments(
+                        Period.entries, period, { it.title },
+                        animateSelection = false,
+                        containerColor = if (LocalLedgerDark.current) colors.surfaceContainerHigh else colors.surface,
+                        onSelect = choosePeriod,
+                    )
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         val previous = period.step(summary.start, -1)
                         IconButton(onClick = { chooseDay(previous) }, enabled = previous >= FIRST_DAY) {

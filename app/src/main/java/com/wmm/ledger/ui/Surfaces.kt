@@ -165,13 +165,16 @@ fun PrimaryAction(text: String, onClick: () -> Unit, modifier: Modifier = Modifi
 
 @Composable
 fun <T> LedgerSegments(options: List<T>, selected: T, title: (T) -> String,
-    animateSelection: Boolean = true, onSelect: (T) -> Unit) {
+    animateSelection: Boolean = true,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant,
+    onSelect: (T) -> Unit,
+) {
     val colors = MaterialTheme.colorScheme
     val refined = LocalLedgerRefinement.current
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = FieldShape,
-        color = colors.surfaceVariant,
+        color = containerColor,
     ) {
         Row(
             Modifier.padding(3.dp).selectableGroup(),
