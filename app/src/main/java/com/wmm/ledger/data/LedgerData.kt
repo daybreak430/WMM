@@ -22,10 +22,13 @@ data class Tag(
     val name: String,
     val archived: Boolean = false,
     val sortOrder: Int? = null,
+    val iconKey: String? = null,
+    val iconColor: String? = null,
 )
 
 @Entity(tableName = "scenes", indices = [Index(value = ["name"], unique = true)])
-data class Scene(@PrimaryKey val id: String, val name: String, val sortOrder: Int? = null)
+data class Scene(@PrimaryKey val id: String, val name: String, val sortOrder: Int? = null,
+    val iconKey: String? = null, val iconColor: String? = null)
 
 @Entity(tableName = "accounts")
 data class Account(
@@ -58,6 +61,7 @@ data class Entry(
     val occurredAt: Long,
     val day: String,
     val sceneId: String? = null,
+    val habitArea: String? = null,
 )
 
 @Entity(tableName = "reports", primaryKeys = ["period", "startDay"])
@@ -107,13 +111,14 @@ interface LedgerDao {
     @Insert suspend fun restoreReports(reports: List<Report>)
     @Query("DELETE FROM entries WHERE id = :id") suspend fun deleteEntry(id: String)
     @Query("DELETE FROM entries") suspend fun clearEntries()
+    @Query("UPDATE entries SET habitArea = NULL WHERE habitArea IS NOT NULL") suspend fun clearHabitAreas()
     @Query("DELETE FROM tags") suspend fun clearTags()
     @Query("DELETE FROM scenes") suspend fun clearScenes()
     @Query("DELETE FROM accounts") suspend fun clearAccounts()
     @Query("DELETE FROM reports") suspend fun clearReports()
 }
 
-@Database(entities = [Tag::class, Account::class, Entry::class, Report::class, Profile::class, Scene::class], version = 4)
+@Database(entities = [Tag::class, Account::class, Entry::class, Report::class, Profile::class, Scene::class], version = 5)
 abstract class LedgerDatabase : RoomDatabase() {
     abstract fun ledger(): LedgerDao
 }
@@ -139,5 +144,15 @@ internal val MIGRATION_3_4 = object : Migration(3, 4) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE accounts ADD COLUMN sortOrder INTEGER")
         db.execSQL("ALTER TABLE accounts ADD COLUMN isDefault INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
+internal val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE entries ADD COLUMN habitArea TEXT")
+        db.execSQL("ALTER TABLE tags ADD COLUMN iconKey TEXT")
+        db.execSQL("ALTER TABLE tags ADD COLUMN iconColor TEXT")
+        db.execSQL("ALTER TABLE scenes ADD COLUMN iconKey TEXT")
+        db.execSQL("ALTER TABLE scenes ADD COLUMN iconColor TEXT")
     }
 }

@@ -163,7 +163,8 @@ class StorageAndModelTest {
         assertFalse(Reports.request(Provider.MINIMAX, analysis).has("thinking"))
         val prompt = Reports.request(Provider.DEEPSEEK, analysis)
             .getJSONArray("messages").getJSONObject(0).getString("content")
-        assertTrue(prompt.contains("长度和结构由发现决定"))
+        assertTrue(prompt.contains("完整七天与刚开始的两天不能直接比较"))
+        assertTrue(prompt.contains("\"nextStep\":null"))
         val longReport = "先说一件有意思的事。".repeat(900)
         val longResponse = JSONObject().put("choices", org.json.JSONArray().put(JSONObject()
             .put("finish_reason", "stop").put("message", JSONObject().put("content", longReport))))
@@ -283,6 +284,37 @@ class StorageAndModelTest {
         assertEquals(null, snapshot.entries.single { it.id == lunch.id }.sceneId)
         assertTrue(snapshot.entries.all { it.accountId == null })
         assertTrue(BillImport.parse(reply, "test-file", snapshot.entries, labels).rows[1].alreadyImported)
+    }
+
+    @Test fun generatedIconsPreserveManualStylesAndBackupExcludesHabitAreas() = runBlocking {
+        val repository = LedgerRepository(isolated())
+        val day = LocalDate.of(2026, 1, 2)
+        val stamp = day.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val manuallyStyled = Tag("meal", Kind.EXPENSE.name, "早餐", iconKey = "MEAL", iconColor = "VIOLET")
+        val other = Tag("transit", Kind.EXPENSE.name, "地铁")
+        val trip = Scene("trip", "出差")
+        val locationRecord = Entry("sample", Kind.EXPENSE.name, 1400, manuallyStyled.id, null, "", stamp,
+            day.toString(), trip.id, habitArea = "private-area-hash")
+        repository.replace(LedgerSnapshot(entries = listOf(locationRecord), tags = listOf(manuallyStyled, other),
+            scenes = listOf(trip)))
+        val preview = repository.suggestLabelIcons(null)
+        assertEquals(setOf(other.id, trip.id), preview.changes.map { it.target.id }.toSet())
+        val cloudRequest = LabelIcons.request(Provider.DEEPSEEK, preview.changes.map { it.target }).toString()
+        assertTrue(cloudRequest.contains("地铁") && cloudRequest.contains("出差"))
+        assertFalse(cloudRequest.contains("private-area-hash") || cloudRequest.contains("transit"))
+        repository.saveLabelIcons(preview.changes, onlyUnstyled = true)
+        val data = repository.snapshot()
+        assertEquals("VIOLET", data.tags.single { it.id == manuallyStyled.id }.iconColor)
+        assertEquals("TRAIN", data.tags.single { it.id == other.id }.iconKey)
+        assertEquals("PLANE", data.scenes.single().iconKey)
+        val backup = Backup.encode(data)
+        assertFalse(backup.decodeToString().contains("private-area-hash"))
+        val restored = Backup.decode(backup.inputStream())
+        assertEquals(data.tags, restored.tags)
+        assertEquals(data.scenes, restored.scenes)
+        assertEquals(null, restored.entries.single().habitArea)
+        repository.clearHabitAreas()
+        assertEquals(null, repository.snapshot().entries.single().habitArea)
     }
 
     private fun isolated(): Context {

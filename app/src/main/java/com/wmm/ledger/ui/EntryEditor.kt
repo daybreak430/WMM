@@ -35,6 +35,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -50,6 +51,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
@@ -64,7 +66,10 @@ import androidx.compose.ui.unit.sp
 import com.wmm.ledger.LedgerViewModel
 import com.wmm.ledger.data.Entry
 import com.wmm.ledger.data.Kind
+import com.wmm.ledger.data.LabelStyle
 import com.wmm.ledger.data.LedgerRepository
+import com.wmm.ledger.data.LedgerHabits
+import com.wmm.ledger.data.readHabitArea
 import com.wmm.ledger.data.LedgerSnapshot
 import com.wmm.ledger.data.MAX_NAME
 import com.wmm.ledger.data.MAX_NOTE
@@ -81,6 +86,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 
 private const val VISIBLE_TAG_LIMIT = 8
@@ -94,10 +100,12 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
     val scenes = remember(data.scenes, data.entries) { data.orderedScenes() }
     val activeAccounts = remember(data.accounts) { data.accounts.filterNot { it.archived } }
     val defaultAccount = activeAccounts.firstOrNull { it.isDefault }
-    var tagId by rememberSaveable { mutableStateOf(initial?.tagId) }
-    var sceneId by rememberSaveable {
+    var manualTagId by rememberSaveable { mutableStateOf(initial?.tagId) }
+    var manualSceneId by rememberSaveable {
         mutableStateOf(if (initial == null) scenes.firstOrNull()?.id else initial.sceneId)
     }
+    var tagChosen by rememberSaveable { mutableStateOf(false) }
+    var sceneChosen by rememberSaveable { mutableStateOf(false) }
     var chosenAccountId by rememberSaveable { mutableStateOf(initial?.accountId) }
     var accountChosen by rememberSaveable { mutableStateOf(false) }
     val accountId = if (initial == null && !accountChosen) defaultAccount?.id else chosenAccountId
@@ -105,6 +113,18 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
     var occurredAt by rememberSaveable { mutableStateOf(initial?.occurredAt ?: System.currentTimeMillis()) }
     var bookedDay by rememberSaveable { mutableStateOf(initial?.day ?: LedgerRepository.bookingDay(occurredAt).toString()) }
     val day = LocalDate.parse(bookedDay)
+    val useLocation by model.habitLocation.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val area by produceState<String?>(null, useLocation, initial == null) {
+        value = if (useLocation && initial == null) readHabitArea(context) else null
+    }
+    val habitArea = area.takeIf { useLocation && System.currentTimeMillis() - occurredAt in 0..900_000 }
+    val habits = remember(data.entries, data.tags, data.scenes) { LedgerHabits(data) }
+    val guess = remember(habits, kind, cents, occurredAt, note, habitArea, initial == null, tagChosen) {
+        if (initial == null && !tagChosen) habits.suggest(kind, cents, occurredAt, note, habitArea) else null
+    }
+    val tagId = guess?.tag?.id ?: manualTagId
+    val sceneId = if (!sceneChosen && guess != null) guess.scene?.id else manualSceneId
     val zone = ZoneId.systemDefault()
     val time = Instant.ofEpochMilli(occurredAt).atZone(zone).toLocalTime()
     var tagDialog by rememberSaveable { mutableStateOf(false) }
@@ -121,6 +141,12 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
     val tags = remember(data.tags, data.entries, kind) { data.orderedTags(kind) }
     val sceneLabels = remember(scenes) { scenes.associate { it.id to it.name } }
     val tagLabels = remember(tags) { tags.associate { it.id to it.name } }
+    val sceneStyles = remember(scenes) { scenes.mapNotNull { scene ->
+        LabelStyle.from(scene.iconKey, scene.iconColor)?.let { scene.id to it }
+    }.toMap() }
+    val tagStyles = remember(tags) { tags.mapNotNull { tag ->
+        LabelStyle.from(tag.iconKey, tag.iconColor)?.let { tag.id to it }
+    }.toMap() }
     val archivedTag = data.tags.firstOrNull { it.archived && it.id == initial?.tagId && it.kind == kindName }
     val account = data.accounts.firstOrNull { it.id == accountId }
     val tagDrag = key(kind) { rememberReorderDragState() }
@@ -152,7 +178,8 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
             ) { option ->
                 if (option != kind) {
                     kindName = option.name
-                    tagId = null
+                    manualTagId = null
+                    tagChosen = false
                     showTags = false
                 }
             }
@@ -167,12 +194,13 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
                     style = MaterialTheme.typography.bodySmall)
             }
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (guess != null) Text("按记账习惯选中", color = colors.primary, style = MaterialTheme.typography.labelSmall)
                 if (kind == Kind.EXPENSE) {
                     EntryTagGroup(
-                        title = "场景", labels = sceneLabels, selected = sceneId, expanded = showScenes,
+                        title = "场景", labels = sceneLabels, styles = sceneStyles, selected = sceneId, expanded = showScenes,
                         dragState = sceneDrag, optional = true,
                         save = { order, failed -> model.reorderScenes(order, failed) },
-                        select = { sceneId = it.takeUnless { id -> id == sceneId }; dismissKeyboard() },
+                        select = { manualSceneId = it.takeUnless { id -> id == sceneId }; sceneChosen = true; dismissKeyboard() },
                     ) {
                         EntryTagChip("新建场景", add = true) {
                             dismissKeyboard()
@@ -186,10 +214,15 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
                 }
                 key(kind) {
                     EntryTagGroup(
-                        title = "类型", labels = tagLabels, selected = tagId, expanded = showTags,
+                        title = "类型", labels = tagLabels, styles = tagStyles, selected = tagId, expanded = showTags,
                         dragState = tagDrag, archivedTag = archivedTag,
                         save = { order, failed -> model.reorderTags(kind, order, failed) },
-                        select = { tagId = it; dismissKeyboard() },
+                        select = {
+                            if (!sceneChosen && guess != null && guess.tag.id == it) manualSceneId = guess.scene?.id
+                            manualTagId = it
+                            tagChosen = true
+                            dismissKeyboard()
+                        },
                     ) {
                         EntryTagChip("新建标签", add = true) {
                             dismissKeyboard()
@@ -228,7 +261,7 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
                     focus.clearFocus()
                     keyboard?.hide()
                     model.saveEntry(initial?.id, kind, saveCents, selected, accountId, note, occurredAt, day,
-                        sceneId.takeIf { kind == Kind.EXPENSE }, back)
+                        sceneId.takeIf { kind == Kind.EXPENSE }, habitArea, back)
                         .invokeOnCompletion { saving = false }
                 },
                 enabled = cents != null && tagId != null && !saving,
@@ -239,7 +272,8 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
     if (tagDialog) {
         NameDialog("新建${kind.title}标签", "标签名称", "", onDismiss = { tagDialog = false }) { name ->
             model.saveTag(kind, name, null) { tag ->
-                tagId = tag.id
+                manualTagId = tag.id
+                tagChosen = true
                 tagDialog = false
             }
         }
@@ -247,7 +281,8 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
     if (newScene && kind == Kind.EXPENSE) {
         NameDialog("新建场景", "场景名称", "", onDismiss = { newScene = false }) { name ->
             model.saveScene(name) {
-                sceneId = it.id
+                manualSceneId = it.id
+                sceneChosen = true
                 newScene = false
             }
         }
@@ -328,6 +363,7 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
 private fun EntryTagGroup(
     title: String,
     labels: Map<String, String>,
+    styles: Map<String, LabelStyle>,
     selected: String?,
     expanded: Boolean,
     dragState: DragAndDropState<String>,
@@ -354,7 +390,8 @@ private fun EntryTagGroup(
                     order.ids.filter { it in visibleIds }.forEach { id ->
                         key(id) {
                             ReorderableLedgerItem(id, order, visibleIds, dragState, save, Modifier.animateBounds(this@LookaheadScope)) {
-                                EntryTagChip(labels.getValue(id), selected = selected == id, optional = optional) { select(id) }
+                                EntryTagChip(labels.getValue(id), selected = selected == id, optional = optional,
+                                    style = styles[id]) { select(id) }
                             }
                         }
                     }
@@ -423,7 +460,7 @@ private fun EntryAmount(amount: String, error: Boolean, autoFocus: Boolean, onCh
 
 @Composable
 private fun EntryTagChip(label: String, selected: Boolean? = null, optional: Boolean = false,
-    add: Boolean = false, onClick: () -> Unit) {
+    add: Boolean = false, style: LabelStyle? = null, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(12.dp)
     val interaction = when {
@@ -452,6 +489,7 @@ private fun EntryTagChip(label: String, selected: Boolean? = null, optional: Boo
             Row(Modifier.heightIn(min = 34.dp).padding(horizontal = 11.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (add) LucideIcon(Glyph.PLUS, tint, size = 16)
+                if (style != null) LabelGlyph(style, 15)
                 Text(label, style = labelStyle, color = tint)
             }
         }

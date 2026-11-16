@@ -1,5 +1,6 @@
 package com.wmm.ledger.ui
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -36,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wmm.ledger.Appearance
 import com.wmm.ledger.LedgerViewModel
 import com.wmm.ledger.data.Kind
@@ -59,6 +61,11 @@ internal fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, active
     var avatarOptions by rememberSaveable { mutableStateOf(false) }
     var appearanceOptions by rememberSaveable { mutableStateOf(false) }
     var exportWarning by rememberSaveable { mutableStateOf(false) }
+    val habitLocation by model.habitLocation.collectAsStateWithLifecycle()
+    var explainLocation by rememberSaveable { mutableStateOf(false) }
+    val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        if (it) model.setHabitLocation(true)
+    }
     val avatarChooser = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) model.saveAvatar(uri)
     }
@@ -98,6 +105,10 @@ internal fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, active
                     SettingsRow("AI 模型", icon = Glyph.SPARK, end = if (hasKey) activeProvider.title else "未配置", onClick = openModel)
                     Hairline(14)
                     SettingsRow("AI 导入账单", icon = Glyph.UPLOAD, onClick = importBill)
+                    Hairline(14)
+                    SettingsRow("按位置推荐分类", end = if (habitLocation) "开启" else "关闭") {
+                        if (habitLocation) model.setHabitLocation(false) else explainLocation = true
+                    }
                 }
             }
             item("backup-title") {
@@ -143,6 +154,14 @@ internal fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, active
                 }
             }
         }, confirmButton = { TextButton(onClick = { avatarOptions = false }) { Text("关闭") } })
+    }
+    if (explainLocation) {
+        ConfirmDialog("按位置推荐分类？",
+            "记账页面可使用大致位置学习常去区域。区域标记仅存此设备，关闭后会清除。",
+            "允许大致位置", { explainLocation = false }) {
+            explainLocation = false
+            locationPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+        }
     }
     if (exportWarning) {
         ConfirmDialog("导出普通备份？", "备份文件未加密，包含账本、资产、个人资料和报告。请在分享面板中选择可信的接收方。",
@@ -229,6 +248,11 @@ fun ModelSettings(model: LedgerViewModel, provider: Provider, providersWithKeys:
 
 @Composable
 fun TagsScreen(data: LedgerSnapshot, model: LedgerViewModel, back: () -> Unit) {
+    var showStyles by rememberSaveable { mutableStateOf(false) }
+    if (showStyles) {
+        LabelStylesScreen(data, model) { showStyles = false }
+        return
+    }
     var kindName by rememberSaveable { mutableStateOf(Kind.EXPENSE.name) }
     val kind = Kind.valueOf(kindName)
     val tags = remember(data.tags, data.entries, kind) { data.orderedTags(kind) }
@@ -239,6 +263,7 @@ fun TagsScreen(data: LedgerSnapshot, model: LedgerViewModel, back: () -> Unit) {
     var open by rememberSaveable { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize()) {
         PageHeader("标签管理", back) {
+            TextButton(onClick = { showStyles = true }) { Text("配图标") }
             IconButton(onClick = { edit = "new" }) { LucideIcon(Glyph.PLUS, description = "添加标签") }
         }
         key(kind) {

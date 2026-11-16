@@ -9,6 +9,11 @@ import com.wmm.ledger.data.AccountType
 import com.wmm.ledger.data.Avatar
 import com.wmm.ledger.data.Backup
 import com.wmm.ledger.data.BillRow
+import com.wmm.ledger.data.similarBillRows
+import com.wmm.ledger.data.LabelIconChange
+import com.wmm.ledger.data.LabelIconPreview
+import com.wmm.ledger.data.LabelStyle
+import com.wmm.ledger.data.StyleLabel
 import com.wmm.ledger.data.Kind
 import com.wmm.ledger.data.LedgerError
 import com.wmm.ledger.data.LedgerRepository
@@ -37,12 +42,22 @@ internal data class BillImportState(
     val skippedCurrency: Int = 0,
     val scanning: Boolean = false,
     val saving: Boolean = false,
+    val batch: BillBatch? = null,
 )
+
+internal data class BillBatch(val type: String, val scene: String, val ids: List<String>)
 
 class LedgerViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = LedgerRepository(application)
     private val resolver = application.contentResolver
     private val appearancePrefs = application.getSharedPreferences("appearance", Context.MODE_PRIVATE)
+    private val habitLocationPrefs = application.getSharedPreferences("habit_location", Context.MODE_PRIVATE)
+    private val locateHabits = MutableStateFlow(habitLocationPrefs.getBoolean("enabled", false))
+    internal val habitLocation = locateHabits.asStateFlow()
+    private val pendingIcons = MutableStateFlow<LabelIconPreview?>(null)
+    internal val iconPreview = pendingIcons.asStateFlow()
+    private val stylingIcons = MutableStateFlow(false)
+    internal val iconBusy = stylingIcons.asStateFlow()
     private val preferredAppearance = MutableStateFlow(
         Appearance.entries.firstOrNull { it.name == appearancePrefs.getString("mode", null) } ?: Appearance.SYSTEM,
     )
@@ -97,11 +112,49 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
         perform("无法保存场景顺序。", onFailure) { repository.reorderScenes(order) }
 
     fun saveEntry(id: String?, kind: Kind, amount: Long, tag: String, account: String?, note: String, at: Long,
-        day: LocalDate, sceneId: String?, done: () -> Unit) = perform("无法保存流水。") {
-        repository.saveEntry(id, kind, amount, tag, account, note, at, day, sceneId)
+        day: LocalDate, sceneId: String?, habitArea: String?, done: () -> Unit) = perform("无法保存流水。") {
+        repository.saveEntry(id, kind, amount, tag, account, note, at, day, sceneId,
+            habitArea.takeIf { locateHabits.value })
         done()
         notify("已保存")
     }
+
+    internal fun setHabitLocation(enabled: Boolean) {
+        habitLocationPrefs.edit().putBoolean("enabled", enabled).apply()
+        locateHabits.value = enabled
+        if (!enabled) perform("无法清除已记录的位置范围。") { repository.clearHabitAreas() }
+    }
+
+    internal fun suggestIcons(useModel: Boolean) {
+        if (stylingIcons.value) return
+        stylingIcons.value = true
+        perform("无法生成图标建议。") {
+            try {
+                pendingIcons.value = repository.suggestLabelIcons(provider.value.takeIf { useModel })
+            } finally {
+                stylingIcons.value = false
+            }
+        }
+    }
+
+    internal fun applyIconPreview() {
+        val preview = pendingIcons.value ?: return
+        if (stylingIcons.value) return
+        stylingIcons.value = true
+        perform("无法保存标签图标。") {
+            try {
+                repository.saveLabelIcons(preview.changes, onlyUnstyled = true)
+                pendingIcons.value = null
+            } finally {
+                stylingIcons.value = false
+            }
+        }
+    }
+
+    internal fun discardIconPreview() { if (!stylingIcons.value) pendingIcons.value = null }
+
+    internal fun saveLabelIcon(target: StyleLabel, style: LabelStyle?, done: () -> Unit) =
+        perform("无法保存标签图标。") { repository.saveLabelIcons(listOf(LabelIconChange(target, style))); done() }
 
     fun deleteEntry(id: String, done: () -> Unit) = perform("无法删除流水。") {
         repository.deleteEntry(id)
@@ -188,6 +241,27 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
         val current = billState.value
         if (current.scanning || current.saving) return
         billState.value = current.copy(rows = current.rows.map { if (it.id == row.id) row else it })
+    }
+
+    internal fun reviewBillRow(row: BillRow) {
+        val current = billState.value
+        if (current.scanning || current.saving) return
+        val before = current.rows.firstOrNull { it.id == row.id } ?: return
+        val similar = similarBillRows(before, row, current.rows)
+        billState.value = current.copy(
+            rows = current.rows.map { if (it.id == row.id) row.copy(reviewed = true) else it },
+            batch = similar.takeIf { it.isNotEmpty() }?.let { BillBatch(row.type, row.scene, it) },
+        )
+    }
+
+    internal fun resolveBillBatch(selectedIds: List<String>) {
+        val current = billState.value
+        val batch = current.batch ?: return
+        val ids = batch.ids.intersect(selectedIds.toSet())
+        val rows = current.rows.map {
+            if (it.id in ids) it.copy(type = batch.type, scene = batch.scene, reviewed = true) else it
+        }
+        billState.value = current.copy(rows = rows, batch = null)
     }
 
     internal fun discardBill() {

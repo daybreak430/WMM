@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.wmm.ledger.BillBatch
 import com.wmm.ledger.LedgerViewModel
 import com.wmm.ledger.data.BILL_MIME_TYPES
 import com.wmm.ledger.data.BillLabels
@@ -127,9 +128,12 @@ internal fun BillImportScreen(data: LedgerSnapshot, model: LedgerViewModel, prov
     }
     state.rows.firstOrNull { it.id == editing }?.let { row ->
         BillRowDialog(row, labels, dismiss = { editing = null }) { edited ->
-            model.changeBillRow(edited)
+            model.reviewBillRow(edited)
             editing = null
         }
+    }
+    state.batch?.let { batch ->
+        BillBatchDialog(batch, state.rows.filter { it.id in batch.ids }, model::resolveBillBatch)
     }
     if (confirmSave) {
         ConfirmDialog("导入 ${selected.size} 笔流水？",
@@ -142,6 +146,35 @@ internal fun BillImportScreen(data: LedgerSnapshot, model: LedgerViewModel, prov
 }
 
 @Composable
+private fun BillBatchDialog(batch: BillBatch, rows: List<BillRow>, resolve: (List<String>) -> Unit) {
+    var chosen by rememberSaveable(batch.ids) { mutableStateOf(ArrayList(batch.ids)) }
+    val colors = MaterialTheme.colorScheme
+    LedgerAlertDialog(onDismissRequest = { resolve(emptyList()) }, title = { Text("同步类似流水？") }, text = {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("将所选流水的分类改为「${billLabel(batch.type, batch.scene)}」。", style = MaterialTheme.typography.bodyMedium)
+            LazyColumn(Modifier.heightIn(max = 260.dp)) {
+                items(rows, key = BillRow::id) { row ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = row.id in chosen, onCheckedChange = { checked ->
+                            chosen = ArrayList(if (checked) chosen + row.id else chosen - row.id)
+                        })
+                        Column(Modifier.weight(1f).padding(vertical = 5.dp)) {
+                            Text(row.note.ifBlank { billLabel(row.type, row.scene).ifBlank { "待分类流水" } },
+                                style = MaterialTheme.typography.titleSmall)
+                            Text(listOf(row.date, row.time, parseCents(row.amount)?.let(::currency).orEmpty())
+                                .filter(String::isNotBlank).joinToString(" · "), style = MaterialTheme.typography.bodySmall,
+                                color = colors.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+        }
+    }, confirmButton = {
+        TextButton(enabled = chosen.isNotEmpty(), onClick = { resolve(chosen) }) { Text("同步 ${chosen.size} 笔") }
+    }, dismissButton = { TextButton(onClick = { resolve(emptyList()) }) { Text("只修改这笔") } })
+}
+
+@Composable
 private fun BillReviewRow(row: BillRow, archivedType: Boolean, enabled: Boolean, toggle: (Boolean) -> Unit, edit: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val status = when {
@@ -149,6 +182,7 @@ private fun BillReviewRow(row: BillRow, archivedType: Boolean, enabled: Boolean,
         archivedType -> "类型已归档，需改选"
         !row.isReady() -> "待核对"
         row.duplicate -> "可能重复"
+        row.habitSuggestion && !row.reviewed -> "按记账习惯建议"
         else -> null
     }
     GroupCard {
@@ -187,7 +221,8 @@ internal fun BillRowDialog(row: BillRow, labels: BillLabels, dismiss: () -> Unit
     val suggestion = billLabel(row.suggestedType, row.suggestedScene)
     LedgerAlertDialog(onDismissRequest = dismiss, title = { Text("编辑待导入流水") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (suggestion.isNotEmpty()) Text("AI 建议 · $suggestion", style = MaterialTheme.typography.bodySmall,
+            if (suggestion.isNotEmpty()) Text("${if (row.habitSuggestion) "习惯建议" else "AI 建议"} · $suggestion",
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             LedgerSegments(Kind.entries, kind, { it?.title.orEmpty() }) { chosen ->
                 if (chosen?.name != kindName) {

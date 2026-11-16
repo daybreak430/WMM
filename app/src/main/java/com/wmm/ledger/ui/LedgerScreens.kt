@@ -50,11 +50,13 @@ import com.wmm.ledger.data.Cashflow
 import com.wmm.ledger.data.Entry
 import com.wmm.ledger.data.FIRST_DAY
 import com.wmm.ledger.data.Kind
+import com.wmm.ledger.data.LabelStyle
 import com.wmm.ledger.data.LedgerSnapshot
 import com.wmm.ledger.data.Period
 import com.wmm.ledger.data.PeriodStats
 import com.wmm.ledger.data.Provider
 import com.wmm.ledger.data.Report
+import com.wmm.ledger.data.ReportStory
 import com.wmm.ledger.data.Reports
 import com.wmm.ledger.data.reportAnalysis
 import com.wmm.ledger.data.weekCashflow
@@ -163,10 +165,12 @@ fun LazyListScope.ledgerRows(entries: List<Entry>, data: LedgerSnapshot, today: 
             // 流水逐行加载，首尾圆角和组内分隔线组成连续的卡面。
             Surface(color = colors.surface, shape = shape) {
                 Column {
-                    val type = tagById[entry.tagId]?.name.orEmpty()
+                    val type = tagById[entry.tagId]
                     val scene = sceneById[entry.sceneId]?.name
-                    val label = if (scene == null) type else "$scene · $type"
-                    LedgerRow(entry, label, accountById[entry.accountId]?.name, edit)
+                    val name = type?.name.orEmpty()
+                    val label = if (scene == null) name else "$scene · $name"
+                    LedgerRow(entry, label, LabelStyle.from(type?.iconKey, type?.iconColor),
+                        accountById[entry.accountId]?.name, edit)
                     if (position < records.lastIndex) {
                         if (refined) HorizontalDivider(Modifier.padding(start = 60.dp, end = 14.dp), color = colors.outlineVariant)
                         else Hairline(14)
@@ -178,22 +182,24 @@ fun LazyListScope.ledgerRows(entries: List<Entry>, data: LedgerSnapshot, today: 
 }
 
 @Composable
-private fun LedgerRow(entry: Entry, tag: String, account: String?, edit: (Entry) -> Unit) {
+private fun LedgerRow(entry: Entry, tag: String, icon: LabelStyle?, account: String?, edit: (Entry) -> Unit) {
     val income = entry.kind == Kind.INCOME.name
     val colors = MaterialTheme.colorScheme
     val refined = LocalLedgerRefinement.current
-    val glyph = if (income) Glyph.INCOME else Glyph.EXPENSE
     Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).clickable(role = Role.Button) { edit(entry) }
         .padding(horizontal = 14.dp, vertical = if (refined) 10.dp else 11.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        if (refined) {
-            Box(Modifier.size(36.dp).background(if (income) colors.primaryContainer else colors.surfaceVariant,
-                RoundedCornerShape(11.dp)), contentAlignment = Alignment.Center) {
-                LucideIcon(glyph, if (income) colors.primary else colors.onSurfaceVariant, size = 18)
-            }
-        } else IconBadge(glyph, emphasis = income)
+        LabelBadge(icon, if (refined) 36 else 40)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(tag, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text(tag, Modifier.weight(1f, fill = false), style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(if (income) "收入" else "支出",
+                    Modifier.background(if (income) colors.primaryContainer else colors.surfaceVariant, CircleShape)
+                        .padding(horizontal = 5.dp, vertical = 1.dp),
+                    color = if (income) colors.primary else colors.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelSmall, maxLines = 1)
+            }
             val time = Instant.ofEpochMilli(entry.occurredAt).atZone(ZoneId.systemDefault()).format(TimeLabel)
             val subtitle = listOfNotNull(time, account).joinToString(" · ")
             Text(subtitle, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
@@ -322,7 +328,7 @@ private fun ReportPanel(summary: PeriodStats, report: Report?, stale: Boolean, b
             if (report != null) {
                 val generated = Instant.ofEpochMilli(report.createdAt).atZone(ZoneId.systemDefault())
                     .format(DateTimeFormatter.ofPattern("M月d日 HH:mm", Locale.SIMPLIFIED_CHINESE))
-                Text(report.content.replace("**", ""), style = MaterialTheme.typography.bodyLarge)
+                ReportBody(report.content)
                 Text("${Provider.valueOf(report.provider).title} · $generated", style = MaterialTheme.typography.bodySmall,
                     color = colors.onSurfaceVariant)
             }
@@ -338,6 +344,34 @@ private fun ReportPanel(summary: PeriodStats, report: Report?, stale: Boolean, b
                         Spacer(Modifier.size(8.dp))
                     }
                     Text(when { busy -> "正在生成"; report == null -> "生成报告"; else -> "重新生成" })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReportBody(content: String) {
+    val story = remember(content) { ReportStory.parse(content) }
+    if (story == null) {
+        Text(content.replace("**", ""), style = MaterialTheme.typography.bodyLarge)
+        return
+    }
+    val colors = MaterialTheme.colorScheme
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text(story.headline, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+        story.findings.forEach { finding ->
+            Hairline()
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(finding.title, style = MaterialTheme.typography.titleSmall, color = colors.onSurface)
+                Text(finding.body, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+            }
+        }
+        story.nextStep?.let { next ->
+            Surface(color = colors.primaryContainer.copy(alpha = .54f), shape = FieldShape) {
+                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("下次可以试试", color = colors.primary, style = MaterialTheme.typography.labelLarge)
+                    Text(next, color = colors.onSurface, style = MaterialTheme.typography.bodyMedium)
                 }
             }
         }

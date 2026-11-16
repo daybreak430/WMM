@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.room.Room
 import androidx.room.withTransaction
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -27,7 +28,7 @@ class LedgerRepository(context: Context) {
         val key = secrets.databaseKey(!app.getDatabasePath(DATABASE_NAME).exists())
         Room.databaseBuilder(app, LedgerDatabase::class.java, DATABASE_NAME)
             .openHelperFactory(SupportOpenHelperFactory(key))
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
             .build()
     }
     private val dao get() = database.ledger()
@@ -90,7 +91,7 @@ class LedgerRepository(context: Context) {
 
     suspend fun saveEntry(
         id: String?, kind: Kind, cents: Long, tagId: String, accountId: String?,
-        note: String, occurredAt: Long, day: LocalDate, sceneId: String? = null,
+        note: String, occurredAt: Long, day: LocalDate, sceneId: String? = null, habitArea: String? = null,
     ) = withContext(Dispatchers.IO) {
         if (cents !in 1..MAX_CENTS) throw LedgerError("请输入有效金额，最多两位小数。")
         if (day !in FIRST_DAY..LAST_DAY || occurredAt > System.currentTimeMillis()) throw LedgerError("请选择有效的发生日期和时间。")
@@ -105,12 +106,51 @@ class LedgerRepository(context: Context) {
             if (sceneId != null && (kind != Kind.EXPENSE || dao.scene(sceneId) == null)) {
                 throw LedgerError("请选择一个有效的支出场景。")
             }
+            val area = if (old == null) habitArea else old.habitArea.takeIf { occurredAt == old.occurredAt }
             dao.save(Entry(id ?: newId(), kind.name, cents, tagId, accountId, note.trim().take(MAX_NOTE),
-                occurredAt, day.toString(), sceneId))
+                occurredAt, day.toString(), sceneId, area))
         }
     }
 
     suspend fun deleteEntry(id: String) = withContext(Dispatchers.IO) { dao.deleteEntry(id) }
+
+    suspend fun clearHabitAreas() = withContext(Dispatchers.IO) { dao.clearHabitAreas() }
+
+    internal suspend fun suggestLabelIcons(provider: Provider?): LabelIconPreview = withContext(Dispatchers.IO) {
+        val targets = snapshot().styleLabels().filter { it.style == null }
+        val key = provider?.let(secrets::modelKey)
+        val modelStyles = if (provider != null && key != null && targets.isNotEmpty()) {
+            try {
+                LabelIcons.parse(modelClient.send(provider, key, LabelIcons.request(provider, targets.take(100))))
+                    .filterKeys { it in 0 until minOf(100, targets.size) }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                emptyMap()
+            }
+        } else emptyMap()
+        LabelIconPreview(targets.mapIndexed { index, target ->
+            LabelIconChange(target, modelStyles[index] ?: LabelIcons.local(target.name, target.section))
+        }, modelStyles.isNotEmpty())
+    }
+
+    internal suspend fun saveLabelIcons(changes: List<LabelIconChange>, onlyUnstyled: Boolean = false) = database.withTransaction {
+        val tags = dao.tags().associateBy(Tag::id)
+        val scenes = dao.scenes().associateBy(Scene::id)
+        val updatedTags = mutableListOf<Tag>()
+        val updatedScenes = mutableListOf<Scene>()
+        for ((target, style) in changes) {
+            if (target.scene) {
+                val old = scenes[target.id]?.takeIf { it.name == target.name && (!onlyUnstyled || it.iconKey == null) } ?: continue
+                updatedScenes.add(old.copy(iconKey = style?.icon?.name, iconColor = style?.color?.name))
+            } else {
+                val old = tags[target.id]?.takeIf { it.name == target.name && (!onlyUnstyled || it.iconKey == null) } ?: continue
+                updatedTags.add(old.copy(iconKey = style?.icon?.name, iconColor = style?.color?.name))
+            }
+        }
+        if (updatedTags.isNotEmpty()) dao.updateTags(updatedTags)
+        if (updatedScenes.isNotEmpty()) dao.updateScenes(updatedScenes)
+    }
 
     suspend fun saveAccount(id: String?, type: AccountType, name: String, initial: Long?) = withContext(Dispatchers.IO) {
         val trimmed = name.trim()
@@ -188,7 +228,9 @@ class LedgerRepository(context: Context) {
         val request = BillImport.request(provider, source, LocalDate.now(), labels)
         val reply = modelClient.send(provider, key, request, readTimeout = 120_000)
         val current = snapshot()
-        BillImport.parse(reply, source.fingerprint, current.entries, BillLabels(current))
+        val parsed = BillImport.parse(reply, source.fingerprint, current.entries, BillLabels(current))
+        val habits = LedgerHabits(current)
+        parsed.copy(rows = parsed.rows.map(habits::classify))
     }
 
     internal suspend fun importBill(rows: List<BillRow>): Int = database.withTransaction {
@@ -229,9 +271,11 @@ class LedgerRepository(context: Context) {
         val provider = secrets.provider
         val key = secrets.modelKey(provider) ?: throw LedgerError("请先在设置中保存 ${provider.title} 的 API Key。")
         val reply = modelClient.complete(provider, key, analysis)
+        val story = ReportStory.parse(reply) ?: throw LedgerError("模型返回的报告格式不完整，请重新生成。")
         database.withTransaction {
             if (restoreVersion != restoreCount.get()) throw LedgerError("账本已恢复，请重新生成报告。")
-            dao.save(Report(period.name, summary.start.toString(), Reports.signature(analysis), System.currentTimeMillis(), provider.name, reply))
+            dao.save(Report(period.name, summary.start.toString(), Reports.signature(analysis), System.currentTimeMillis(), provider.name,
+                story.encode()))
         }
     }
 

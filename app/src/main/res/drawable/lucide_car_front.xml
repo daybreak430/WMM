@@ -1,0 +1,16 @@
+<!-- 来源：lucide/icons/car-front.svg @ 55782beff3a0133df79c417eb68f96e8f19e2404 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="m21 8-2 2-1.5-3.7A2 2 0 0 0 15.646 5H8.4a2 2 0 0 0-1.903 1.257L5 10 3 8" android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M7 14h.01" android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M17 14h.01" android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M5.0,10.0 H19.0 Q21.0,10.0 21.0,12.0 V16.0 Q21.0,18.0 19.0,18.0 H5.0 Q3.0,18.0 3.0,16.0 V12.0 Q3.0,10.0 5.0,10.0 Z" android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M5 18v2" android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M19 18v2" android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" />
+</vector>

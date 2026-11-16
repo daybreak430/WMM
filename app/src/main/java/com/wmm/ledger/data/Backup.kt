@@ -13,7 +13,7 @@ import java.time.ZoneOffset
 import java.util.Locale
 
 private const val FORMAT = "wmm-ledger"
-private const val BACKUP_VERSION = 5
+private const val BACKUP_VERSION = 6
 const val MAX_BACKUP_BYTES = 32 * 1024 * 1024
 const val MAX_AVATAR_BYTES = 256 * 1024
 
@@ -36,10 +36,12 @@ object Backup {
         put("tags", array(data.tags) {
             put("id", it.id); put("kind", it.kind); put("name", it.name); put("archived", it.archived)
             put("sortOrder", it.sortOrder ?: JSONObject.NULL)
+            put("iconKey", it.iconKey ?: JSONObject.NULL); put("iconColor", it.iconColor ?: JSONObject.NULL)
         })
         put("scenes", array(data.scenes) {
             put("id", it.id); put("name", it.name)
             put("sortOrder", it.sortOrder ?: JSONObject.NULL)
+            put("iconKey", it.iconKey ?: JSONObject.NULL); put("iconColor", it.iconColor ?: JSONObject.NULL)
         })
         put("accounts", array(data.accounts) {
             put("id", it.id); put("type", it.type); put("name", it.name)
@@ -72,10 +74,13 @@ object Backup {
             throw LedgerError("不支持这个备份版本。请使用兼容的「记个账」版本恢复。")
         }
         val tags = root.list("tags", 50_000) {
-            Tag(id(), enumValueOf<Kind>(string("kind")).name, name(), flag("archived"), sortOrder(version))
+            val style = labelStyle(version)
+            Tag(id(), enumValueOf<Kind>(string("kind")).name, name(), flag("archived"), sortOrder(version),
+                style?.icon?.name, style?.color?.name)
         }
         val scenes = if (version == 1L) emptyList() else root.list("scenes", 50_000) {
-            Scene(id(), name(), sortOrder(version))
+            val style = labelStyle(version)
+            Scene(id(), name(), sortOrder(version), style?.icon?.name, style?.color?.name)
         }
         val rankedTags = tags.filter { !it.archived && it.sortOrder != null }
         val rankedScenes = scenes.mapNotNull { it.sortOrder }
@@ -158,6 +163,13 @@ object Backup {
         else -> error("非法的整数")
     }
     private fun JSONObject.flag(key: String): Boolean = get(key) as Boolean
+    private fun JSONObject.labelStyle(version: Long): LabelStyle? {
+        if (version < 6) return null
+        val icon = nullableString("iconKey")
+        val color = nullableString("iconColor")
+        if (icon == null && color == null) return null
+        return requireNotNull(LabelStyle.from(icon, color))
+    }
     private fun JSONObject.sortOrder(version: Long, since: Long = 3): Int? =
         if (version < since || get("sortOrder") == JSONObject.NULL) null
         else number("sortOrder").also { require(it in 0..Int.MAX_VALUE.toLong()) }.toInt()

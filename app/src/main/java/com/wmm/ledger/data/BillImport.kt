@@ -43,6 +43,8 @@ internal data class BillRow(
     val alreadyImported: Boolean = false,
     val suggestedType: String = type,
     val suggestedScene: String = scene,
+    val habitSuggestion: Boolean = false,
+    val reviewed: Boolean = false,
 ) {
     fun stamp(now: Long, zone: ZoneId): Long? {
         val day = runCatching { LocalDate.parse(date.trim()) }.getOrNull() ?: return null
