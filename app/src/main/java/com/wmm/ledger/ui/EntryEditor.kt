@@ -427,12 +427,7 @@ private fun EntryTagGroup(
 
 @Composable
 private fun EntryKindSelector(kind: Kind, select: (Kind) -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    LedgerSegments(
-        Kind.entries, kind, { it.title },
-        containerColor = if (LocalLedgerDark.current) colors.surfaceContainerHigh else colors.surface,
-        onSelect = select,
-    )
+    LedgerSegments(Kind.entries, kind, { it.title }, onSelect = select)
 }
 
 @Composable

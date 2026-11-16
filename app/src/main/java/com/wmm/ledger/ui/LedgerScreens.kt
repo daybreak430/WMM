@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -28,6 +29,7 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,6 +41,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -75,9 +78,25 @@ fun LedgerScreen(data: LedgerSnapshot, today: LocalDate, openSettings: () -> Uni
     val stats = remember(data, today) { data.stats(Period.MONTH, today, today) }
     val colors = MaterialTheme.colorScheme
     val inset = LedgerPageInset()
-    Column(Modifier.fillMaxSize()) {
-        PageHeader(stringResource(R.string.app_name), mark = Glyph.BOOK) { UserAvatar(data.profile, openSettings) }
-        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(start = inset, end = inset, top = 4.dp, bottom = 14.dp)) {
+    Scaffold(
+        containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        topBar = {
+            PageHeader(stringResource(R.string.app_name), mark = Glyph.BOOK) { UserAvatar(data.profile, openSettings) }
+        },
+        bottomBar = {
+            PrimaryAction("记一笔", record,
+                Modifier.fillMaxWidth().padding(start = inset, end = inset, top = 10.dp, bottom = bottomInset + 4.dp),
+                Glyph.PLUS)
+        },
+    ) { overlayPadding ->
+        // 流水绘制到悬浮底栏背后，末尾留出悬浮控件的高度，便于滑出并点中最后一笔。
+        LazyColumn(
+            Modifier.fillMaxSize().padding(top = overlayPadding.calculateTopPadding()),
+            contentPadding = PaddingValues(
+                start = inset, end = inset, top = 4.dp, bottom = overlayPadding.calculateBottomPadding() + 14.dp,
+            ),
+        ) {
             item("cover") {
                 BalancePanel {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -111,9 +130,6 @@ fun LedgerScreen(data: LedgerSnapshot, today: LocalDate, openSettings: () -> Uni
                 ledgerRows(data.entries, data, today, edit)
             }
         }
-        PrimaryAction("记一笔", record,
-            Modifier.fillMaxWidth().padding(start = inset, end = inset, top = 10.dp, bottom = bottomInset + 4.dp),
-            Glyph.PLUS)
     }
 }
 
@@ -244,11 +260,7 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
         )) {
             item("filters") {
                 Column(Modifier.padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    LedgerSegments(
-                        listOf(Period.WEEK, Period.MONTH, Period.YEAR), period, { it.title },
-                        containerColor = if (LocalLedgerDark.current) colors.surfaceContainerHigh else colors.surface,
-                        onSelect = choosePeriod,
-                    )
+                    LedgerSegments(listOf(Period.WEEK, Period.MONTH, Period.YEAR), period, { it.title }, onSelect = choosePeriod)
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         val previous = period.step(summary.start, -1)
                         IconButton(onClick = { chooseDay(previous) }, enabled = previous >= FIRST_DAY) {

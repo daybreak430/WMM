@@ -279,7 +279,6 @@ fun TagsScreen(data: LedgerSnapshot, model: LedgerViewModel, back: () -> Unit) {
     val tags = remember(data.tags, data.entries, kind) { data.orderedTags(kind) }
     val archived = remember(data.tags, kind) { data.tags.filter { it.kind == kindName && it.archived } }
     val tagsById = remember(tags) { tags.associateBy { it.id } }
-    val colors = MaterialTheme.colorScheme
     var edit by rememberSaveable { mutableStateOf<String?>(null) }
     var open by rememberSaveable { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize()) {
@@ -299,10 +298,7 @@ fun TagsScreen(data: LedgerSnapshot, model: LedgerViewModel, back: () -> Unit) {
                     verticalArrangement = Arrangement.spacedBy(9.dp),
                 ) {
                     item {
-                        LedgerSegments(
-                            Kind.entries, kind, { it.title },
-                            containerColor = if (LocalLedgerDark.current) colors.surfaceContainerHigh else colors.surface,
-                        ) { kindName = it.name }
+                        LedgerSegments(Kind.entries, kind, { it.title }) { kindName = it.name }
                     }
                     if (tags.isEmpty() && archived.isEmpty()) {
                         item { GroupCard { EmptyPanel("还没有${kind.title}标签", glyph = Glyph.TAG) } }

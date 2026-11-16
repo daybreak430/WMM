@@ -3,6 +3,7 @@ package com.wmm.ledger.ui
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -165,7 +166,6 @@ fun PrimaryAction(text: String, onClick: () -> Unit, modifier: Modifier = Modifi
 
 @Composable
 fun <T> LedgerSegments(options: List<T>, selected: T, title: (T) -> String,
-    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant,
     onSelect: (T) -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
@@ -173,7 +173,8 @@ fun <T> LedgerSegments(options: List<T>, selected: T, title: (T) -> String,
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = FieldShape,
-        color = containerColor,
+        color = if (LocalLedgerDark.current) colors.surfaceContainerHigh else Color.White,
+        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .55f)),
     ) {
         Row(
             Modifier.padding(3.dp).selectableGroup(),

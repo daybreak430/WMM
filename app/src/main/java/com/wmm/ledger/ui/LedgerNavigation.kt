@@ -4,11 +4,13 @@ import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -20,7 +22,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -32,6 +33,7 @@ import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.shadow.Shadow
 
@@ -58,33 +60,28 @@ internal fun LedgerNavigation(
 ) {
     val colors = MaterialTheme.colorScheme
     val dark = LocalLedgerDark.current
-    val glassTint = if (dark) Color(0xFF253B58) else Color(0xFFE8F3FF)
-    val glassTop = if (dark) Color(0xFF355170) else Color.White
+    val glassTint = if (dark) Color(0xFF203D61).copy(alpha = .28f) else Color(0xFFE8F3FF).copy(alpha = .20f)
     val glass = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         // 沿用 Backdrop 示例的模糊和折射顺序，让滚动内容透过底栏边缘。
         Modifier.drawBackdrop(
             backdrop = backdrop,
             shape = { CircleShape },
             effects = {
-                blur(13.dp.toPx())
-                lens(17.dp.toPx(), 26.dp.toPx())
+                vibrancy()
+                blur(8.dp.toPx())
+                lens(21.dp.toPx(), 20.dp.toPx())
             },
-            highlight = { Highlight(width = 1.dp, alpha = if (dark) .78f else 1f) },
+            highlight = { Highlight(width = .75.dp, alpha = if (dark) .66f else .90f) },
             shadow = {
-                Shadow(radius = 12.dp, offset = DpOffset(0.dp, 4.dp),
-                    color = Color(0xFF16396B).copy(alpha = if (dark) .34f else .17f))
+                Shadow(radius = 9.dp, offset = DpOffset(0.dp, 3.dp),
+                    color = Color(0xFF16396B).copy(alpha = if (dark) .26f else .13f))
             },
-            onDrawSurface = {
-                drawRect(Brush.verticalGradient(listOf(
-                    glassTop.copy(alpha = if (dark) .75f else .76f),
-                    glassTint.copy(alpha = if (dark) .66f else .60f),
-                )))
-            },
+            onDrawSurface = { drawRect(glassTint) },
         )
     } else {
         Modifier.shadow(5.dp, CircleShape)
-            .background(Brush.verticalGradient(listOf(glassTop, glassTint)), CircleShape)
-            .border(1.dp, Color.White.copy(alpha = if (dark) .18f else .9f), CircleShape)
+            .background(colors.surface.copy(alpha = .83f), CircleShape)
+            .border(1.dp, colors.outlineVariant.copy(alpha = .65f), CircleShape)
     }
     Row(
         modifier.widthIn(max = 364.dp).fillMaxWidth().height(height).then(glass).padding(4.dp).selectableGroup(),
@@ -93,18 +90,8 @@ internal fun LedgerNavigation(
         for (tab in Tab.entries) {
             val active = tab == selected
             val tint = if (active) colors.primary else colors.onSurfaceVariant
-            val lens = if (active) {
-                Modifier.background(Brush.verticalGradient(listOf(
-                    colors.primary.copy(alpha = if (dark) .06f else .025f),
-                    colors.primary.copy(alpha = if (dark) .20f else .12f),
-                )), CircleShape)
-                    .border(1.dp, Brush.verticalGradient(listOf(
-                        Color.White.copy(alpha = if (dark) .25f else .9f),
-                        colors.primary.copy(alpha = .23f),
-                    )), CircleShape)
-            } else Modifier
             Column(
-                Modifier.weight(1f).height(height - 8.dp).clip(CircleShape).then(lens)
+                Modifier.weight(1f).height(height - 8.dp).clip(CircleShape)
                     .selectable(active, interactionSource = null, indication = null, role = Role.Tab) { onSelect(tab) },
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
@@ -112,6 +99,8 @@ internal fun LedgerNavigation(
                 LucideIcon(tab.icon, tint, size = 21)
                 Text(tab.label, color = tint, style = MaterialTheme.typography.labelMedium,
                     fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium)
+                Box(Modifier.width(10.dp).height(2.dp)
+                    .background(if (active) colors.primary else Color.Transparent, CircleShape))
             }
         }
     }
