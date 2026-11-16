@@ -135,7 +135,7 @@ UI 开发规范：
 
 ## 发布规范
 
-- 每次发布 Android 新版本，签名并验证覆盖升级，将 APK 保存到指定的 github release 目录`
+- 每次 Android 更新都发布到 [daybreak430/WMM Releases](https://github.com/daybreak430/WMM/releases)。使用原有项目签名并验证覆盖升级，将签名 APK 保存到本地 `release/`。
 - 同次发布须在 GitHub Releases 创建或更新 `v<版本>`，让标签指向构建 APK 的源码提交，并上传同名签名 APK 作为发布附件。
 - 发布完成前核对 GitHub Release 已发布、附件可下载，且附件的 SHA-256 与本地 APK 一致。在交付说明中附上 Release 链接。
 

@@ -1,8 +1,11 @@
 package com.wmm.ledger.ui
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -34,11 +37,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wmm.ledger.Appearance
+import com.wmm.ledger.BuildConfig
 import com.wmm.ledger.LedgerViewModel
 import com.wmm.ledger.data.Kind
 import com.wmm.ledger.data.LedgerSnapshot
@@ -47,6 +52,8 @@ import com.wmm.ledger.data.orderedTags
 import com.mohamedrejeb.compose.dnd.DragAndDropContainer
 import com.mohamedrejeb.compose.dnd.scroll.dragAutoScroll
 import kotlinx.coroutines.launch
+
+private const val RELEASES_URL = "https://github.com/daybreak430/WMM/releases"
 
 internal class OpenLocal : ActivityResultContracts.OpenDocument() {
     override fun createIntent(context: Context, input: Array<String>): Intent =
@@ -127,6 +134,8 @@ internal fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, active
                     }
                 }
             }
+            item("about-title") { SectionTitle("关于") }
+            item("about") { AboutSettings() }
         }
     }
 
@@ -159,6 +168,27 @@ internal fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, active
             "打开分享面板", { exportWarning = false }) {
             exportWarning = false
             model.exportForSharing()
+        }
+    }
+}
+
+@Composable
+private fun AboutSettings() {
+    val context = LocalContext.current
+    val colors = MaterialTheme.colorScheme
+    GroupCard {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("当前版本", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+            Text("v${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+        }
+        Hairline(14)
+        SettingsRow("GitHub Releases", icon = Glyph.BOX) {
+            try {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(RELEASES_URL)))
+            } catch (_: ActivityNotFoundException) {
+                Toast.makeText(context, "此设备无法打开发布页面。", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 }
