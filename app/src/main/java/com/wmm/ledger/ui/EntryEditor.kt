@@ -182,11 +182,11 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                PageBackButton(back)
+                Spacer(Modifier.width(48.dp))
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     Box(Modifier.widthIn(max = 186.dp)) { EntryKindSelector(kind, selectKind) }
                 }
-                Spacer(Modifier.width(48.dp))
+                PageCloseButton(back)
             }
         } else {
             PageHeader("编辑流水", back, centered = true) {

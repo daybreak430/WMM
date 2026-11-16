@@ -77,6 +77,8 @@ import com.wmm.ledger.ui.Tab
 import com.wmm.ledger.ui.TagDrillScreen
 import com.wmm.ledger.ui.TagsScreen
 import com.wmm.ledger.ui.blockExitingPage
+import com.wmm.ledger.ui.entryDrawerEnterMotion
+import com.wmm.ledger.ui.entryDrawerExitMotion
 import com.wmm.ledger.ui.ledgerNavigationHeight
 import com.wmm.ledger.ui.pageMotion
 import java.time.LocalDate
@@ -203,7 +205,13 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
                     targetState = destination,
                     contentKey = { it.route },
                     modifier = modifier,
-                    transitionSpec = { pageMotion(if (targetState.depth >= initialState.depth) 1 else -1) },
+                    transitionSpec = {
+                        when {
+                            initialState.route == null && targetState.route == "new" -> entryDrawerEnterMotion()
+                            initialState.route == "new" && targetState.route == null -> entryDrawerExitMotion()
+                            else -> pageMotion(if (targetState.depth >= initialState.depth) 1 else -1)
+                        }
+                    },
                     label = "详情页转场",
                 ) { screen ->
                     val current = screen.route

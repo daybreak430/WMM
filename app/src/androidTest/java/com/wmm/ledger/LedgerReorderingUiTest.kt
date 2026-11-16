@@ -65,10 +65,10 @@ class LedgerReorderingUiTest {
                 runBlocking { repository.snapshot().scenes.single { it.id == "scene-1" }.sortOrder == 0 }
             }
             ui.onNodeWithText(sceneNames[0]).assertIsOn()
-            back()
+            closeEditor()
             ui.onNodeWithContentDescription("记一笔").performClick()
             ui.onNodeWithText(sceneNames[1]).assertIsOn()
-            back()
+            closeEditor()
             activity.recreate()
             ui.waitUntil(10_000) { ui.onNodeWithContentDescription("记一笔").isDisplayed() }
             openManagement()
@@ -88,6 +88,12 @@ class LedgerReorderingUiTest {
             accounts = listOf(primary, secondary, archived))) { repository, _ ->
             ui.waitUntil(10_000) { ui.onNodeWithContentDescription("记一笔").isDisplayed() }
             ui.onNodeWithContentDescription("个人设置").performClick()
+            ui.onNode(hasText("资产") and hasText("¥••••••")).assertIsDisplayed()
+            ui.onNodeWithContentDescription("显示净资产").performClick()
+            ui.onNode(hasText("资产") and hasText("¥150.00")).assertIsDisplayed()
+            ui.onNodeWithContentDescription("隐藏净资产").performClick()
+            ui.onNode(hasText("资产") and hasText("¥••••••")).assertIsDisplayed()
+            ui.onNodeWithContentDescription("显示净资产").performClick()
             ui.onNode(hasText("资产") and hasText("¥150.00")).assertIsDisplayed().performClick()
             ui.onNodeWithText("¥150.00").assertIsDisplayed()
             drag(primary.name, secondary.name)
@@ -110,7 +116,7 @@ class LedgerReorderingUiTest {
             ui.waitUntil(8_000) { runBlocking { repository.snapshot().accounts.single { it.isDefault }.id == primary.id } }
             ui.onNodeWithText("关闭").performClick()
             assertAccount("不关联")
-            back()
+            closeEditor()
 
             ui.onNodeWithText(tag.name).performClick()
             assertAccount("不关联")
@@ -143,6 +149,8 @@ class LedgerReorderingUiTest {
     }
 
     private fun back() = ui.onNodeWithContentDescription("返回").performClick()
+
+    private fun closeEditor() = ui.onNodeWithContentDescription("关闭").performClick()
 
     private fun position(text: String) = ui.onNodeWithText(text).fetchSemanticsNode().boundsInRoot.center
 

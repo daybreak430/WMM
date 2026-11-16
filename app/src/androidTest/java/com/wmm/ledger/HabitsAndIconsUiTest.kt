@@ -53,7 +53,7 @@ class HabitsAndIconsUiTest {
             ui.onNodeWithText("工作日").assertIsOn()
             ui.onNodeWithText("瑞幸").performClick().assertIsSelected()
             ui.onNodeWithText("按记账习惯选中").assertDoesNotExist()
-            ui.onNodeWithContentDescription("返回").performClick()
+            ui.onNodeWithContentDescription("关闭").performClick()
 
             ui.onNodeWithContentDescription("个人设置").performClick()
             ui.onNodeWithText("标签管理").performClick()

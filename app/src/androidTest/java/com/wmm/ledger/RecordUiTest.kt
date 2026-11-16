@@ -219,7 +219,8 @@ class RecordUiTest {
 
         record.performClick()
         ui.onNodeWithTag("entry-amount").assertIsFocused()
-        ui.onNodeWithContentDescription("返回").performClick()
+        ui.onNodeWithContentDescription("返回").assertDoesNotExist()
+        ui.onNodeWithContentDescription("关闭").performClick()
         ui.onNodeWithText("本月收支看板").assertIsDisplayed()
     }
 }

@@ -73,6 +73,7 @@ internal fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, active
     var exportWarning by rememberSaveable { mutableStateOf(false) }
     val habitLocation by model.habitLocation.collectAsStateWithLifecycle()
     val netAssetAmount = remember(data) { currency(data.netAssetTotal()) }
+    var netAssetVisible by rememberSaveable { mutableStateOf(false) }
     var explainLocation by rememberSaveable { mutableStateOf(false) }
     val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         if (it) model.setHabitLocation(true)
@@ -109,7 +110,19 @@ internal fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, active
             item("assets") {
                 GroupCard {
                     SettingsRow("资产", description = "净资产总额", icon = Glyph.WALLET,
-                        endContent = { AmountText(netAssetAmount) }, onClick = assets)
+                        endContent = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                AmountText(if (netAssetVisible) netAssetAmount else "¥••••••")
+                                IconButton(onClick = { netAssetVisible = !netAssetVisible }) {
+                                    LucideIcon(
+                                        if (netAssetVisible) Glyph.EYE_OFF else Glyph.EYE,
+                                        MaterialTheme.colorScheme.onSurfaceVariant,
+                                        description = if (netAssetVisible) "隐藏净资产" else "显示净资产",
+                                        size = 19,
+                                    )
+                                }
+                            }
+                        }, onClick = assets)
                 }
             }
             item("labels") {

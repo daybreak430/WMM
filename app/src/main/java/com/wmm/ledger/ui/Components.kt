@@ -85,6 +85,15 @@ internal fun PageBackButton(onClick: () -> Unit) {
 }
 
 @Composable
+internal fun PageCloseButton(onClick: () -> Unit) {
+    IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
+        Surface(Modifier.size(40.dp), shape = CircleShape, color = MaterialTheme.colorScheme.surface) {
+            Box(contentAlignment = Alignment.Center) { LucideIcon(Glyph.CLOSE, description = "关闭", size = 19) }
+        }
+    }
+}
+
+@Composable
 fun UserAvatar(profile: Profile, onClick: () -> Unit, size: Int = 44, description: String = "个人设置") {
     val image = remember(profile.avatar) {
         profile.avatar?.let { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() }

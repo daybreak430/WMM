@@ -37,6 +37,8 @@ enum class Glyph(@param:DrawableRes @get:DrawableRes val drawable: Int) {
     CLOSE(R.drawable.lucide_x),
     DOWNLOAD(R.drawable.lucide_download),
     UPLOAD(R.drawable.lucide_upload),
+    EYE(R.drawable.lucide_eye),
+    EYE_OFF(R.drawable.lucide_eye_off),
 }
 
 @Composable

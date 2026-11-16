@@ -1,13 +1,16 @@
 package com.wmm.ledger.ui
 
 import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -33,6 +36,18 @@ internal fun pageMotion(direction: Int): ContentTransform {
     val exit = fadeOut(tween(EXIT_MS)) +
         slideOutHorizontally(tween(EXIT_MS, easing = FastOutSlowInEasing)) { -direction * it / 14 }
     return ContentTransform(enter, exit, sizeTransform = null)
+}
+
+internal fun entryDrawerEnterMotion(): ContentTransform {
+    val enter = fadeIn(tween(180)) +
+        slideInVertically(tween(320, easing = FastOutSlowInEasing)) { height -> height }
+    return ContentTransform(enter, ExitTransition.None, sizeTransform = null)
+}
+
+internal fun entryDrawerExitMotion(): ContentTransform {
+    val exit = fadeOut(tween(180)) +
+        slideOutVertically(tween(280, easing = FastOutSlowInEasing)) { height -> height }
+    return ContentTransform(fadeIn(tween(120)), exit, sizeTransform = null)
 }
 
 internal fun Modifier.blockExitingPage(active: Boolean): Modifier {
