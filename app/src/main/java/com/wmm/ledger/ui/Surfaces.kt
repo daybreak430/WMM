@@ -165,7 +165,6 @@ fun PrimaryAction(text: String, onClick: () -> Unit, modifier: Modifier = Modifi
 
 @Composable
 fun <T> LedgerSegments(options: List<T>, selected: T, title: (T) -> String,
-    animateSelection: Boolean = true,
     containerColor: Color = MaterialTheme.colorScheme.surfaceVariant,
     onSelect: (T) -> Unit,
 ) {
@@ -183,14 +182,15 @@ fun <T> LedgerSegments(options: List<T>, selected: T, title: (T) -> String,
             for (option in options) {
                 val active = selected == option
                 val shape = RoundedCornerShape(11.dp)
-                val activeFill = if (active) colors.primaryContainer else Color.Transparent
-                val activeTint = if (active) colors.primary else colors.onSurfaceVariant
-                val fill = if (animateSelection) animateColorAsState(activeFill, tween(170), label = "筛选底色").value else activeFill
-                val tint = if (animateSelection) animateColorAsState(activeTint, tween(170), label = "筛选文字").value else activeTint
+                val fill = if (active) colors.primaryContainer else Color.Transparent
+                val tint = if (active) colors.primary else colors.onSurfaceVariant
                 Box(
                     Modifier.weight(1f).heightIn(min = if (refined) 44.dp else 48.dp).clip(shape)
                         .background(fill)
-                        .selectable(active, role = Role.RadioButton) { onSelect(option) }
+                        .selectable(
+                            selected = active, interactionSource = null, indication = null,
+                            role = Role.RadioButton, onClick = { onSelect(option) },
+                        )
                         .padding(horizontal = 8.dp, vertical = 7.dp),
                     contentAlignment = Alignment.Center,
                 ) {

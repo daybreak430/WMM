@@ -1,7 +1,5 @@
 package com.wmm.ledger.ui
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -347,20 +345,25 @@ private fun EntryTagChip(label: String, selected: Boolean? = null, optional: Boo
     val colors = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(10.dp)
     val interaction = when {
-        selected == null -> Modifier.clickable(role = Role.Button, onClick = onClick)
-        optional -> Modifier.toggleable(selected, role = Role.Checkbox) { onClick() }
-        else -> Modifier.selectable(selected, role = Role.RadioButton, onClick = onClick)
+        selected == null -> Modifier.clickable(
+            interactionSource = null, indication = null, role = Role.Button, onClick = onClick,
+        )
+        optional -> Modifier.toggleable(
+            value = selected, interactionSource = null, indication = null, role = Role.Checkbox,
+            onValueChange = { onClick() },
+        )
+        else -> Modifier.selectable(
+            selected = selected, interactionSource = null, indication = null, role = Role.RadioButton, onClick = onClick,
+        )
     }
     val chipFill = when (selected) {
         true -> colors.primaryContainer
         false -> colors.surfaceVariant
         null -> Color.Transparent
     }
-    val tint by animateColorAsState(if (selected != false) colors.primary else colors.onSurface,
-        tween(140), label = "标签文字")
-    val fill by animateColorAsState(chipFill, tween(140), label = "标签背景")
+    val tint = if (selected != false) colors.primary else colors.onSurface
     Box(Modifier.heightIn(min = 44.dp).clip(shape).then(interaction), contentAlignment = Alignment.Center) {
-        Surface(shape = shape, color = fill) {
+        Surface(shape = shape, color = chipFill) {
             Row(Modifier.heightIn(min = 34.dp).padding(horizontal = 11.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (add) LucideIcon(Glyph.PLUS, tint, size = 16)

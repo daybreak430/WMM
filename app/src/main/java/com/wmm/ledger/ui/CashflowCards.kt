@@ -94,7 +94,10 @@ internal fun SevenDayTrend(days: List<DailyCashflow>) {
                     val date = item.date.shortDate()
                     Column(
                         Modifier.weight(1f).clip(FieldShape)
-                            .selectable(active, role = Role.Tab) { selected = index }
+                            .selectable(
+                                selected = active, interactionSource = null, indication = null,
+                                role = Role.Tab, onClick = { selected = index },
+                            )
                             .semantics {
                                 contentDescription = "${item.date}，收入 ${currency(item.amount.income)}，支出 ${currency(item.amount.expense)}"
                             },

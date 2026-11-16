@@ -233,7 +233,6 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
                 Column(Modifier.padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     LedgerSegments(
                         Period.entries, period, { it.title },
-                        animateSelection = false,
                         containerColor = if (LocalLedgerDark.current) colors.surfaceContainerHigh else colors.surface,
                         onSelect = choosePeriod,
                     )

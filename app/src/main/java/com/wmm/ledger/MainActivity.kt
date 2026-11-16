@@ -302,7 +302,10 @@ private fun LedgerNavigation(selected: Tab, onSelect: (Tab) -> Unit) {
                     val tint = if (active) colors.primary else colors.onSurfaceVariant
                     Column(
                         Modifier.weight(1f).heightIn(min = 62.dp)
-                            .selectable(active, role = Role.Tab, onClick = { onSelect(item) })
+                            .selectable(
+                                selected = active, interactionSource = null, indication = null,
+                                role = Role.Tab, onClick = { onSelect(item) },
+                            )
                             .padding(top = 7.dp, bottom = 13.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
