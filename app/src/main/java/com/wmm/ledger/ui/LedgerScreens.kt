@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
@@ -40,7 +39,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -226,6 +224,11 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
     }
     val expenses = remember(summary) { summary.tagTotals.filter { it.tag.kind == Kind.EXPENSE.name } }
     val income = remember(summary) { summary.tagTotals.filter { it.tag.kind == Kind.INCOME.name } }
+    val sceneRanks = remember(summary) {
+        val named = summary.sceneTotals.map { RankedAmount(it.scene.id, it.scene.name, it.cents) }
+        val unassigned = summary.expense - named.sumOf { it.amount }
+        if (unassigned > 0) named + RankedAmount(null, "未标场景", unassigned) else named
+    }
     Column(Modifier.fillMaxSize()) {
         PageHeader("统计")
         LazyColumn(contentPadding = PaddingValues(horizontal = PagePadding, vertical = 10.dp)) {
@@ -268,11 +271,10 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
                     }
                 }
             }
-            rankSection("支出标签", Glyph.TAG, "expense", summary.expense,
+            shareSection("支出类型占比", Glyph.TAG, "expense", "支出合计", summary.expense,
                 expenses.map { RankedAmount(it.tag.id, it.tag.name, it.cents) }, drill)
-            rankSection("支出场景", Glyph.BOX, "scene", summary.expense,
-                summary.sceneTotals.map { RankedAmount(it.scene.id, it.scene.name, it.cents) }, drillScene)
-            rankSection("收入标签", Glyph.INCOME, "income", summary.income,
+            shareSection("支出场景占比", Glyph.BOX, "scene", "支出合计", summary.expense, sceneRanks, drillScene)
+            shareSection("收入类型占比", Glyph.INCOME, "income", "收入合计", summary.income,
                 income.map { RankedAmount(it.tag.id, it.tag.name, it.cents) }, drill)
             item("report") {
                 val stale = report != null && remember(data, period, day, today) {
@@ -292,66 +294,6 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
             "同意并生成", { consentDialog = false }) {
             consentDialog = false
             generate(true)
-        }
-    }
-}
-
-private data class RankedAmount(val id: String, val label: String, val amount: Long)
-
-private fun LazyListScope.rankSection(title: String, icon: Glyph, key: String, total: Long,
-    ranks: List<RankedAmount>, open: (String) -> Unit) {
-    if (ranks.isEmpty()) return
-    item("rank-title:$key") {
-        val colors = MaterialTheme.colorScheme
-        Row(Modifier.fillMaxWidth().padding(start = 3.dp, top = 20.dp, bottom = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            LucideIcon(icon, color = colors.primary, size = 17)
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        }
-    }
-    itemsIndexed(ranks, key = { _, row -> "rank:$key:${row.id}" }) { index, row ->
-        RankRow(row, total, index == 0, index == ranks.lastIndex) {
-            open(row.id)
-        }
-    }
-}
-
-@Composable
-private fun RankRow(rank: RankedAmount, total: Long, first: Boolean, last: Boolean,
-    click: () -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    val top = if (first) 18.dp else 0.dp
-    val bottom = if (last) 18.dp else 0.dp
-    val shape = RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom)
-    val fraction = if (total > 0) (rank.amount.toDouble() / total).coerceIn(0.0, 1.0) else 0.0
-    val percent = if (fraction > 0 && fraction < .001) "<0.1%"
-        else String.format(Locale.CHINA, "%.1f", fraction * 100).removeSuffix(".0") + "%"
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = shape,
-        color = colors.surface,
-    ) {
-        Column {
-            Row(Modifier.fillMaxWidth().heightIn(min = 62.dp).clickable(role = Role.Button, onClick = click)
-                .padding(horizontal = 15.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text(rank.label, style = MaterialTheme.typography.titleSmall,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.weight(1f, fill = false).width(56.dp).height(3.dp).clip(CircleShape)
-                            .background(colors.primaryContainer)) {
-                            Box(Modifier.fillMaxWidth(fraction.toFloat()).height(3.dp)
-                                .background(colors.primary.copy(alpha = .76f), CircleShape))
-                        }
-                        Text(percent, color = colors.onSurfaceVariant, style = MaterialTheme.typography.labelSmall, maxLines = 1)
-                    }
-                }
-                AmountText(currency(rank.amount), modifier = Modifier.weight(.8f),
-                    style = LedgerFlowNumber.copy(textAlign = TextAlign.End))
-                LucideIcon(Glyph.RIGHT, color = colors.onSurfaceVariant, size = 15)
-            }
-            if (!last) Hairline(15)
         }
     }
 }

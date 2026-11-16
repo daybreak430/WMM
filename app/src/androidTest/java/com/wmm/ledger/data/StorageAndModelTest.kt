@@ -145,6 +145,13 @@ class StorageAndModelTest {
                 .forEach { assertFalse(payload.contains(it)) }
             assertEquals("测试连接", Reports.request(provider, null).getJSONArray("messages")
                 .getJSONObject(1).getString("content"))
+            val daily = Reports.request(provider, data.reportAnalysis(Period.DAY, today, today)).getJSONArray("messages")
+            val dailyPrompt = daily.getJSONObject(0).getString("content")
+            assertTrue(dailyPrompt.contains("「场景与类型组合排行」"))
+            assertTrue(dailyPrompt.contains("一句话也完全够用"))
+            val dailyData = JSONObject(daily.getJSONObject(1).getString("content"))
+            assertEquals(1, dailyData.getInt("笔数"))
+            assertEquals("出差", dailyData.getJSONArray("场景与类型组合排行").getJSONObject(0).getString("场景"))
         }
         assertTrue(Reports.request(Provider.DEEPSEEK, analysis).has("thinking"))
         assertFalse(Reports.request(Provider.MINIMAX, analysis).has("thinking"))

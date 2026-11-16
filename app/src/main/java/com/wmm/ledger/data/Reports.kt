@@ -20,7 +20,7 @@ enum class Provider(val title: String, val host: String, val path: String, val m
 class LedgerError(val display: String) : Exception()
 
 object Reports {
-    private const val ANALYSIS_VERSION = 3
+    private const val ANALYSIS_VERSION = 4
 
     fun payload(analysis: ReportAnalysis): JSONObject = JSONObject().apply {
         val stats = analysis.current
@@ -78,7 +78,7 @@ object Reports {
             }
         }
 
-    // 用实际发送内容判断是否过期，备注或账户改动不影响报告。
+    // 汇总数据或提示词更新时提示重新生成，备注和账户改动不影响报告有效性。
     fun signature(analysis: ReportAnalysis): String = MessageDigest.getInstance("SHA-256")
         .digest("$ANALYSIS_VERSION|${payload(analysis)}".toByteArray())
         .joinToString("") { "%02x".format(it) }
@@ -105,15 +105,18 @@ object Reports {
 
     private fun reviewPrompt(period: Period): String {
         val focus = when (period) {
-            Period.DAY -> "留意当天特别集中、反复出现或值得记住的一两件事。"
+            Period.DAY -> "写日报时，优先从「场景与类型组合排行」找当天钱具体花在了哪个场合、哪类事情上，用「场景·类型」讲在一起。" +
+                "有足够数据时，可以看看同一种类型在不同场景的差别，或同一个场景里的不同花法，再用笔数和金额分辨是多笔累积还是一笔突出。" +
+                "若只有一个组合，把这笔或这组说清楚就够了。缺少场景时只说账本里有依据的类型。组合排行的占比以全部支出为分母。"
             Period.MONTH -> "结合分段、频次、金额与场景，看这个月重复出现的模式和少数拉高支出的项目。"
             Period.YEAR -> "顺着月度分布找起伏、收入节奏、支出高峰和全年的收支关系。"
         }
-        return "你在帮用户读自己的账本。用简体中文，像一个细心、会聊天的朋友，说出这份账单里最值得注意的发现。" +
-            "先写具体、有意思的观察，再用账本里的数字或场景说明你为什么留意它。可以用轻松的比喻或一句有分寸的俏皮话，" +
-            "避免说教、评判消费、强行玩梗或流水账式地复述数据。" +
-            "长度和结构由发现决定。有一个好发现就把它说透；有多个相互关联的线索就展开。根据内容安排段落，" +
-            "无需固定标题、段数、字数或结尾。只有数据确实提示一个值得尝试的动作时，才顺手提出来。" +
+        return "你在帮用户读自己的账本。用简体中文，像熟悉的朋友翻到这一页，顺口聊起一件具体、有意思的事。" +
+            "句子轻巧一点，选一个有画面感的细节来写，合适时来一句俏皮的账本旁白。让账上真实的反差和小发现自己带来趣味。" +
+            "语气友善，避免说教、评判消费、强行玩梗或把数字挨个念一遍。" +
+            "长度和结构由发现决定。统计周期只有一两笔或线索很少时，一句话也完全够用，讲完就收住。" +
+            "数据丰富、线索互相印证时再展开。无需固定标题、段数、字数或结尾，也不必补一段总结或建议。" +
+            "只有数据确实提示一个值得尝试的动作时，才顺手提出来。" +
             focus +
             "事实只来自收到的汇总 JSON，金额、变化量和比例引用原值。解释或猜想要说清楚它们只是可能性，" +
             "不能因一两个巧合就下结论。仅在给出上一完整期间时做同期口径的比较，当前期间标明截至目前。" +

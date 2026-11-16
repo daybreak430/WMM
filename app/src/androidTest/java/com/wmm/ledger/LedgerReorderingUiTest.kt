@@ -120,18 +120,6 @@ class LedgerReorderingUiTest {
         }
     }
 
-    private fun withLedger(data: LedgerSnapshot, test: (LedgerRepository, ActivityScenario<MainActivity>) -> Unit) {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val repository = LedgerRepository(context)
-        val original = runBlocking { repository.snapshot() }
-        try {
-            runBlocking { repository.replace(data) }
-            ActivityScenario.launch(MainActivity::class.java).use { test(repository, it) }
-        } finally {
-            runBlocking { repository.replace(original) }
-        }
-    }
-
     private fun openAccountPicker() = ui.onNodeWithText("账户").performScrollTo().performClick()
 
     private fun assertAccount(name: String) =
@@ -163,5 +151,17 @@ class LedgerReorderingUiTest {
             }
             up()
         }
+    }
+}
+
+internal fun withLedger(data: LedgerSnapshot, test: (LedgerRepository, ActivityScenario<MainActivity>) -> Unit) {
+    val context = InstrumentationRegistry.getInstrumentation().targetContext
+    val repository = LedgerRepository(context)
+    val original = runBlocking { repository.snapshot() }
+    try {
+        runBlocking { repository.replace(data) }
+        ActivityScenario.launch(MainActivity::class.java).use { test(repository, it) }
+    } finally {
+        runBlocking { repository.replace(original) }
     }
 }
