@@ -1,5 +1,6 @@
 package com.wmm.ledger
 
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -7,6 +8,7 @@ import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -19,6 +21,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTouchInput
 import java.time.LocalDate
 import org.junit.Rule
 import org.junit.Test
@@ -131,6 +134,35 @@ class RecordUiTest {
         } finally {
             ui.mainClock.autoAdvance = true
         }
+    }
+
+    @Test fun bottomTabDragCommitsOnReleaseAndKeepsThePageOnCancel() {
+        ui.waitUntil(10_000) { ui.onAllNodesWithText("记一笔").fetchSemanticsNodes().isNotEmpty() }
+        val ledger = ui.onNode(hasText("账本") and hasClickAction())
+        val stats = ui.onNode(hasText("统计") and hasClickAction())
+        val distance = stats.fetchSemanticsNode().boundsInRoot.center.x - ledger.fetchSemanticsNode().boundsInRoot.center.x
+
+        ledger.performTouchInput {
+            down(center)
+            repeat(8) { step -> moveTo(center + Offset(distance * (step + 1) / 8, 0f)) }
+        }
+        ui.onNodeWithText("记一笔").assertIsDisplayed()
+        ledger.performTouchInput { up() }
+        ui.onNodeWithText("本月收支看板").assertIsDisplayed()
+
+        stats.performTouchInput {
+            down(center)
+            repeat(8) { step -> moveTo(center - Offset(distance * (step + 1) / 8, 0f)) }
+            cancel()
+        }
+        ui.onNodeWithText("本月收支看板").assertIsDisplayed()
+
+        stats.performTouchInput {
+            down(center)
+            repeat(8) { step -> moveTo(center - Offset(distance * (step + 1) / 8, 0f)) }
+            up()
+        }
+        ui.onNodeWithText("记一笔").assertIsDisplayed()
     }
 
     @Test fun assetAccountCanBeAddedAndCalibratedFromItsCard() {
