@@ -3,6 +3,7 @@ package com.wmm.ledger
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -12,35 +13,23 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.only
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Surface
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -57,15 +46,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.wmm.ledger.data.Period
 import com.wmm.ledger.ui.AssetsScreen
 import com.wmm.ledger.ui.BillImportScreen
@@ -73,18 +66,23 @@ import com.wmm.ledger.ui.ConfirmDialog
 import com.wmm.ledger.ui.EmptyPanel
 import com.wmm.ledger.ui.EntryEditor
 import com.wmm.ledger.ui.Glyph
-import com.wmm.ledger.ui.LedgerScreenFrame
+import com.wmm.ledger.ui.LedgerNavigation
 import com.wmm.ledger.ui.LedgerScreen
-import com.wmm.ledger.ui.LedgerTheme
+import com.wmm.ledger.ui.LedgerScreenFrame
 import com.wmm.ledger.ui.LedgerScreenTheme
-import com.wmm.ledger.ui.blockExitingPage
-import com.wmm.ledger.ui.pageMotion
+import com.wmm.ledger.ui.LedgerTheme
 import com.wmm.ledger.ui.LucideIcon
 import com.wmm.ledger.ui.ModelSettings
+import com.wmm.ledger.ui.NavigationBottomGap
+import com.wmm.ledger.ui.NavigationTopGap
 import com.wmm.ledger.ui.SettingsScreen
 import com.wmm.ledger.ui.StatsScreen
+import com.wmm.ledger.ui.Tab
 import com.wmm.ledger.ui.TagDrillScreen
 import com.wmm.ledger.ui.TagsScreen
+import com.wmm.ledger.ui.blockExitingPage
+import com.wmm.ledger.ui.ledgerNavigationHeight
+import com.wmm.ledger.ui.pageMotion
 import java.time.LocalDate
 import kotlinx.coroutines.delay
 
@@ -109,10 +107,6 @@ class MainActivity : ComponentActivity() {
             LedgerTheme(dark) { LedgerApp(model, appearance) }
         }
     }
-}
-
-private enum class Tab(val label: String, val icon: Glyph) {
-    LEDGER("账本", Glyph.BOOK), STATS("统计", Glyph.CHART), ASSETS("资产", Glyph.WALLET)
 }
 
 private data class Destination(val route: String?, val depth: Int)
@@ -182,13 +176,15 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
 
     val destination = Destination(route, if (route == null) 0 else if (parent == null) 1 else 2)
     val refined = route == "new" || route?.startsWith("entry:") == true || (route == null && tab == Tab.LEDGER)
+    val tabHeight = ledgerNavigationHeight()
+    val tabSpace = tabHeight + NavigationBottomGap + NavigationTopGap
     LedgerScreenFrame(refined, tabName) {
         Scaffold(
             containerColor = Color.Transparent,
             contentColor = MaterialTheme.colorScheme.onBackground,
             contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
             snackbarHost = {
-                SnackbarHost(snackbar, Modifier.navigationBarsPadding().padding(bottom = if (route == null) 62.dp else 0.dp)) { data ->
+                SnackbarHost(snackbar, Modifier.navigationBarsPadding().padding(bottom = if (route == null) tabSpace else 0.dp)) { data ->
                     Snackbar(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                         dismissAction = {
@@ -217,8 +213,21 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
                     val current = screen.route
                     val active = screen == destination
                     if (current == null) {
-                        Column(Modifier.fillMaxSize().blockExitingPage(active)) {
-                            Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
+                        val systemBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                        val bottomInset = tabSpace + systemBottom
+                        val background = MaterialTheme.colorScheme.background
+                        val backdrop = rememberLayerBackdrop(onDraw = remember(background) {
+                            {
+                                // 先铺背景再录制列表，透明间隙里的文字也能完整参与折射。
+                                drawRect(background)
+                                drawContent()
+                            }
+                        })
+                        val capture = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            Modifier.layerBackdrop(backdrop)
+                        } else Modifier
+                        Box(Modifier.fillMaxSize().blockExitingPage(active)) {
+                            Box(Modifier.matchParentSize().then(capture)) {
                                 LedgerScreenTheme(tab == Tab.LEDGER) {
                                     navState.SaveableStateProvider(tab.name) {
                                         when (tab) {
@@ -227,20 +236,27 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
                                                 followToday = true
                                                 periodName = Period.MONTH.name
                                                 tabName = Tab.STATS.name
-                                            }, { route = "new" }, { route = "entry:${it.id}" })
+                                            }, { route = "new" }, { route = "entry:${it.id}" }, bottomInset)
                                             Tab.STATS -> StatsScreen(data, today, period, day, { periodName = it.name }, {
                                                 dayText = it.toString()
                                                 followToday = it == today
                                             }, { route = "tag:$it" }, { route = "scene:$it" }, generating,
                                                 provider in keys, model.hasReportConsent(),
                                                 { agreed -> model.generate(period, day, agreed) },
-                                                { route = "model" })
-                                            Tab.ASSETS -> AssetsScreen(data, model)
+                                                { route = "model" }, bottomInset)
+                                            Tab.ASSETS -> AssetsScreen(data, model, bottomInset)
                                         }
                                     }
                                 }
                             }
-                            LedgerNavigation(tab) { if (active) tabName = it.name }
+                            Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(systemBottom)
+                                .background(Brush.verticalGradient(listOf(Color.Transparent, background))))
+                            LedgerNavigation(
+                                tab, backdrop, tabHeight,
+                                Modifier.align(Alignment.BottomCenter).padding(
+                                    start = 22.dp, end = 22.dp, bottom = systemBottom + NavigationBottomGap,
+                                ),
+                            ) { if (active) tabName = it.name }
                         }
                     } else {
                         Box(Modifier.fillMaxSize().navigationBarsPadding().blockExitingPage(active)) {
@@ -289,42 +305,5 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
         ConfirmDialog("替换本机账本？", "此备份含 ${backup.entries.size} 笔流水和 ${backup.accounts.size} 个账户。" +
             "恢复会替换本机的流水、标签、资产、资料和报告，无法撤销。", "替换并恢复",
             model::cancelRestore, model::restore)
-    }
-}
-
-
-@Composable
-private fun LedgerNavigation(selected: Tab, onSelect: (Tab) -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    Surface(
-        color = colors.surface,
-    ) {
-        BoxWithConstraints(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 12.dp)) {
-            val indicatorWidth = 14.dp
-            val tabWidth = maxWidth / Tab.entries.size
-            val indicatorPosition = tabWidth * (selected.ordinal + .5f) - indicatorWidth / 2
-            Row(Modifier.fillMaxWidth().selectableGroup()) {
-                for (item in Tab.entries) {
-                    val active = selected == item
-                    val tint = if (active) colors.primary else colors.onSurfaceVariant
-                    Column(
-                        Modifier.weight(1f).heightIn(min = 62.dp)
-                            .selectable(
-                                selected = active, interactionSource = null, indication = null,
-                                role = Role.Tab, onClick = { onSelect(item) },
-                            )
-                            .padding(top = 7.dp, bottom = 13.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
-                    ) {
-                        LucideIcon(item.icon, tint, size = 21)
-                        Text(item.label, color = tint, style = MaterialTheme.typography.labelMedium,
-                            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium)
-                    }
-                }
-            }
-            Box(Modifier.align(Alignment.BottomStart).offset(x = indicatorPosition, y = (-5).dp)
-                .width(indicatorWidth).height(2.dp).background(colors.primary, CircleShape))
-        }
     }
 }

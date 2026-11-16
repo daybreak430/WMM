@@ -15,6 +15,7 @@ dependencyResolutionManagement {
             filter {
                 includeGroup("net.zetetic")
                 includeGroup("com.mohamedrejeb.dnd")
+                includeGroup("io.github.kyant0")
             }
         }
     }

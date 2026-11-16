@@ -43,6 +43,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import com.wmm.ledger.R
@@ -70,7 +71,7 @@ import java.util.Locale
 
 @Composable
 fun LedgerScreen(data: LedgerSnapshot, today: LocalDate, openSettings: () -> Unit, openStats: () -> Unit,
-    record: () -> Unit, edit: (Entry) -> Unit) {
+    record: () -> Unit, edit: (Entry) -> Unit, bottomInset: Dp) {
     val stats = remember(data, today) { data.stats(Period.MONTH, today, today) }
     val colors = MaterialTheme.colorScheme
     val inset = LedgerPageInset()
@@ -110,7 +111,9 @@ fun LedgerScreen(data: LedgerSnapshot, today: LocalDate, openSettings: () -> Uni
                 ledgerRows(data.entries, data, today, edit)
             }
         }
-        PrimaryAction("记一笔", record, Modifier.fillMaxWidth().padding(horizontal = inset, vertical = 10.dp), Glyph.PLUS)
+        PrimaryAction("记一笔", record,
+            Modifier.fillMaxWidth().padding(start = inset, end = inset, top = 10.dp, bottom = bottomInset + 4.dp),
+            Glyph.PLUS)
     }
 }
 
@@ -219,7 +222,7 @@ private fun LedgerRow(entry: Entry, tag: String, icon: LabelStyle?, account: Str
 fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: LocalDate, choosePeriod: (Period) -> Unit,
     chooseDay: (LocalDate) -> Unit, drill: (String) -> Unit, drillScene: (String) -> Unit,
     busy: Boolean, hasKey: Boolean, consent: Boolean,
-    generate: (Boolean) -> Unit, openModel: () -> Unit) {
+    generate: (Boolean) -> Unit, openModel: () -> Unit, bottomInset: Dp) {
     val summary = remember(data, period, day, today) { data.stats(period, day, today) }
     val calendar = CalendarAction(day, today, chooseDay)
     var consentDialog by rememberSaveable { mutableStateOf(false) }
@@ -236,7 +239,9 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
     }
     Column(Modifier.fillMaxSize()) {
         PageHeader("统计")
-        LazyColumn(contentPadding = PaddingValues(horizontal = PagePadding, vertical = 10.dp)) {
+        LazyColumn(contentPadding = PaddingValues(
+            start = PagePadding, end = PagePadding, top = 10.dp, bottom = bottomInset + 10.dp,
+        )) {
             item("filters") {
                 Column(Modifier.padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     LedgerSegments(

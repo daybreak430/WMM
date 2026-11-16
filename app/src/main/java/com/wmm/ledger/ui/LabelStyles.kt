@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -72,37 +73,54 @@ private val LabelIcon.drawable: Int
         LabelIcon.PHONE -> R.drawable.lucide_smartphone
     }
 
+internal data class LabelColors(val ink: Color, val fill: Color)
+
 @Composable
-private fun IconColor.tint(): Color {
+internal fun IconColor.labelColors(): LabelColors {
+    val colors = MaterialTheme.colorScheme
     val dark = LocalLedgerDark.current
+    if (dark) {
+        val ink = when (this) {
+            IconColor.BLUE -> colors.primary
+            IconColor.AZURE -> Color(0xFF83D8FF)
+            IconColor.INDIGO -> Color(0xFFB6BEFF)
+            IconColor.VIOLET -> Color(0xFFD0B3FF)
+            IconColor.ROSE -> Color(0xFFFFB0D4)
+            IconColor.RED -> Color(0xFFFFB4AC)
+            IconColor.AMBER -> Color(0xFFFFC77E)
+            IconColor.SLATE -> Color(0xFFB4CAE6)
+        }
+        return LabelColors(ink, lerp(colors.surface, ink, .14f))
+    }
     return when (this) {
-        IconColor.BLUE -> MaterialTheme.colorScheme.primary
-        IconColor.AZURE -> Color(if (dark) 0xFF76CDEB else 0xFF156C90)
-        IconColor.INDIGO -> Color(if (dark) 0xFFA8B7FF else 0xFF4859B2)
-        IconColor.VIOLET -> Color(if (dark) 0xFFC1A5F5 else 0xFF7447B5)
-        IconColor.ROSE -> Color(if (dark) 0xFFF19EC6 else 0xFFA13571)
-        IconColor.RED -> Color(if (dark) 0xFFFFACA6 else 0xFFAF423E)
-        IconColor.AMBER -> Color(if (dark) 0xFFF5C17D else 0xFF925916)
-        IconColor.SLATE -> Color(if (dark) 0xFFA9BAD2 else 0xFF51657E)
+        IconColor.BLUE -> LabelColors(colors.primary, Color(0xFFEBF4FF))
+        IconColor.AZURE -> LabelColors(Color(0xFF00739F), Color(0xFFEAF8FF))
+        IconColor.INDIGO -> LabelColors(Color(0xFF4C54BF), Color(0xFFEEF0FF))
+        IconColor.VIOLET -> LabelColors(Color(0xFF7843B5), Color(0xFFF5EDFF))
+        IconColor.ROSE -> LabelColors(Color(0xFFA83473), Color(0xFFFDEEF7))
+        IconColor.RED -> LabelColors(Color(0xFFB83239), Color(0xFFFFEEEF))
+        IconColor.AMBER -> LabelColors(Color(0xFFA75208), Color(0xFFFFF3DD))
+        IconColor.SLATE -> LabelColors(Color(0xFF45668F), Color(0xFFEDF4FD))
     }
 }
 
 @Composable
 internal fun LabelBadge(style: LabelStyle?, size: Int = 38) {
     val colors = MaterialTheme.colorScheme
-    val tint = style?.color?.tint() ?: colors.onSurfaceVariant
+    val palette = style?.color?.labelColors()
     Box(Modifier.size(size.dp)
-        .background(if (style == null) colors.surfaceVariant else tint.copy(alpha = .13f), RoundedCornerShape(11.dp)),
+        .background(palette?.fill ?: colors.surfaceVariant, RoundedCornerShape(11.dp)),
         contentAlignment = Alignment.Center) {
-        if (style == null) LucideIcon(Glyph.TAG, tint, size = if (size <= 36) 17 else 19)
-        else LabelGlyph(style, if (size <= 36) 17 else 19)
+        val iconSize = if (size <= 36) 17 else 19
+        if (style == null || palette == null) LucideIcon(Glyph.TAG, colors.onSurfaceVariant, size = iconSize)
+        else LabelGlyph(style, iconSize, palette.ink)
     }
 }
 
 @Composable
-internal fun LabelGlyph(style: LabelStyle, size: Int) {
+internal fun LabelGlyph(style: LabelStyle, size: Int, tint: Color) {
     Icon(painterResource(style.icon.drawable), contentDescription = null,
-        tint = style.color.tint(), modifier = Modifier.size(size.dp))
+        tint = tint, modifier = Modifier.size(size.dp))
 }
 
 @Composable
@@ -210,7 +228,7 @@ private fun LabelStyleDialog(label: StyleLabel, dismiss: () -> Unit, save: (Labe
                                 onClick = { color = candidate })
                             .semantics { contentDescription = candidate.title },
                             contentAlignment = Alignment.Center) {
-                            Box(Modifier.size(16.dp).background(candidate.tint(), CircleShape))
+                            Box(Modifier.size(16.dp).background(candidate.labelColors().ink, CircleShape))
                         }
                     }
                 }

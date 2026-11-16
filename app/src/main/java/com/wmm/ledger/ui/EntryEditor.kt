@@ -1,6 +1,7 @@
 package com.wmm.ledger.ui
 
 import androidx.compose.animation.animateBounds
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.layout.Arrangement
@@ -494,6 +495,8 @@ private fun EntryAmount(amount: String, error: Boolean, compact: Boolean, onChan
 private fun EntryTagChip(label: String, selected: Boolean? = null, optional: Boolean = false,
     add: Boolean = false, style: LabelStyle? = null, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
+    val palette = style?.color?.labelColors()
+    val accent = palette?.ink ?: colors.primary
     val shape = RoundedCornerShape(12.dp)
     val interaction = when {
         selected == null -> Modifier.clickable(
@@ -508,20 +511,25 @@ private fun EntryTagChip(label: String, selected: Boolean? = null, optional: Boo
         )
     }
     val chipFill = when (selected) {
-        true -> colors.primaryContainer
+        true -> palette?.fill ?: colors.primaryContainer
         false -> if (LocalLedgerDark.current) colors.surfaceContainerHigh else colors.surface
         null -> Color.Transparent
     }
-    val tint = if (selected == false) colors.onSurfaceVariant else colors.primary
+    val tint = when (selected) {
+        true -> accent
+        false -> colors.onSurfaceVariant
+        null -> colors.primary
+    }
+    val outline = if (selected == true) BorderStroke(1.dp, accent.copy(alpha = .42f)) else null
     val labelStyle = MaterialTheme.typography.labelLarge.copy(
         fontWeight = if (selected == null) FontWeight.SemiBold else FontWeight.Medium,
     )
     Box(Modifier.heightIn(min = 44.dp).clip(shape).then(interaction), contentAlignment = Alignment.Center) {
-        Surface(shape = shape, color = chipFill) {
+        Surface(shape = shape, color = chipFill, border = outline) {
             Row(Modifier.heightIn(min = 34.dp).padding(horizontal = 11.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (add) LucideIcon(Glyph.PLUS, tint, size = 16)
-                if (style != null) LabelGlyph(style, 15)
+                if (style != null) LabelGlyph(style, 15, accent)
                 Text(label, style = labelStyle, color = tint)
             }
         }

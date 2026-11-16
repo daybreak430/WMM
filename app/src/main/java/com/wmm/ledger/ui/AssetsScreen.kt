@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.wmm.ledger.LedgerViewModel
 import com.wmm.ledger.data.Account
@@ -47,7 +48,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 @Composable
-fun AssetsScreen(data: LedgerSnapshot, model: LedgerViewModel) {
+fun AssetsScreen(data: LedgerSnapshot, model: LedgerViewModel, bottomInset: Dp) {
     val balances = remember(data) { data.accountBalances() }
     val active = remember(data.accounts) { data.accounts.filterNot { it.archived } }
     val activeById = remember(active) { active.associateBy { it.id } }
@@ -70,7 +71,9 @@ fun AssetsScreen(data: LedgerSnapshot, model: LedgerViewModel) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().dragAutoScroll(dragState, listState),
                 state = listState,
-                contentPadding = PaddingValues(start = PagePadding, end = PagePadding, top = 8.dp, bottom = 24.dp),
+                contentPadding = PaddingValues(
+                    start = PagePadding, end = PagePadding, top = 8.dp, bottom = bottomInset + 24.dp,
+                ),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 item("net-assets") {

@@ -59,7 +59,6 @@ internal fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, active
     importBill: () -> Unit) {
     var editNickname by rememberSaveable { mutableStateOf(false) }
     var avatarOptions by rememberSaveable { mutableStateOf(false) }
-    var appearanceOptions by rememberSaveable { mutableStateOf(false) }
     var exportWarning by rememberSaveable { mutableStateOf(false) }
     val habitLocation by model.habitLocation.collectAsStateWithLifecycle()
     var explainLocation by rememberSaveable { mutableStateOf(false) }
@@ -96,7 +95,12 @@ internal fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, active
                 }
             }
             item("appearance") {
-                GroupCard { SettingsRow("外观", end = appearance.title) { appearanceOptions = true } }
+                GroupCard {
+                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("外观", style = MaterialTheme.typography.titleMedium)
+                        LedgerSegments(Appearance.entries, appearance, { it.title }, onSelect = model::selectAppearance)
+                    }
+                }
             }
             item("preferences") {
                 GroupCard {
@@ -106,7 +110,7 @@ internal fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, active
                     Hairline(14)
                     SettingsRow("AI 导入账单", icon = Glyph.UPLOAD, onClick = importBill)
                     Hairline(14)
-                    SettingsRow("按位置推荐分类", end = if (habitLocation) "开启" else "关闭") {
+                    SettingsRow("按位置推荐分类", icon = Glyph.MAP_PIN, end = if (habitLocation) "开启" else "关闭") {
                         if (habitLocation) model.setHabitLocation(false) else explainLocation = true
                     }
                 }
@@ -130,19 +134,6 @@ internal fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, active
         NameDialog("编辑昵称", "昵称", data.profile.nickname, allowBlank = true, onDismiss = { editNickname = false }) {
             model.saveNickname(it) { editNickname = false }
         }
-    }
-    if (appearanceOptions) {
-        LedgerAlertDialog(onDismissRequest = { appearanceOptions = false }, title = { Text("外观") }, text = {
-            Column {
-                Appearance.entries.forEachIndexed { index, option ->
-                    if (index > 0) Hairline()
-                    SettingsRow(option.title, end = if (option == appearance) "当前" else null) {
-                        model.selectAppearance(option)
-                        appearanceOptions = false
-                    }
-                }
-            }
-        }, confirmButton = { TextButton(onClick = { appearanceOptions = false }) { Text("取消") } })
     }
     if (avatarOptions) {
         LedgerAlertDialog(onDismissRequest = { avatarOptions = false }, title = { Text("头像") }, text = {

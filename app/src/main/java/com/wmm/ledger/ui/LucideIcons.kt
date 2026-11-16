@@ -26,6 +26,7 @@ enum class Glyph(@param:DrawableRes @get:DrawableRes val drawable: Int) {
     LEFT(R.drawable.lucide_chevron_left),
     RIGHT(R.drawable.lucide_chevron_right),
     TAG(R.drawable.lucide_tag),
+    MAP_PIN(R.drawable.lucide_map_pin),
     INCOME(R.drawable.lucide_arrow_down_left),
     EXPENSE(R.drawable.lucide_arrow_up_right),
     CALENDAR(R.drawable.lucide_calendar_days),

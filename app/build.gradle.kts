@@ -12,8 +12,8 @@ android {
         applicationId = "com.wmm.ledger"
         minSdk = 26
         targetSdk = 36
-        versionCode = 19
-        versionName = "0.6.1"
+        versionCode = 20
+        versionName = "0.6.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildTypes {
@@ -34,6 +34,10 @@ dependencies {
     implementation(platform("androidx.compose:compose-bom:2026.05.00"))
     implementation("androidx.activity:activity-compose:1.9.0")
     implementation("androidx.compose.foundation:foundation")
+    implementation("io.github.kyant0:backdrop:1.0.6") {
+        // Shapes 的 Android 实现共用本项目的 AndroidX Compose UI。
+        exclude(group = "org.jetbrains.compose.ui", module = "ui")
+    }
     implementation("com.mohamedrejeb.dnd:compose-dnd:1.0.0-alpha01") {
         // Android 端使用项目已有的 AndroidX Compose BOM。
         exclude(group = "org.jetbrains.compose.foundation", module = "foundation")
