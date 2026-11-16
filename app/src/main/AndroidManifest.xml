@@ -6,7 +6,7 @@
     <application android:allowBackup="false" android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="false" android:usesCleartextTraffic="false"
         android:theme="@style/Theme.WMM" android:label="@string/app_name"
-        android:icon="@drawable/ic_wmm" android:supportsRtl="true">
+        android:icon="@mipmap/ic_wmm" android:supportsRtl="true">
         <provider android:name=".data.BackupFileProvider"
             android:authorities="${applicationId}.backup" android:exported="false" android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/backup_share_paths" />

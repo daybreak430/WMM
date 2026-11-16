@@ -20,4 +20,6 @@
 
 ## 图标
 
-应用图标使用 [Lucide 官方图标](https://github.com/lucide-icons/lucide/tree/55782beff3a0133df79c417eb68f96e8f19e2404/icons) 的 Android 矢量资源。各资源记录了上游 SVG 路径和版本，许可证随 APK 一起打包。
+Android 桌面图标是自适应图标。蓝色渐变作为背景，瓷白账本和「¥」作为透明 WebP 前景，系统按设备的桌面图标形状裁切。
+
+应用界面使用 [Lucide 官方图标](https://github.com/lucide-icons/lucide/tree/55782beff3a0133df79c417eb68f96e8f19e2404/icons) 的 Android 矢量资源。各资源记录了上游 SVG 路径和版本，许可证随 APK 一起打包。
