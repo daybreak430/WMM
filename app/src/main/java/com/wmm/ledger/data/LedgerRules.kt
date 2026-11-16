@@ -39,6 +39,7 @@ data class LedgerSnapshot(
     val reports: List<Report> = emptyList(),
     val profile: Profile = Profile(),
     val scenes: List<Scene> = emptyList(),
+    val scheduledBills: List<ScheduledBill> = emptyList(),
 )
 
 data class TagTotal(val tag: Tag, val cents: Long, val count: Int)

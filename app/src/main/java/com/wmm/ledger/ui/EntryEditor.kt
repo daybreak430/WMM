@@ -115,6 +115,7 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
     val accountId = if (initial == null && !accountChosen) defaultAccount?.id else chosenAccountId
     var note by rememberSaveable { mutableStateOf(initial?.note.orEmpty()) }
     var occurredAt by rememberSaveable { mutableStateOf(initial?.occurredAt ?: System.currentTimeMillis()) }
+    var hasTime by rememberSaveable { mutableStateOf(initial?.hasTime ?: false) }
     var bookedDay by rememberSaveable { mutableStateOf(initial?.day ?: LedgerRepository.bookingDay(occurredAt).toString()) }
     val day = LocalDate.parse(bookedDay)
     val useLocation by model.habitLocation.collectAsStateWithLifecycle()
@@ -124,13 +125,14 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
     }
     val habitArea = area.takeIf { useLocation && System.currentTimeMillis() - occurredAt in 0..900_000 }
     val habits = remember(data.entries, data.tags, data.scenes) { LedgerHabits(data) }
-    val guess = remember(habits, kind, cents, occurredAt, note, habitArea, initial == null, tagChosen) {
-        if (initial == null && !tagChosen) habits.suggest(kind, cents, occurredAt, note, habitArea) else null
+    val habitTime = occurredAt.takeIf { hasTime || day == LocalDate.now() }
+    val guess = remember(habits, kind, cents, habitTime, note, habitArea, initial == null, tagChosen) {
+        if (initial == null && !tagChosen) habits.suggest(kind, cents, habitTime, note, habitArea) else null
     }
     val tagId = guess?.tag?.id ?: manualTagId
     val sceneId = if (!sceneChosen && guess != null) guess.scene?.id else manualSceneId
     val zone = ZoneId.systemDefault()
-    val time = Instant.ofEpochMilli(occurredAt).atZone(zone).toLocalTime()
+    val time = occurredAt.takeIf { hasTime }?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalTime() }
     var tagDialog by rememberSaveable { mutableStateOf(false) }
     var newScene by rememberSaveable { mutableStateOf(false) }
     var accountDialog by rememberSaveable { mutableStateOf(false) }
@@ -260,7 +262,9 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
                     accountDialog = true
                 }
                 Hairline(14)
-                EntryDetailRow("日期时间", "${day.year}/${day.monthValue}/${day.dayOfMonth} ${time.format(TimeLabel)}", Glyph.CALENDAR) {
+                val dateLabel = "${day.year}/${day.monthValue}/${day.dayOfMonth}"
+                val dateTimeLabel = listOfNotNull(dateLabel, time?.format(TimeLabel)).joinToString(" ")
+                EntryDetailRow("日期时间", dateTimeLabel, Glyph.CALENDAR) {
                     dismissKeyboard()
                     dateEditor = true
                 }
@@ -281,7 +285,7 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
                     focus.clearFocus()
                     keyboard?.hide()
                     model.saveEntry(initial?.id, kind, saveCents, selected, accountId, note, occurredAt, day,
-                        sceneId.takeIf { kind == Kind.EXPENSE }, habitArea, back)
+                        sceneId.takeIf { kind == Kind.EXPENSE }, habitArea, hasTime, back)
                         .invokeOnCompletion { saving = false }
                 },
                 enabled = cents != null && tagId != null && !saving,
@@ -371,7 +375,14 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
         EntryDateDialog(day, time, onDismiss = { dateEditor = false }) { changedDay, changedTime ->
             if (changedDay != day || changedTime != time) {
                 bookedDay = changedDay.toString()
-                occurredAt = changedDay.atTime(changedTime).atZone(zone).toInstant().toEpochMilli()
+                hasTime = changedTime != null
+                // 只清除原时间的显示时保留时间戳，避免影响账户的余额校准。
+                occurredAt = when {
+                    changedTime != null -> changedDay.atTime(changedTime).atZone(zone).toInstant().toEpochMilli()
+                    changedDay == day -> occurredAt
+                    changedDay == LocalDate.now(zone) -> System.currentTimeMillis()
+                    else -> changedDay.atStartOfDay(zone).toInstant().toEpochMilli()
+                }
             }
             dateEditor = false
         }
@@ -560,20 +571,23 @@ private fun EntryDetailRow(label: String, value: String, icon: Glyph, onClick: (
 }
 
 @Composable
-private fun EntryDateDialog(day: LocalDate, time: LocalTime, onDismiss: () -> Unit,
-    onSave: (LocalDate, LocalTime) -> Unit) {
+private fun EntryDateDialog(day: LocalDate, time: LocalTime?, onDismiss: () -> Unit,
+    onSave: (LocalDate, LocalTime?) -> Unit) {
     var dateText by rememberSaveable { mutableStateOf(day.toString()) }
-    var timeText by rememberSaveable { mutableStateOf(time.toString()) }
+    var timeText by rememberSaveable { mutableStateOf(time?.toString()) }
     val pendingDay = LocalDate.parse(dateText)
-    val pendingTime = LocalTime.parse(timeText)
+    val pendingTime = timeText?.let(LocalTime::parse)
     val chooseDate = CalendarAction(pendingDay) { dateText = it.toString() }
-    val chooseTime = TimeAction(pendingTime) { timeText = it.toString() }
+    val chooseTime = TimeAction(pendingTime ?: LocalTime.now()) { timeText = it.toString() }
     LedgerAlertDialog(onDismissRequest = onDismiss, shape = CardShape, title = { Text("日期时间") },
         text = {
             GroupCard {
                 EntryDetailRow("日期", pendingDay.toString(), Glyph.CALENDAR, chooseDate)
                 Hairline(14)
-                EntryDetailRow("时间", pendingTime.format(TimeLabel), Glyph.EDIT, chooseTime)
+                EntryDetailRow("时间", pendingTime?.format(TimeLabel) ?: "选填", Glyph.EDIT, chooseTime)
+                if (pendingTime != null) {
+                    TextButton(onClick = { timeText = null }) { Text("清除时间") }
+                }
             }
         },
         confirmButton = { TextButton(onClick = { onSave(pendingDay, pendingTime) }) { Text("确认") } },

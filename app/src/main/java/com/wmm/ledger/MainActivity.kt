@@ -72,6 +72,8 @@ import com.wmm.ledger.ui.ModelSettings
 import com.wmm.ledger.ui.NavigationBottomGap
 import com.wmm.ledger.ui.NavigationTopGap
 import com.wmm.ledger.ui.SettingsScreen
+import com.wmm.ledger.ui.ScheduledBillsScreen
+import com.wmm.ledger.ui.ScheduledBillEditor
 import com.wmm.ledger.ui.StatsScreen
 import com.wmm.ledger.ui.Tab
 import com.wmm.ledger.ui.TagDrillScreen
@@ -155,6 +157,9 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
         }
     }
     LaunchedEffect(model) { model.feedback.collect { snackbar.showSnackbar(it, withDismissAction = true) } }
+    LaunchedEffect(model, today, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { model.refreshScheduledBills() }
+    }
 
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -164,7 +169,7 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
             keyboard?.hide()
             val returnTo = parent
             route = returnTo
-            parent = if (returnTo == "bill-import") "settings" else null
+            parent = if (returnTo == "bill-import" || returnTo == "scheduled-bills") "settings" else null
         } else {
             tabName = Tab.LEDGER.name
         }
@@ -172,7 +177,13 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
 
     BackHandler(enabled = route != null || tab != Tab.LEDGER, onBack = ::back)
 
-    val destination = Destination(route, if (route == null) 0 else if (parent == null) 1 else 2)
+    val depth = when {
+        route == null -> 0
+        parent == null -> 1
+        parent == "scheduled-bills" -> 3
+        else -> 2
+    }
+    val destination = Destination(route, depth)
     val refined = route == "new" || route?.startsWith("entry:") == true || (route == null && tab == Tab.LEDGER)
     val tabHeight = ledgerNavigationHeight()
     val tabSpace = tabHeight + NavigationBottomGap + NavigationTopGap
@@ -269,7 +280,21 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
                                         assets = { parent = current; route = "assets" },
                                         tags = { parent = current; route = "tags" },
                                         openModel = { parent = current; route = "model" },
-                                        importBill = { parent = current; route = "bill-import" })
+                                        importBill = { parent = current; route = "bill-import" },
+                                        scheduledBills = { parent = current; route = "scheduled-bills" })
+                                    current == "scheduled-bills" -> ScheduledBillsScreen(data, ::back) { id ->
+                                        parent = current
+                                        route = "scheduled-bill:${id.orEmpty()}"
+                                    }
+                                    current.startsWith("scheduled-bill:") -> {
+                                        val id = current.substringAfter(':')
+                                        val bill = remember(current) { data.scheduledBills.firstOrNull { it.id == id } }
+                                        if (id.isEmpty() || bill != null) {
+                                            ScheduledBillEditor(data, bill, model, today) { if (route == current) back() }
+                                        } else {
+                                            LaunchedEffect(current) { if (route == current) back() }
+                                        }
+                                    }
                                     current == "assets" -> AssetsScreen(data, model, ::back)
                                     current == "tags" -> TagsScreen(data, model, ::back)
                                     current == "model" -> ModelSettings(model, provider, keys, ::back)
@@ -306,8 +331,8 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
     }
 
     pendingRestore?.let { backup ->
-        ConfirmDialog("替换本机账本？", "此备份含 ${backup.entries.size} 笔流水和 ${backup.accounts.size} 个账户。" +
-            "恢复会替换本机的流水、标签、资产、资料和报告，无法撤销。", "替换并恢复",
+        ConfirmDialog("替换本机账本？", "此备份含 ${backup.entries.size} 笔流水、${backup.accounts.size} 个账户和 " +
+            "${backup.scheduledBills.size} 条定时账单。恢复会替换本机账本和定时账单，无法撤销。", "替换并恢复",
             model::cancelRestore, model::restore)
     }
 }

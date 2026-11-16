@@ -11,7 +11,9 @@ internal class LedgerHabits(data: LedgerSnapshot, private val zone: ZoneId = Zon
     private val tags = data.tags.filterNot(Tag::archived).associateBy(Tag::id)
     private val scenes = data.scenes.associateBy(Scene::id)
     private val entries = data.entries.asSequence().filter { it.tagId in tags }.take(1500)
-        .map { HabitObservation(it, merchantKey(it.note), minute(it.occurredAt, zone)) }.groupBy { it.entry.kind }
+        .map { entry ->
+            HabitObservation(entry, merchantKey(entry.note), entry.occurredAt.takeIf { entry.hasTime }?.let { minute(it, zone) })
+        }.groupBy { it.entry.kind }
 
     fun suggest(kind: Kind, cents: Long?, time: Long?, note: String, area: String?): HabitChoice? {
         val merchant = merchantKey(note)
@@ -20,7 +22,7 @@ internal class LedgerHabits(data: LedgerSnapshot, private val zone: ZoneId = Zon
         val votes = entries[kind.name].orEmpty().mapNotNull { observed ->
             val old = observed.entry
             val familiarMerchant = sameMerchant(merchant, observed.merchant)
-            val familiarTime = clock != null && timeClose(clock, observed.minute)
+            val familiarTime = clock != null && observed.minute != null && timeClose(clock, observed.minute)
             val familiarAmount = cents != null && amountClose(cents, old.cents)
             val familiarArea = area != null && area == old.habitArea
             if (!familiarMerchant && !(familiarTime && (familiarArea || familiarAmount))) return@mapNotNull null
@@ -42,7 +44,7 @@ internal class LedgerHabits(data: LedgerSnapshot, private val zone: ZoneId = Zon
 }
 
 private data class HabitVote(val category: Pair<String, String?>, val day: String, val weight: Int, val merchant: Boolean)
-private data class HabitObservation(val entry: Entry, val merchant: String, val minute: Int)
+private data class HabitObservation(val entry: Entry, val merchant: String, val minute: Int?)
 private val merchantNoise = Regex("[\\p{P}\\p{Z}\\d]+")
 private val noteDetail = Regex("[·,，;；/：:（(\\n]")
 

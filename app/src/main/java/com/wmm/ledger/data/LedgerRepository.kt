@@ -28,19 +28,20 @@ class LedgerRepository(context: Context) {
         val key = secrets.databaseKey(!app.getDatabasePath(DATABASE_NAME).exists())
         Room.databaseBuilder(app, LedgerDatabase::class.java, DATABASE_NAME)
             .openHelperFactory(SupportOpenHelperFactory(key))
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
             .build()
     }
     private val dao get() = database.ledger()
 
     suspend fun observe() = withContext(Dispatchers.IO) {
-        database.invalidationTracker.createFlow("entries", "tags", "accounts", "reports", "profile", "scenes")
+        database.invalidationTracker.createFlow("entries", "tags", "accounts", "reports", "profile", "scenes", "scheduled_bills")
             .conflate().map { snapshot() }.flowOn(Dispatchers.IO)
     }
 
     suspend fun snapshot(): LedgerSnapshot = withContext(Dispatchers.IO) {
         database.withTransaction {
-            LedgerSnapshot(dao.entries(), dao.tags(), dao.accounts(), dao.reports(), dao.profile() ?: Profile(), dao.scenes())
+            LedgerSnapshot(dao.entries(), dao.tags(), dao.accounts(), dao.reports(), dao.profile() ?: Profile(),
+                dao.scenes(), dao.scheduledBills())
         }
     }
 
@@ -105,6 +106,7 @@ class LedgerRepository(context: Context) {
     suspend fun saveEntry(
         id: String?, kind: Kind, cents: Long, tagId: String, accountId: String?,
         note: String, occurredAt: Long, day: LocalDate, sceneId: String? = null, habitArea: String? = null,
+        hasTime: Boolean = true,
     ) = withContext(Dispatchers.IO) {
         if (cents !in 1..MAX_CENTS) throw LedgerError("请输入有效金额，最多两位小数。")
         if (day !in FIRST_DAY..LAST_DAY || occurredAt > System.currentTimeMillis()) throw LedgerError("请选择有效的发生日期和时间。")
@@ -121,11 +123,62 @@ class LedgerRepository(context: Context) {
             }
             val area = if (old == null) habitArea else old.habitArea.takeIf { occurredAt == old.occurredAt }
             dao.save(Entry(id ?: newId(), kind.name, cents, tagId, accountId, note.trim().take(MAX_NOTE),
-                occurredAt, day.toString(), sceneId, area))
+                occurredAt, day.toString(), sceneId, area, hasTime))
         }
     }
 
     suspend fun deleteEntry(id: String) = withContext(Dispatchers.IO) { dao.deleteEntry(id) }
+
+    internal suspend fun saveScheduledBill(draft: ScheduledBill) = database.withTransaction {
+        val old = draft.id.takeIf(String::isNotEmpty)?.let {
+            dao.scheduledBill(it) ?: throw LedgerError("定时账单已变更，请重新打开。")
+        }
+        val start = LocalDate.parse(draft.startDay)
+        val scheduleChanged = old == null || old.period != draft.period || old.startDay != draft.startDay
+        if (start !in FIRST_DAY..LAST_DAY || scheduleChanged && start < LocalDate.now()) {
+            throw LedgerError("请将首次日期设为今天或以后的日期。")
+        }
+        if (draft.cents !in 1..MAX_CENTS) throw LedgerError("请输入有效金额，最多两位小数。")
+        val tag = dao.tag(draft.tagId)
+        if (tag?.kind != draft.kind || tag.archived) throw LedgerError("请选择一个有效标签。")
+        if (draft.accountId != null && dao.account(draft.accountId)?.archived != false) {
+            throw LedgerError("请选择可用账户。")
+        }
+        if (draft.sceneId != null && (draft.kind != Kind.EXPENSE.name || dao.scene(draft.sceneId) == null)) {
+            throw LedgerError("请选择一个有效的支出场景。")
+        }
+        dao.save(draft.copy(id = old?.id ?: newId(), note = draft.note.trim().take(MAX_NOTE),
+            lastRecordedDay = old?.lastRecordedDay))
+    }
+
+    internal suspend fun deleteScheduledBill(id: String) = dao.deleteScheduledBill(id)
+
+    internal suspend fun recordScheduledBills(
+        zone: ZoneId = ZoneId.systemDefault(),
+        today: LocalDate = LocalDate.now(zone),
+        updateJob: Boolean = false,
+    ): Boolean = database.withTransaction {
+        val bills = dao.scheduledBills()
+        val jobReady = !updateJob || ScheduledBillJob.update(app, bills.isNotEmpty())
+        val due = bills.mapNotNull { bill -> bill.nextDay()?.takeIf { it <= today }?.let { bill to it } }
+        if (due.isEmpty()) return@withTransaction jobReady
+        val labels = LedgerSnapshot(tags = dao.tags(), accounts = dao.accounts())
+        val now = System.currentTimeMillis()
+        val currentDay = bookingDay(now, zone)
+        for ((bill, firstDay) in due) {
+            if (bill.unavailableReason(labels) != null) continue
+            val days = generateSequence(firstDay) { bill.nextDay(it) }.takeWhile { it <= today }.take(366).toList()
+            // 日期游标与流水同事务提交，系统任务重试或用户删掉流水时不会补出重复记录。
+            dao.insertScheduledEntries(days.map { day ->
+                // 当天生成的流水按当前时刻入账，补记使用原定日期的起点，保留余额校准的比较口径。
+                val occurredAt = if (day == currentDay) now else day.atStartOfDay(zone).toInstant().toEpochMilli()
+                Entry(bill.entryId(day), bill.kind, bill.cents, bill.tagId, bill.accountId, bill.note,
+                    occurredAt, day.toString(), bill.sceneId, hasTime = false)
+            })
+            dao.save(bill.copy(lastRecordedDay = days.last().toString()))
+        }
+        jobReady
+    }
 
     suspend fun clearHabitAreas() = withContext(Dispatchers.IO) { dao.clearHabitAreas() }
 
@@ -235,6 +288,7 @@ class LedgerRepository(context: Context) {
     suspend fun replace(snapshot: LedgerSnapshot) = withContext(Dispatchers.IO) {
         database.withTransaction {
             dao.clearEntries()
+            dao.clearScheduledBills()
             dao.clearTags()
             dao.clearScenes()
             dao.clearAccounts()
@@ -243,6 +297,7 @@ class LedgerRepository(context: Context) {
             dao.restoreScenes(snapshot.scenes)
             dao.restoreAccounts(snapshot.accounts)
             dao.restoreEntries(snapshot.entries)
+            dao.restoreScheduledBills(snapshot.scheduledBills)
             dao.restoreReports(snapshot.reports)
             dao.save(snapshot.profile)
             restoreCount.incrementAndGet()
@@ -288,7 +343,8 @@ class LedgerRepository(context: Context) {
                 }
             } else null
             dao.save(Entry(row.id, kind.name, checkNotNull(parseCents(row.amount.trim())), tag.id, null,
-                row.note.trim(), checkNotNull(row.stamp(now, zone)), row.date.trim(), scene?.id))
+                row.note.trim(), checkNotNull(row.stamp(now, zone)), row.date.trim(), scene?.id,
+                hasTime = row.time.isNotBlank()))
             count++
         }
         count
@@ -315,6 +371,13 @@ class LedgerRepository(context: Context) {
 
     companion object {
         const val DATABASE_NAME = "wmm-ledger.db"
+        private var sharedInstance: LedgerRepository? = null
+
+        // 前台和系统后台任务共用连接，Room 可以及时把后台生成的流水通知到界面。
+        @Synchronized
+        internal fun shared(context: Context): LedgerRepository =
+            sharedInstance ?: LedgerRepository(context).also { sharedInstance = it }
+
         fun bookingDay(occurredAt: Long, zone: ZoneId = ZoneId.systemDefault()): LocalDate =
             Instant.ofEpochMilli(occurredAt).atZone(zone).toLocalDate()
     }

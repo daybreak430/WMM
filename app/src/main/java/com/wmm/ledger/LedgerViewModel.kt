@@ -22,6 +22,7 @@ import com.wmm.ledger.data.LedgerSnapshot
 import com.wmm.ledger.data.Period
 import com.wmm.ledger.data.Provider
 import com.wmm.ledger.data.Scene
+import com.wmm.ledger.data.ScheduledBill
 import com.wmm.ledger.data.Tag
 import com.wmm.ledger.data.prepareBackupShare
 import kotlinx.coroutines.CancellationException
@@ -49,7 +50,7 @@ internal data class BillImportState(
 internal data class BillBatch(val type: String, val scene: String, val ids: List<String>)
 
 class LedgerViewModel(application: Application) : AndroidViewModel(application) {
-    private val repository = LedgerRepository(application)
+    private val repository = LedgerRepository.shared(application)
     private val resolver = application.contentResolver
     private val appearancePrefs = application.getSharedPreferences("appearance", Context.MODE_PRIVATE)
     private val habitLocationPrefs = application.getSharedPreferences("habit_location", Context.MODE_PRIVATE)
@@ -113,11 +114,36 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
         perform("无法保存场景顺序。", onFailure) { repository.reorderScenes(order) }
 
     fun saveEntry(id: String?, kind: Kind, amount: Long, tag: String, account: String?, note: String, at: Long,
-        day: LocalDate, sceneId: String?, habitArea: String?, done: () -> Unit) = perform("无法保存流水。") {
+        day: LocalDate, sceneId: String?, habitArea: String?, hasTime: Boolean, done: () -> Unit) = perform("无法保存流水。") {
         repository.saveEntry(id, kind, amount, tag, account, note, at, day, sceneId,
-            habitArea.takeIf { locateHabits.value })
+            habitArea.takeIf { locateHabits.value }, hasTime)
         done()
         notify("已保存")
+    }
+
+    internal suspend fun refreshScheduledBills() {
+        try {
+            if (!repository.recordScheduledBills(updateJob = true)) {
+                notify("后台调度暂未启用，打开应用时会继续检查定时账单。")
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            notify("定时账单暂时无法检查，下次会重试。")
+        }
+    }
+
+    internal fun saveScheduledBill(bill: ScheduledBill, done: () -> Unit, onFailure: () -> Unit) =
+        perform("无法保存定时账单。", onFailure) {
+            repository.saveScheduledBill(bill)
+            refreshScheduledBills()
+            done()
+        }
+
+    internal fun deleteScheduledBill(id: String, done: () -> Unit) = perform("无法删除定时账单。") {
+        repository.deleteScheduledBill(id)
+        refreshScheduledBills()
+        done()
     }
 
     internal fun setHabitLocation(enabled: Boolean) {
@@ -326,6 +352,7 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
         restorePreview.value = null
         fileOperation("恢复失败，原有账本未被覆盖。") {
             repository.replace(snapshot)
+            refreshScheduledBills()
             notify("备份已恢复")
         }
     }

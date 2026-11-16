@@ -206,10 +206,10 @@ private fun LedgerRow(entry: Entry, tag: String, icon: LabelStyle?, account: Str
                     color = if (income) colors.primary else colors.onSurfaceVariant,
                     style = MaterialTheme.typography.labelSmall, maxLines = 1)
             }
-            val time = Instant.ofEpochMilli(entry.occurredAt).atZone(ZoneId.systemDefault()).format(TimeLabel)
-            val subtitle = listOfNotNull(time, account).joinToString(" · ")
-            Text(subtitle, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (!account.isNullOrEmpty()) {
+                Text(account, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
             if (entry.note.isNotBlank()) {
                 Text(entry.note, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -227,7 +227,7 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
     busy: Boolean, hasKey: Boolean, consent: Boolean,
     generate: (Boolean) -> Unit, openModel: () -> Unit, bottomInset: Dp) {
     val summary = remember(data, period, day, today) { data.stats(period, day, today) }
-    val calendar = CalendarAction(day, today, chooseDay)
+    val calendar = CalendarAction(day, today, onSelect = chooseDay)
     var consentDialog by rememberSaveable { mutableStateOf(false) }
     val colors = MaterialTheme.colorScheme
     val trend = remember(data.entries, summary.start, period) {

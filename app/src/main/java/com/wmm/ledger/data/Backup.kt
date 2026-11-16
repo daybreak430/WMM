@@ -13,7 +13,7 @@ import java.time.ZoneOffset
 import java.util.Locale
 
 private const val FORMAT = "wmm-ledger"
-private const val BACKUP_VERSION = 6
+private const val BACKUP_VERSION = 7
 const val MAX_BACKUP_BYTES = 32 * 1024 * 1024
 const val MAX_AVATAR_BYTES = 256 * 1024
 
@@ -53,6 +53,13 @@ object Backup {
             put("accountId", it.accountId ?: JSONObject.NULL); put("note", it.note)
             put("occurredAt", it.occurredAt); put("day", it.day)
             put("sceneId", it.sceneId ?: JSONObject.NULL)
+            put("hasTime", it.hasTime)
+        })
+        put("scheduledBills", array(data.scheduledBills) {
+            put("id", it.id); put("kind", it.kind); put("cents", it.cents); put("tagId", it.tagId)
+            put("accountId", it.accountId ?: JSONObject.NULL); put("sceneId", it.sceneId ?: JSONObject.NULL)
+            put("note", it.note); put("period", it.period); put("startDay", it.startDay)
+            put("lastRecordedDay", it.lastRecordedDay ?: JSONObject.NULL)
         })
         put("reports", array(data.reports) {
             put("period", it.period); put("startDay", it.startDay); put("snapshotId", it.snapshotId)
@@ -113,9 +120,24 @@ object Backup {
             val utcDay = Instant.ofEpochMilli(occurredAt).atOffset(ZoneOffset.UTC).toLocalDate()
             require(bookingDay in utcDay.minusDays(1)..utcDay.plusDays(1))
             Entry(id(), kind, number("cents").also { require(it in 1..MAX_CENTS) }, tagId, accountId,
-                string("note").also { require(it.length <= MAX_NOTE) }, occurredAt, bookingDay.toString(), sceneId)
+                string("note").also { require(it.length <= MAX_NOTE) }, occurredAt, bookingDay.toString(), sceneId,
+                hasTime = version < 7L || flag("hasTime"))
         }
         require(entries.distinctBy { it.id }.size == entries.size)
+        val scheduledBills = if (version < 7) emptyList() else root.list("scheduledBills", 50_000) {
+            val kind = enumValueOf<Kind>(string("kind")).name
+            val tagId = id("tagId").also { require(tagsById[it]?.kind == kind) }
+            val accountId = nullableString("accountId").also { require(it == null || it in accountsById) }
+            val sceneId = nullableString("sceneId")
+            require(sceneId == null || kind == Kind.EXPENSE.name && sceneId in sceneIds)
+            val lastRecordedDay = nullableString("lastRecordedDay")?.let {
+                LocalDate.parse(it).also { date -> require(date in FIRST_DAY..LAST_DAY) }.toString()
+            }
+            ScheduledBill(id(), kind, number("cents").also { require(it in 1..MAX_CENTS) }, tagId, accountId, sceneId,
+                string("note").also { require(it.length <= MAX_NOTE) }, enumValueOf<Period>(string("period")).name,
+                day("startDay").toString(), lastRecordedDay)
+        }
+        require(scheduledBills.distinctBy { it.id }.size == scheduledBills.size)
         val reports = root.list("reports", 50_000) {
             val period = enumValueOf<Period>(string("period"))
             require(version >= 2L || period != Period.YEAR)
@@ -132,7 +154,7 @@ object Backup {
             val avatar = nullableString("avatar")?.let(::decodeAvatar)
             Profile(nickname = nickname, avatar = avatar)
         }
-        return LedgerSnapshot(entries, tags, accounts, reports, profile, scenes)
+        return LedgerSnapshot(entries, tags, accounts, reports, profile, scenes, scheduledBills)
     }
 
     private fun decodeAvatar(raw: String): ByteArray {

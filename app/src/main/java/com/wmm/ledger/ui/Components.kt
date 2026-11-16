@@ -199,15 +199,16 @@ fun ConfirmDialog(title: String, text: String, action: String, onDismiss: () -> 
 }
 
 @Composable
-fun CalendarAction(day: LocalDate, limit: LocalDate = LocalDate.now(), onSelect: (LocalDate) -> Unit): () -> Unit {
+fun CalendarAction(day: LocalDate, limit: LocalDate = LocalDate.now(), earliest: LocalDate = FIRST_DAY,
+    onSelect: (LocalDate) -> Unit): () -> Unit {
     val context = LocalContext.current
     val theme = if (LocalLedgerDark.current) R.style.LedgerPickerDark else R.style.LedgerPickerLight
     return {
         DatePickerDialog(context, theme, { _, year, month, date -> onSelect(LocalDate.of(year, month + 1, date)) },
             day.year, day.monthValue - 1, day.dayOfMonth).apply {
             val zone = ZoneId.systemDefault()
-            datePicker.minDate = FIRST_DAY.atStartOfDay(zone).toInstant().toEpochMilli()
             datePicker.maxDate = limit.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli() - 1
+            datePicker.minDate = earliest.atStartOfDay(zone).toInstant().toEpochMilli()
         }.show()
     }
 }

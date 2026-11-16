@@ -7,6 +7,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.RoomDatabase
@@ -62,6 +63,7 @@ data class Entry(
     val day: String,
     val sceneId: String? = null,
     val habitArea: String? = null,
+    @ColumnInfo(defaultValue = "1") val hasTime: Boolean = true,
 )
 
 @Entity(tableName = "reports", primaryKeys = ["period", "startDay"])
@@ -88,6 +90,13 @@ interface LedgerDao {
     @Query("SELECT * FROM reports") suspend fun reports(): List<Report>
     @Query("SELECT * FROM profile WHERE id = 0") suspend fun profile(): Profile?
     @Query("SELECT * FROM entries WHERE id = :id") suspend fun entry(id: String): Entry?
+    @Query("SELECT * FROM scheduled_bills ORDER BY startDay, id") suspend fun scheduledBills(): List<ScheduledBill>
+    @Query("SELECT * FROM scheduled_bills WHERE id = :id") suspend fun scheduledBill(id: String): ScheduledBill?
+    @Upsert suspend fun save(bill: ScheduledBill)
+    @Query("DELETE FROM scheduled_bills WHERE id = :id") suspend fun deleteScheduledBill(id: String)
+    @Query("DELETE FROM scheduled_bills") suspend fun clearScheduledBills()
+    @Insert suspend fun restoreScheduledBills(bills: List<ScheduledBill>)
+    @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insertScheduledEntries(entries: List<Entry>)
     @Query("SELECT * FROM tags WHERE id = :id") suspend fun tag(id: String): Tag?
     @Query("SELECT * FROM accounts WHERE id = :id") suspend fun account(id: String): Account?
     @Upsert suspend fun save(tag: Tag)
@@ -118,7 +127,10 @@ interface LedgerDao {
     @Query("DELETE FROM reports") suspend fun clearReports()
 }
 
-@Database(entities = [Tag::class, Account::class, Entry::class, Report::class, Profile::class, Scene::class], version = 5)
+@Database(
+    entities = [Tag::class, Account::class, Entry::class, Report::class, Profile::class, Scene::class, ScheduledBill::class],
+    version = 6,
+)
 abstract class LedgerDatabase : RoomDatabase() {
     abstract fun ledger(): LedgerDao
 }
@@ -154,5 +166,19 @@ internal val MIGRATION_4_5 = object : Migration(4, 5) {
         db.execSQL("ALTER TABLE tags ADD COLUMN iconColor TEXT")
         db.execSQL("ALTER TABLE scenes ADD COLUMN iconKey TEXT")
         db.execSQL("ALTER TABLE scenes ADD COLUMN iconColor TEXT")
+    }
+}
+
+internal val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // 旧版无法区分精确时间和占位时间，迁移时保留原有显示。
+        db.execSQL("ALTER TABLE entries ADD COLUMN hasTime INTEGER NOT NULL DEFAULT 1")
+        db.execSQL("""
+            CREATE TABLE scheduled_bills (
+                id TEXT NOT NULL PRIMARY KEY, kind TEXT NOT NULL, cents INTEGER NOT NULL,
+                tagId TEXT NOT NULL, accountId TEXT, sceneId TEXT, note TEXT NOT NULL,
+                period TEXT NOT NULL, startDay TEXT NOT NULL, lastRecordedDay TEXT
+            )
+        """.trimIndent())
     }
 }
