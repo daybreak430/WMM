@@ -126,7 +126,10 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())
             .padding(horizontal = pageInset, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            LedgerSegments(Kind.entries, kind, { it.title }) { option ->
+            LedgerSegments(
+                Kind.entries, kind, { it.title },
+                containerColor = if (LocalLedgerDark.current) colors.surfaceContainerHigh else colors.surface,
+            ) { option ->
                 if (option != kind) {
                     kindName = option.name
                     tagId = null
@@ -343,7 +346,7 @@ private fun EntryAmount(amount: String, error: Boolean, autoFocus: Boolean, onCh
 private fun EntryTagChip(label: String, selected: Boolean? = null, optional: Boolean = false,
     add: Boolean = false, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(10.dp)
+    val shape = RoundedCornerShape(12.dp)
     val interaction = when {
         selected == null -> Modifier.clickable(
             interactionSource = null, indication = null, role = Role.Button, onClick = onClick,
@@ -358,16 +361,19 @@ private fun EntryTagChip(label: String, selected: Boolean? = null, optional: Boo
     }
     val chipFill = when (selected) {
         true -> colors.primaryContainer
-        false -> colors.surfaceVariant
+        false -> if (LocalLedgerDark.current) colors.surfaceContainerHigh else colors.surface
         null -> Color.Transparent
     }
-    val tint = if (selected != false) colors.primary else colors.onSurface
+    val tint = if (selected == false) colors.onSurfaceVariant else colors.primary
+    val labelStyle = MaterialTheme.typography.labelLarge.copy(
+        fontWeight = if (selected == null) FontWeight.SemiBold else FontWeight.Medium,
+    )
     Box(Modifier.heightIn(min = 44.dp).clip(shape).then(interaction), contentAlignment = Alignment.Center) {
         Surface(shape = shape, color = chipFill) {
             Row(Modifier.heightIn(min = 34.dp).padding(horizontal = 11.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (add) LucideIcon(Glyph.PLUS, tint, size = 16)
-                Text(label, style = MaterialTheme.typography.labelLarge, color = tint)
+                Text(label, style = labelStyle, color = tint)
             }
         }
     }
