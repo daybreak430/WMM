@@ -29,7 +29,8 @@ class StorageAndModelTest {
                 Tag("lunch", "EXPENSE", "餐饮", sortOrder = 0)),
             entries = listOf(Entry("entry", "EXPENSE", 5_000, "tag", "card", "不可发送的备注", now, today.toString(), "trip")),
             scenes = listOf(Scene("trip", "出差", sortOrder = 0)),
-            accounts = listOf(Account("card", "SAVINGS", "我的卡", 500_000, now - 3_600_000)),
+            accounts = listOf(Account("card", "SAVINGS", "我的卡", 500_000, now - 3_600_000,
+                sortOrder = 0, isDefault = true)),
             profile = Profile(nickname = "仅本地"),
         )
         val analysis = originalData.reportAnalysis(Period.YEAR, today, today)
@@ -78,6 +79,15 @@ class StorageAndModelTest {
         val importedTwo = Backup.decode(versionTwo.toString().byteInputStream())
         assertEquals(complete.tags.map { it.copy(sortOrder = null) }, importedTwo.tags)
         assertEquals(complete.scenes.map { it.copy(sortOrder = null) }, importedTwo.scenes)
+        val versionThree = JSONObject(encoded.decodeToString()).put("version", 3).apply {
+            getJSONArray("accounts").getJSONObject(0).apply { remove("sortOrder"); remove("isDefault") }
+        }
+        val importedThree = Backup.decode(versionThree.toString().byteInputStream())
+        assertEquals(complete.accounts.map { it.copy(sortOrder = null, isDefault = false) }, importedThree.accounts)
+
+        restored.archiveAccount("card", true)
+        assertFalse(restored.snapshot().accounts.single().isDefault)
+        assertEquals(complete.entries, restored.snapshot().entries)
     }
 
     @Test fun accountRelinkAndDeletionRespectPersistedCalibration() = runBlocking {

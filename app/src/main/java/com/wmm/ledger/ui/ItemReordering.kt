@@ -19,9 +19,9 @@ import com.mohamedrejeb.compose.dnd.reorder.reorderableItem
 import com.mohamedrejeb.compose.dnd.rememberDragAndDropState
 
 @Composable
-internal fun rememberTagOrder(ids: List<String>): TagOrder = remember(ids) { TagOrder(ids) }
+internal fun rememberItemOrder(ids: List<String>): ItemOrder = remember(ids) { ItemOrder(ids) }
 
-internal class TagOrder(private val saved: List<String>) {
+internal class ItemOrder(private val saved: List<String>) {
     var ids by mutableStateOf(saved)
         private set
     var saving by mutableStateOf(false)
@@ -36,7 +36,7 @@ internal class TagOrder(private val saved: List<String>) {
         val subset = ids.filter { it in visible }.toMutableList()
         val destination = subset.indexOf(target)
         subset.add(destination, subset.removeAt(subset.indexOf(id)))
-        // 折叠时仅交换可见标签的位置，未展示的标签留在原序位。
+        // 仅调整参与拖拽的条目，折叠区内未展示的条目保持原序位。
         val reordered = subset.iterator()
         ids = ids.map { if (it in visible) reordered.next() else it }
     }
@@ -53,12 +53,12 @@ internal class TagOrder(private val saved: List<String>) {
 }
 
 @Composable
-internal fun rememberTagDragState() = rememberDragAndDropState<String>(dragAfterLongPress = true)
+internal fun rememberReorderDragState() = rememberDragAndDropState<String>(dragAfterLongPress = true)
 
 @Composable
-internal fun ReorderableTag(
+internal fun ReorderableLedgerItem(
     id: String,
-    order: TagOrder,
+    order: ItemOrder,
     visibleIds: Set<String>,
     dragState: DragAndDropState<String>,
     save: (List<String>, () -> Unit) -> Unit,

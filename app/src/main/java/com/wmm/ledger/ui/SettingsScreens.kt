@@ -239,8 +239,8 @@ fun TagsScreen(data: LedgerSnapshot, model: LedgerViewModel, back: () -> Unit) {
             IconButton(onClick = { edit = "new" }) { LucideIcon(Glyph.PLUS, description = "添加标签") }
         }
         key(kind) {
-            val dragState = rememberTagDragState()
-            val order = rememberTagOrder(tags.map { it.id })
+            val dragState = rememberReorderDragState()
+            val order = rememberItemOrder(tags.map { it.id })
             val listState = rememberLazyListState()
             DragAndDropContainer(dragState, modifier = Modifier.weight(1f)) {
                 LazyColumn(
@@ -259,7 +259,7 @@ fun TagsScreen(data: LedgerSnapshot, model: LedgerViewModel, back: () -> Unit) {
                         item { GroupCard { EmptyPanel("还没有${kind.title}标签", glyph = Glyph.TAG) } }
                     }
                     items(order.ids, key = { it }) { id ->
-                        ReorderableTag(
+                        ReorderableLedgerItem(
                             id, order, tagsById.keys, dragState,
                             save = { updated, failed -> model.reorderTags(kind, updated, failed) },
                             modifier = Modifier.fillMaxWidth().animateItem(),

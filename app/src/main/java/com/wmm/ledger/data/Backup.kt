@@ -13,7 +13,7 @@ import java.time.ZoneOffset
 import java.util.Locale
 
 private const val FORMAT = "wmm-ledger"
-private const val BACKUP_VERSION = 3
+private const val BACKUP_VERSION = 4
 const val MAX_BACKUP_BYTES = 32 * 1024 * 1024
 const val MAX_AVATAR_BYTES = 256 * 1024
 
@@ -44,6 +44,7 @@ object Backup {
         put("accounts", array(data.accounts) {
             put("id", it.id); put("type", it.type); put("name", it.name)
             put("baselineCents", it.baselineCents); put("calibratedAt", it.calibratedAt); put("archived", it.archived)
+            put("sortOrder", it.sortOrder ?: JSONObject.NULL); put("isDefault", it.isDefault)
         })
         put("entries", array(data.entries) {
             put("id", it.id); put("kind", it.kind); put("cents", it.cents); put("tagId", it.tagId)
@@ -84,8 +85,13 @@ object Backup {
         require(sceneIds.size == scenes.size && scenes.distinctBy { it.name.lowercase(Locale.ROOT) }.size == scenes.size)
         val accounts = root.list("accounts", 50_000) {
             Account(id(), enumValueOf<AccountType>(string("type")).name, name(),
-                number("baselineCents").also { require(it in -MAX_CENTS..MAX_CENTS) }, time("calibratedAt"), flag("archived"))
+                number("baselineCents").also { require(it in -MAX_CENTS..MAX_CENTS) }, time("calibratedAt"), flag("archived"),
+                sortOrder(version, since = 4), version >= 4L && flag("isDefault"))
         }
+        val rankedAccounts = accounts.filterNot { it.archived }.mapNotNull { it.sortOrder }
+        require(rankedAccounts.toSet().size == rankedAccounts.size)
+        val defaultAccounts = accounts.filter { it.isDefault }
+        require(defaultAccounts.size <= 1 && defaultAccounts.none { it.archived })
         val tagsById = tags.associateBy { it.id }
         val accountsById = accounts.associateBy { it.id }
         require(tagsById.size == tags.size && accountsById.size == accounts.size)
@@ -151,8 +157,8 @@ object Backup {
         else -> error("非法的整数")
     }
     private fun JSONObject.flag(key: String): Boolean = get(key) as Boolean
-    private fun JSONObject.sortOrder(version: Long): Int? =
-        if (version < 3L || get("sortOrder") == JSONObject.NULL) null
+    private fun JSONObject.sortOrder(version: Long, since: Long = 3): Int? =
+        if (version < since || get("sortOrder") == JSONObject.NULL) null
         else number("sortOrder").also { require(it in 0..Int.MAX_VALUE.toLong()) }.toInt()
     private fun JSONObject.nullableString(key: String): String? = get(key).let { if (it == JSONObject.NULL) null else it as String }
     private fun JSONObject.id(key: String = "id") = string(key).also { require(it.length in 1..64 && it.none { c -> c.isISOControl() }) }

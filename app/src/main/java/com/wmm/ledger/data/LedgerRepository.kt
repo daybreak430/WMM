@@ -26,7 +26,7 @@ class LedgerRepository(context: Context) {
         val key = secrets.databaseKey(!app.getDatabasePath(DATABASE_NAME).exists())
         Room.databaseBuilder(app, LedgerDatabase::class.java, DATABASE_NAME)
             .openHelperFactory(SupportOpenHelperFactory(key))
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
             .build()
     }
     private val dao get() = database.ledger()
@@ -74,7 +74,7 @@ class LedgerRepository(context: Context) {
     }
 
     private fun verifyOrder(order: List<String>, ids: Set<String>) {
-        if (order.size != ids.size || order.toSet() != ids) throw LedgerError("标签列表已更新，请重新排序。")
+        if (order.size != ids.size || order.toSet() != ids) throw LedgerError("列表已更新，请重新排序。")
     }
 
     suspend fun saveScene(name: String): Scene = withContext(Dispatchers.IO) {
@@ -131,7 +131,22 @@ class LedgerRepository(context: Context) {
     }
 
     suspend fun archiveAccount(id: String, archive: Boolean) = withContext(Dispatchers.IO) {
-        database.withTransaction { dao.account(id)?.let { dao.save(it.copy(archived = archive)) } }
+        database.withTransaction {
+            dao.account(id)?.takeIf { it.archived != archive }?.let {
+                dao.save(it.copy(archived = archive, sortOrder = null, isDefault = false))
+            }
+        }
+    }
+
+    suspend fun setDefaultAccount(id: String?) = database.withTransaction {
+        if (id != null && dao.account(id)?.archived != false) throw LedgerError("请选择可用账户。")
+        dao.setDefaultAccount(id)
+    }
+
+    suspend fun reorderAccounts(order: List<String>) = database.withTransaction {
+        val accounts = dao.accounts().filterNot { it.archived }.associateBy { it.id }
+        verifyOrder(order, accounts.keys)
+        dao.updateAccounts(order.mapIndexed { index, id -> accounts.getValue(id).copy(sortOrder = index) })
     }
 
     suspend fun saveNickname(name: String) = withContext(Dispatchers.IO) {

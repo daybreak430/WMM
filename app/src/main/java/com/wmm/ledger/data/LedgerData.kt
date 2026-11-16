@@ -1,5 +1,6 @@
 package com.wmm.ledger.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
@@ -34,6 +35,8 @@ data class Account(
     val baselineCents: Long,
     val calibratedAt: Long,
     val archived: Boolean = false,
+    val sortOrder: Int? = null,
+    @ColumnInfo(defaultValue = "0") val isDefault: Boolean = false,
 )
 
 @Entity(
@@ -75,7 +78,8 @@ interface LedgerDao {
     @Query("SELECT * FROM tags ORDER BY name COLLATE NOCASE") suspend fun tags(): List<Tag>
     @Query("SELECT * FROM scenes ORDER BY name COLLATE NOCASE") suspend fun scenes(): List<Scene>
     @Query("SELECT * FROM scenes WHERE id = :id") suspend fun scene(id: String): Scene?
-    @Query("SELECT * FROM accounts ORDER BY calibratedAt DESC, id") suspend fun accounts(): List<Account>
+    @Query("SELECT * FROM accounts ORDER BY sortOrder IS NULL, sortOrder, calibratedAt DESC, id")
+    suspend fun accounts(): List<Account>
     @Query("SELECT * FROM entries ORDER BY day DESC, occurredAt DESC, id") suspend fun entries(): List<Entry>
     @Query("SELECT * FROM reports") suspend fun reports(): List<Report>
     @Query("SELECT * FROM profile WHERE id = 0") suspend fun profile(): Profile?
@@ -87,6 +91,12 @@ interface LedgerDao {
     @Update suspend fun updateScenes(scenes: List<Scene>)
     @Insert suspend fun addScene(scene: Scene)
     @Upsert suspend fun save(account: Account)
+    @Update suspend fun updateAccounts(accounts: List<Account>)
+    @Query("""
+        UPDATE accounts SET isDefault = CASE WHEN id = :id THEN 1 ELSE 0 END
+        WHERE isDefault = 1 OR id = :id
+    """)
+    suspend fun setDefaultAccount(id: String?)
     @Upsert suspend fun save(entry: Entry)
     @Upsert suspend fun save(report: Report)
     @Upsert suspend fun save(profile: Profile)
@@ -103,7 +113,7 @@ interface LedgerDao {
     @Query("DELETE FROM reports") suspend fun clearReports()
 }
 
-@Database(entities = [Tag::class, Account::class, Entry::class, Report::class, Profile::class, Scene::class], version = 3)
+@Database(entities = [Tag::class, Account::class, Entry::class, Report::class, Profile::class, Scene::class], version = 4)
 abstract class LedgerDatabase : RoomDatabase() {
     abstract fun ledger(): LedgerDao
 }
@@ -122,5 +132,12 @@ internal val MIGRATION_2_3 = object : Migration(2, 3) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE tags ADD COLUMN sortOrder INTEGER")
         db.execSQL("ALTER TABLE scenes ADD COLUMN sortOrder INTEGER")
+    }
+}
+
+internal val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE accounts ADD COLUMN sortOrder INTEGER")
+        db.execSQL("ALTER TABLE accounts ADD COLUMN isDefault INTEGER NOT NULL DEFAULT 0")
     }
 }

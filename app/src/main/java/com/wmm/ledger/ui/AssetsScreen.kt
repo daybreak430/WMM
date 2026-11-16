@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -39,6 +40,8 @@ import com.wmm.ledger.data.currency
 import com.wmm.ledger.data.editableAmount
 import com.wmm.ledger.data.parseCents
 import com.wmm.ledger.data.validName
+import com.mohamedrejeb.compose.dnd.DragAndDropContainer
+import com.mohamedrejeb.compose.dnd.scroll.dragAutoScroll
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -46,8 +49,12 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun AssetsScreen(data: LedgerSnapshot, model: LedgerViewModel) {
     val balances = remember(data) { data.accountBalances() }
-    val active = data.accounts.filterNot { it.archived }
+    val active = remember(data.accounts) { data.accounts.filterNot { it.archived } }
+    val activeById = remember(active) { active.associateBy { it.id } }
     val archived = data.accounts.filter { it.archived }
+    val order = rememberItemOrder(active.map { it.id })
+    val dragState = rememberReorderDragState()
+    val listState = rememberLazyListState()
     var accountEditor by rememberSaveable { mutableStateOf<String?>(null) }
     var accountOptions by rememberSaveable { mutableStateOf<String?>(null) }
     var accountCalibration by rememberSaveable { mutableStateOf<String?>(null) }
@@ -59,28 +66,40 @@ fun AssetsScreen(data: LedgerSnapshot, model: LedgerViewModel) {
                 Text("添加账户", Modifier.padding(start = 4.dp))
             }
         })
-        LazyColumn(contentPadding = PaddingValues(start = PagePadding, end = PagePadding, top = 8.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            item("net-assets") {
-                BalancePanel {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("净资产总额", Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.labelLarge)
-                        SummaryLabel("${active.size} 个账户", Glyph.WALLET)
+        DragAndDropContainer(dragState, modifier = Modifier.weight(1f)) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().dragAutoScroll(dragState, listState),
+                state = listState,
+                contentPadding = PaddingValues(start = PagePadding, end = PagePadding, top = 8.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                item("net-assets") {
+                    BalancePanel {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text("净资产总额", Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.labelLarge)
+                            SummaryLabel("${active.size} 个账户", Glyph.WALLET)
+                        }
+                        AmountText(currency(active.sumOf { balances[it.id] ?: 0L }),
+                            modifier = Modifier.fillMaxWidth().padding(top = 5.dp), style = HeroNumber)
                     }
-                    AmountText(currency(active.sumOf { balances[it.id] ?: 0L }),
-                        modifier = Modifier.fillMaxWidth().padding(top = 5.dp), style = HeroNumber)
                 }
-            }
-            item("account-title") { SectionTitle("账户", Modifier.padding(top = 5.dp)) }
-            if (active.isEmpty()) item("empty") { GroupCard { EmptyPanel("还没有账户", glyph = Glyph.WALLET) } }
-            items(active, key = { it.id }) { account ->
-                AccountCard(account, balances[account.id] ?: 0) { accountOptions = account.id }
-            }
-            if (archived.isNotEmpty()) {
-                item("archived-title") { SectionTitle("已归档", Modifier.padding(top = 7.dp)) }
-                items(archived, key = { it.id }) { account ->
-                    AccountCard(account, balances[account.id] ?: 0) { accountOptions = account.id }
+                item("account-title") { SectionTitle("账户", Modifier.padding(top = 5.dp)) }
+                if (active.isEmpty()) item("empty") { GroupCard { EmptyPanel("还没有账户", glyph = Glyph.WALLET) } }
+                items(order.ids, key = { "account:$it" }) { id ->
+                    ReorderableLedgerItem(
+                        id, order, activeById.keys, dragState,
+                        save = { updated, failed -> model.reorderAccounts(updated, failed) },
+                        modifier = Modifier.fillMaxWidth().animateItem(),
+                    ) {
+                        AccountCard(activeById.getValue(id), balances[id] ?: 0) { accountOptions = id }
+                    }
+                }
+                if (archived.isNotEmpty()) {
+                    item("archived-title") { SectionTitle("已归档", Modifier.padding(top = 7.dp)) }
+                    items(archived, key = { "account:${it.id}" }) { account ->
+                        AccountCard(account, balances[account.id] ?: 0) { accountOptions = account.id }
+                    }
                 }
             }
         }
@@ -122,7 +141,10 @@ fun AssetsScreen(data: LedgerSnapshot, model: LedgerViewModel) {
         CalibrationDialog(calibrating, balances[calibrating.id] ?: 0, model) { accountCalibration = null }
     }
     if (accountArchive != null) {
-        ConfirmDialog("归档账户？", "归档后不再计入净资产总额，关联的旧流水仍会保留。", "归档",
+        val clearsDefault = data.accounts.any { it.id == accountArchive && it.isDefault }
+        val message = "归档后不再计入净资产总额，关联的旧流水仍会保留。" +
+            if (clearsDefault) "归档也会取消此账户的默认关联。" else ""
+        ConfirmDialog("归档账户？", message, "归档",
             { accountArchive = null }) {
             accountArchive?.let { model.archiveAccount(it, true) }
             accountArchive = null

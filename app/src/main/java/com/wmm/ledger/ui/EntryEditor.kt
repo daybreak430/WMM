@@ -91,9 +91,16 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
     val kind = Kind.valueOf(kindName)
     var amountText by rememberSaveable { mutableStateOf(initial?.let { editableAmount(it.cents) } ?: "") }
     val cents = parseCents(amountText)
+    val scenes = remember(data.scenes, data.entries) { data.orderedScenes() }
+    val activeAccounts = remember(data.accounts) { data.accounts.filterNot { it.archived } }
+    val defaultAccount = activeAccounts.firstOrNull { it.isDefault }
     var tagId by rememberSaveable { mutableStateOf(initial?.tagId) }
-    var sceneId by rememberSaveable { mutableStateOf(initial?.sceneId) }
-    var accountId by rememberSaveable { mutableStateOf(initial?.accountId) }
+    var sceneId by rememberSaveable {
+        mutableStateOf(if (initial == null) scenes.firstOrNull()?.id else initial.sceneId)
+    }
+    var chosenAccountId by rememberSaveable { mutableStateOf(initial?.accountId) }
+    var accountChosen by rememberSaveable { mutableStateOf(false) }
+    val accountId = if (initial == null && !accountChosen) defaultAccount?.id else chosenAccountId
     var note by rememberSaveable { mutableStateOf(initial?.note.orEmpty()) }
     var occurredAt by rememberSaveable { mutableStateOf(initial?.occurredAt ?: System.currentTimeMillis()) }
     var bookedDay by rememberSaveable { mutableStateOf(initial?.day ?: LedgerRepository.bookingDay(occurredAt).toString()) }
@@ -103,6 +110,8 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
     var tagDialog by rememberSaveable { mutableStateOf(false) }
     var newScene by rememberSaveable { mutableStateOf(false) }
     var accountDialog by rememberSaveable { mutableStateOf(false) }
+    var defaultAccountDialog by rememberSaveable { mutableStateOf(false) }
+    var savingDefault by remember { mutableStateOf(false) }
     var noteEditor by rememberSaveable { mutableStateOf(false) }
     var dateEditor by rememberSaveable { mutableStateOf(false) }
     var deleteDialog by rememberSaveable { mutableStateOf(false) }
@@ -110,13 +119,12 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
     var showTags by rememberSaveable { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     val tags = remember(data.tags, data.entries, kind) { data.orderedTags(kind) }
-    val scenes = remember(data.scenes, data.entries) { data.orderedScenes() }
     val sceneLabels = remember(scenes) { scenes.associate { it.id to it.name } }
     val tagLabels = remember(tags) { tags.associate { it.id to it.name } }
     val archivedTag = data.tags.firstOrNull { it.archived && it.id == initial?.tagId && it.kind == kindName }
     val account = data.accounts.firstOrNull { it.id == accountId }
-    val tagDrag = key(kind) { rememberTagDragState() }
-    val sceneDrag = rememberTagDragState()
+    val tagDrag = key(kind) { rememberReorderDragState() }
+    val sceneDrag = rememberReorderDragState()
     val scroll = rememberScrollState()
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = LocalFocusManager.current
@@ -244,19 +252,47 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
             }
         }
     }
-    if (accountDialog) {
+    if (accountDialog && defaultAccountDialog) {
+        fun selectDefault(id: String?) {
+            savingDefault = true
+            model.setDefaultAccount(id, done = {
+                savingDefault = false
+                defaultAccountDialog = false
+            }, onFailure = { savingDefault = false })
+        }
+        LedgerAlertDialog(onDismissRequest = { defaultAccountDialog = false },
+            title = { Text("默认关联账户") }, text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    SettingsRow("不设置默认账户", end = if (defaultAccount == null) "当前" else null,
+                        enabled = !savingDefault) { selectDefault(null) }
+                    activeAccounts.forEach { item ->
+                        Hairline()
+                        SettingsRow(item.name, end = if (defaultAccount?.id == item.id) "当前" else null,
+                            enabled = !savingDefault) { selectDefault(item.id) }
+                    }
+                }
+            }, confirmButton = {
+                TextButton(onClick = { defaultAccountDialog = false }) { Text("返回") }
+            })
+    } else if (accountDialog) {
         val available = data.accounts.filter { !it.archived || it.id == initial?.accountId }
+        fun chooseAccount(id: String?) {
+            chosenAccountId = id
+            accountChosen = true
+            accountDialog = false
+        }
         LedgerAlertDialog(onDismissRequest = { accountDialog = false }, title = { Text("关联账户") }, text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
+                SettingsRow("默认关联账户", end = defaultAccount?.name ?: "未设置",
+                    enabled = activeAccounts.isNotEmpty() && !savingDefault) { defaultAccountDialog = true }
+                Hairline()
                 SettingsRow("不关联", end = if (accountId == null) "当前" else null) {
-                    accountId = null
-                    accountDialog = false
+                    chooseAccount(null)
                 }
                 available.forEach { item ->
                     Hairline()
                     SettingsRow(item.name, end = if (accountId == item.id) "当前" else null) {
-                        accountId = item.id
-                        accountDialog = false
+                        chooseAccount(item.id)
                     }
                 }
                 if (available.isEmpty()) Text("暂无账户，可在资产页添加。", Modifier.padding(12.dp),
@@ -303,7 +339,7 @@ private fun EntryTagGroup(
 ) {
     val colors = MaterialTheme.colorScheme
     val savedIds = labels.keys.toList()
-    val order = rememberTagOrder(savedIds)
+    val order = rememberItemOrder(savedIds)
     val visibleIds = remember(savedIds, selected, expanded) {
         if (expanded) labels.keys
         else (savedIds.take(VISIBLE_TAG_LIMIT) + listOfNotNull(selected?.takeIf { it in labels })).toSet()
@@ -317,7 +353,7 @@ private fun EntryTagGroup(
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     order.ids.filter { it in visibleIds }.forEach { id ->
                         key(id) {
-                            ReorderableTag(id, order, visibleIds, dragState, save, Modifier.animateBounds(this@LookaheadScope)) {
+                            ReorderableLedgerItem(id, order, visibleIds, dragState, save, Modifier.animateBounds(this@LookaheadScope)) {
                                 EntryTagChip(labels.getValue(id), selected = selected == id, optional = optional) { select(id) }
                             }
                         }

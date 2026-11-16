@@ -111,6 +111,12 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
     fun archiveAccount(id: String, archive: Boolean) =
         perform("无法修改账户。") { repository.archiveAccount(id, archive) }
 
+    fun reorderAccounts(order: List<String>, onFailure: () -> Unit) =
+        perform("无法保存账户顺序。", onFailure) { repository.reorderAccounts(order) }
+
+    fun setDefaultAccount(id: String?, done: () -> Unit, onFailure: () -> Unit) =
+        perform("无法设置默认账户。", onFailure) { repository.setDefaultAccount(id); done() }
+
     fun saveNickname(name: String, done: () -> Unit) =
         perform("无法保存昵称。") { repository.saveNickname(name); done() }
 
