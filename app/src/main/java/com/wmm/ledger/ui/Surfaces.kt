@@ -27,6 +27,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,9 +45,10 @@ private val ActionShape = RoundedCornerShape(17.dp)
 private val SummaryShape = RoundedCornerShape(27.dp)
 
 @Composable
-internal fun LedgerScreenFrame(refined: Boolean, content: @Composable () -> Unit) {
+internal fun LedgerScreenFrame(refined: Boolean, tabKey: String, content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize()) {
-        LedgerBackdrop(refined)
+        // 底栏切换时背景和内容同一帧更新，同一标签内的详情仍可过渡。
+        key(tabKey) { LedgerBackdrop(refined) }
         content()
     }
 }
@@ -165,7 +167,8 @@ fun PrimaryAction(text: String, onClick: () -> Unit, modifier: Modifier = Modifi
 }
 
 @Composable
-fun <T> LedgerSegments(options: List<T>, selected: T, title: (T) -> String, onSelect: (T) -> Unit) {
+fun <T> LedgerSegments(options: List<T>, selected: T, title: (T) -> String,
+    animateSelection: Boolean = true, onSelect: (T) -> Unit) {
     val colors = MaterialTheme.colorScheme
     val refined = LocalLedgerRefinement.current
     Surface(
@@ -181,10 +184,10 @@ fun <T> LedgerSegments(options: List<T>, selected: T, title: (T) -> String, onSe
             for (option in options) {
                 val active = selected == option
                 val shape = RoundedCornerShape(11.dp)
-                val fill by animateColorAsState(if (active) colors.primaryContainer else Color.Transparent,
-                    tween(170), label = "筛选底色")
-                val tint by animateColorAsState(if (active) colors.primary else colors.onSurfaceVariant,
-                    tween(170), label = "筛选文字")
+                val activeFill = if (active) colors.primaryContainer else Color.Transparent
+                val activeTint = if (active) colors.primary else colors.onSurfaceVariant
+                val fill = if (animateSelection) animateColorAsState(activeFill, tween(170), label = "筛选底色").value else activeFill
+                val tint = if (animateSelection) animateColorAsState(activeTint, tween(170), label = "筛选文字").value else activeTint
                 Box(
                     Modifier.weight(1f).heightIn(min = if (refined) 44.dp else 48.dp).clip(shape)
                         .background(fill)

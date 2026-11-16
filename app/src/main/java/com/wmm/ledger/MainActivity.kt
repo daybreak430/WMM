@@ -10,9 +10,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -184,7 +181,7 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
 
     val destination = Destination(route, if (route == null) 0 else if (parent == null) 1 else 2)
     val refined = route == "new" || route?.startsWith("entry:") == true || (route == null && tab == Tab.LEDGER)
-    LedgerScreenFrame(refined) {
+    LedgerScreenFrame(refined, tabName) {
         Scaffold(
             containerColor = Color.Transparent,
             contentColor = MaterialTheme.colorScheme.onBackground,
@@ -213,38 +210,31 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
                     targetState = destination,
                     contentKey = { it.route },
                     modifier = modifier,
-                    transitionSpec = { pageMotion(if (targetState.depth >= initialState.depth) 1 else -1, isDetail = true) },
+                    transitionSpec = { pageMotion(if (targetState.depth >= initialState.depth) 1 else -1) },
                     label = "详情页转场",
                 ) { screen ->
                     val current = screen.route
                     val active = screen == destination
                     if (current == null) {
                         Column(Modifier.fillMaxSize().blockExitingPage(active)) {
-                            AnimatedContent(
-                                targetState = tab,
-                                modifier = Modifier.weight(1f).fillMaxWidth().clipToBounds(),
-                                transitionSpec = { pageMotion(if (targetState.ordinal > initialState.ordinal) 1 else -1) },
-                                label = "底部页面切换",
-                            ) { shown ->
-                                Box(Modifier.fillMaxSize().blockExitingPage(shown == tab)) {
-                                    LedgerScreenTheme(shown == Tab.LEDGER) {
-                                        navState.SaveableStateProvider(shown.name) {
-                                            when (shown) {
-                                                Tab.LEDGER -> LedgerScreen(data, today, { route = "settings" }, {
-                                                    dayText = today.toString()
-                                                    followToday = true
-                                                    periodName = Period.MONTH.name
-                                                    tabName = Tab.STATS.name
-                                                }, { route = "new" }, { route = "entry:${it.id}" })
-                                                Tab.STATS -> StatsScreen(data, today, period, day, { periodName = it.name }, {
-                                                    dayText = it.toString()
-                                                    followToday = it == today
-                                                }, { route = "tag:$it" }, { route = "scene:$it" }, generating,
-                                                    provider in keys, model.hasReportConsent(),
-                                                    { agreed -> model.generate(period, day, agreed) },
-                                                    { route = "model" })
-                                                Tab.ASSETS -> AssetsScreen(data, model)
-                                            }
+                            Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
+                                LedgerScreenTheme(tab == Tab.LEDGER) {
+                                    navState.SaveableStateProvider(tab.name) {
+                                        when (tab) {
+                                            Tab.LEDGER -> LedgerScreen(data, today, { route = "settings" }, {
+                                                dayText = today.toString()
+                                                followToday = true
+                                                periodName = Period.MONTH.name
+                                                tabName = Tab.STATS.name
+                                            }, { route = "new" }, { route = "entry:${it.id}" })
+                                            Tab.STATS -> StatsScreen(data, today, period, day, { periodName = it.name }, {
+                                                dayText = it.toString()
+                                                followToday = it == today
+                                            }, { route = "tag:$it" }, { route = "scene:$it" }, generating,
+                                                provider in keys, model.hasReportConsent(),
+                                                { agreed -> model.generate(period, day, agreed) },
+                                                { route = "model" })
+                                            Tab.ASSETS -> AssetsScreen(data, model)
                                         }
                                     }
                                 }
@@ -307,19 +297,11 @@ private fun LedgerNavigation(selected: Tab, onSelect: (Tab) -> Unit) {
         BoxWithConstraints(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 12.dp)) {
             val indicatorWidth = 14.dp
             val tabWidth = maxWidth / Tab.entries.size
-            val indicatorPosition by animateDpAsState(
-                targetValue = tabWidth * (selected.ordinal + .5f) - indicatorWidth / 2,
-                animationSpec = tween(220),
-                label = "导航选中线",
-            )
+            val indicatorPosition = tabWidth * (selected.ordinal + .5f) - indicatorWidth / 2
             Row(Modifier.fillMaxWidth().selectableGroup()) {
                 for (item in Tab.entries) {
                     val active = selected == item
-                    val tint by animateColorAsState(
-                        if (active) colors.primary else colors.onSurfaceVariant,
-                        tween(180),
-                        label = "导航标签颜色",
-                    )
+                    val tint = if (active) colors.primary else colors.onSurfaceVariant
                     Column(
                         Modifier.weight(1f).heightIn(min = 62.dp)
                             .selectable(active, role = Role.Tab, onClick = { onSelect(item) })

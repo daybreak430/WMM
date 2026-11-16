@@ -1,12 +1,5 @@
 package com.wmm.ledger.ui
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -57,7 +50,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import com.wmm.ledger.R
 import com.wmm.ledger.data.Cashflow
-import com.wmm.ledger.data.DailyCashflow
 import com.wmm.ledger.data.Entry
 import com.wmm.ledger.data.FIRST_DAY
 import com.wmm.ledger.data.Kind
@@ -237,7 +229,6 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
     val trend = remember(data.entries, summary.start, period) {
         if (period == Period.DAY) data.recentCashflow(summary.start) else emptyList()
     }
-    val overview = StatsOverview(period, summary.start, summary.inProgress, Cashflow(summary.income, summary.expense), trend)
     val expenses = remember(summary) { summary.tagTotals.filter { it.tag.kind == Kind.EXPENSE.name } }
     val income = remember(summary) { summary.tagTotals.filter { it.tag.kind == Kind.INCOME.name } }
     Column(Modifier.fillMaxSize()) {
@@ -245,7 +236,7 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
         LazyColumn(contentPadding = PaddingValues(horizontal = PagePadding, vertical = 10.dp)) {
             item("filters") {
                 Column(Modifier.padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    LedgerSegments(Period.entries, period, { it.title }, choosePeriod)
+                    LedgerSegments(Period.entries, period, { it.title }, animateSelection = false, onSelect = choosePeriod)
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         val previous = period.step(summary.start, -1)
                         IconButton(onClick = { chooseDay(previous) }, enabled = previous >= FIRST_DAY) {
@@ -253,14 +244,8 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
                         }
                         TextButton(onClick = calendar, modifier = Modifier.weight(1f)) {
                             LucideIcon(Glyph.CALENDAR, color = colors.primary, size = 17)
-                            AnimatedContent(
-                                targetState = periodLabel(period, summary.start),
-                                modifier = Modifier.padding(start = 7.dp),
-                                transitionSpec = { fadeIn(tween(160)) togetherWith fadeOut(tween(95)) },
-                                label = "统计日期",
-                            ) { label ->
-                                Text(label, style = MaterialTheme.typography.labelLarge)
-                            }
+                            Text(periodLabel(period, summary.start), Modifier.padding(start = 7.dp),
+                                style = MaterialTheme.typography.labelLarge)
                         }
                         val next = period.step(summary.start, 1)
                         IconButton(onClick = { chooseDay(next) }, enabled = next <= today) {
@@ -271,21 +256,10 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
                 }
             }
             item("rollup") {
-                AnimatedContent(
-                    targetState = overview,
-                    contentKey = { it.period to it.start },
-                    modifier = Modifier.fillMaxWidth(),
-                    transitionSpec = {
-                        (fadeIn(tween(PAGE_TRANSITION_MS)) togetherWith fadeOut(tween(120)))
-                            .using(SizeTransform(clip = true) { _, _ -> tween(PAGE_TRANSITION_MS) })
-                    },
-                    label = "统计看板",
-                ) { visible ->
-                    if (visible.period == Period.DAY) {
-                        Box(Modifier.blockExitingPage(visible == overview)) { SevenDayTrend(visible.trend) }
-                    } else {
-                        PeriodCashflowBoard(visible.period, visible.start, visible.current, visible.cashflow)
-                    }
+                if (period == Period.DAY) {
+                    SevenDayTrend(trend)
+                } else {
+                    PeriodCashflowBoard(period, summary.start, summary.inProgress, Cashflow(summary.income, summary.expense))
                 }
             }
             if (summary.entries.isEmpty()) {
@@ -323,11 +297,6 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
     }
 }
 
-private data class StatsOverview(
-    val period: Period, val start: LocalDate, val current: Boolean,
-    val cashflow: Cashflow, val trend: List<DailyCashflow>,
-)
-
 private data class RankedAmount(val id: String, val label: String, val amount: Long)
 
 private fun LazyListScope.rankSection(title: String, icon: Glyph, key: String, total: Long,
@@ -342,27 +311,25 @@ private fun LazyListScope.rankSection(title: String, icon: Glyph, key: String, t
         }
     }
     itemsIndexed(ranks, key = { _, row -> "rank:$key:${row.id}" }) { index, row ->
-        RankRow(row, total, index == 0, index == ranks.lastIndex,
-            modifier = Modifier.animateItem(fadeInSpec = tween(155), fadeOutSpec = tween(105), placementSpec = null)) {
+        RankRow(row, total, index == 0, index == ranks.lastIndex) {
             open(row.id)
         }
     }
 }
 
 @Composable
-private fun RankRow(rank: RankedAmount, total: Long, first: Boolean, last: Boolean, modifier: Modifier = Modifier,
+private fun RankRow(rank: RankedAmount, total: Long, first: Boolean, last: Boolean,
     click: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val top = if (first) 18.dp else 0.dp
     val bottom = if (last) 18.dp else 0.dp
     val shape = RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom)
     val fraction = if (total > 0) (rank.amount.toDouble() / total).coerceIn(0.0, 1.0) else 0.0
-    val barFraction by animateFloatAsState(fraction.toFloat(), tween(250), label = "占比")
     val percent = if (fraction > 0 && fraction < .001) "<0.1%"
         else String.format(Locale.CHINA, "%.1f", fraction * 100).removeSuffix(".0") + "%"
     // 榜单逐行加载，分组描边只在外边缘绘制。
     Surface(
-        modifier = modifier.fillMaxWidth().clip(shape).background(colors.outlineVariant.copy(alpha = .70f))
+        modifier = Modifier.fillMaxWidth().clip(shape).background(colors.outlineVariant.copy(alpha = .70f))
             .padding(start = 1.dp, end = 1.dp, top = if (first) 1.dp else 0.dp, bottom = if (last) 1.dp else 0.dp),
         shape = shape,
         color = colors.surface,
@@ -377,7 +344,7 @@ private fun RankRow(rank: RankedAmount, total: Long, first: Boolean, last: Boole
                     Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.weight(1f, fill = false).width(56.dp).height(3.dp).clip(CircleShape)
                             .background(colors.primaryContainer)) {
-                            Box(Modifier.fillMaxWidth(barFraction).height(3.dp)
+                            Box(Modifier.fillMaxWidth(fraction.toFloat()).height(3.dp)
                                 .background(colors.primary.copy(alpha = .76f), CircleShape))
                         }
                         Text(percent, color = colors.onSurfaceVariant, style = MaterialTheme.typography.labelSmall, maxLines = 1)

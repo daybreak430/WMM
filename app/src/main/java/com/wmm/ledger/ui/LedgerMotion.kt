@@ -27,12 +27,11 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 internal const val PAGE_TRANSITION_MS = 230
 private const val EXIT_MS = 160
 
-internal fun pageMotion(direction: Int, isDetail: Boolean = false): ContentTransform {
-    val offset = if (isDetail) 7 else 18
+internal fun pageMotion(direction: Int): ContentTransform {
     val enter = fadeIn(tween(PAGE_TRANSITION_MS)) +
-        slideInHorizontally(tween(PAGE_TRANSITION_MS, easing = FastOutSlowInEasing)) { direction * it / offset }
+        slideInHorizontally(tween(PAGE_TRANSITION_MS, easing = FastOutSlowInEasing)) { direction * it / 7 }
     val exit = fadeOut(tween(EXIT_MS)) +
-        slideOutHorizontally(tween(EXIT_MS, easing = FastOutSlowInEasing)) { -direction * it / (offset * 2) }
+        slideOutHorizontally(tween(EXIT_MS, easing = FastOutSlowInEasing)) { -direction * it / 14 }
     return ContentTransform(enter, exit, sizeTransform = null)
 }
 

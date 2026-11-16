@@ -19,6 +19,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
+import java.time.LocalDate
 import org.junit.Rule
 import org.junit.Test
 
@@ -85,6 +86,50 @@ class RecordUiTest {
         ui.onNodeWithText("年").performClick()
         ui.onNode(hasScrollAction()).performScrollToNode(hasText("AI 年报"))
         ui.onNodeWithText("AI 年报").assertIsDisplayed()
+    }
+
+    @Test fun statsFiltersAndBottomTabsShowOnlyTheSelectedContentOnTheNextFrame() {
+        ui.waitUntil(10_000) { ui.onAllNodesWithText("记一笔").fetchSemanticsNodes().isNotEmpty() }
+        ui.mainClock.autoAdvance = false
+        try {
+            ui.onNodeWithText("收支统计").performClick()
+            ui.mainClock.advanceTimeByFrame()
+            ui.onNodeWithText("本月收支看板").assertIsDisplayed()
+            ui.onNodeWithText("最近流水").assertDoesNotExist()
+
+            ui.onNodeWithText("日").performClick()
+            ui.mainClock.advanceTimeByFrame()
+            ui.onNodeWithText("近 7 天收支趋势").assertIsDisplayed()
+            ui.onNodeWithText("本月收支看板").assertDoesNotExist()
+
+            ui.onNodeWithText("年").performClick()
+            ui.mainClock.advanceTimeByFrame()
+            ui.onNodeWithText("本年收支看板").assertIsDisplayed()
+            ui.onNodeWithText("近 7 天收支趋势").assertDoesNotExist()
+
+            ui.onNodeWithContentDescription("上一年").performClick()
+            ui.mainClock.advanceTimeByFrame()
+            ui.onNodeWithText("年度收支看板").assertIsDisplayed()
+            ui.onNodeWithText("${LocalDate.now().year - 1}年").assertIsDisplayed()
+            ui.onNodeWithText("${LocalDate.now().year}年").assertDoesNotExist()
+
+            ui.onNodeWithText("资产").performClick()
+            ui.mainClock.advanceTimeByFrame()
+            ui.onNodeWithText("添加账户").assertIsDisplayed()
+            ui.onNodeWithText("年度收支看板").assertDoesNotExist()
+
+            ui.onNodeWithText("统计").performClick()
+            ui.mainClock.advanceTimeByFrame()
+            ui.onNodeWithText("年度收支看板").assertIsDisplayed()
+            ui.onNodeWithText("添加账户").assertDoesNotExist()
+
+            ui.onNodeWithText("账本").performClick()
+            ui.mainClock.advanceTimeByFrame()
+            ui.onNodeWithText("最近流水").assertIsDisplayed()
+            ui.onNodeWithText("年度收支看板").assertDoesNotExist()
+        } finally {
+            ui.mainClock.autoAdvance = true
+        }
     }
 
     @Test fun assetAccountCanBeAddedAndCalibratedFromItsCard() {
