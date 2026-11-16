@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -36,10 +37,10 @@ class EntryKeyboardUiTest {
             Tag("salary", Kind.INCOME.name, "工资"),
         )
         withLedger(LedgerSnapshot(tags = tags, scenes = scenes)) { _, activity ->
-            ui.waitUntil(10_000) { ui.onNodeWithText("记一笔").isDisplayed() }
-            ui.onNodeWithText("记一笔").performClick()
+            ui.waitUntil(10_000) { ui.onNodeWithContentDescription("记一笔").isDisplayed() }
+            ui.onNodeWithContentDescription("记一笔").performClick()
             ui.waitUntil(8_000) { imeVisible(activity) }
-            ui.onNodeWithText("记一笔").assertDoesNotExist()
+            ui.onNodeWithContentDescription("记一笔").assertDoesNotExist()
             val amount = ui.onNodeWithTag("entry-amount")
             amount.assertIsFocused().performTextInput("24.80")
             ui.onNodeWithText("收入").performClick().assertIsSelected()

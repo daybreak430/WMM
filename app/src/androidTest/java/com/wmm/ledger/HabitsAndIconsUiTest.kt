@@ -45,8 +45,8 @@ class HabitsAndIconsUiTest {
                 at.toLocalDate().toString(), office.id)
         }
         withLedger(LedgerSnapshot(entries = entries, tags = listOf(meal, drink), scenes = listOf(office, leisure))) { repository, _ ->
-            ui.waitUntil(10_000) { ui.onNodeWithText("记一笔").isDisplayed() }
-            ui.onNodeWithText("记一笔").performClick()
+            ui.waitUntil(10_000) { ui.onNodeWithContentDescription("记一笔").isDisplayed() }
+            ui.onNodeWithContentDescription("记一笔").performClick()
             ui.onNodeWithTag("entry-amount").performTextInput("18.50")
             ui.onNodeWithText("按记账习惯选中").assertIsDisplayed()
             ui.onNodeWithText("午餐").assertIsSelected()

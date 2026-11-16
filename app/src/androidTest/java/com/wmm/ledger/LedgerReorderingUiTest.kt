@@ -38,7 +38,7 @@ class LedgerReorderingUiTest {
         val tags = names.mapIndexed { index, name -> Tag("tag-$index", Kind.EXPENSE.name, name, sortOrder = index) }
         val scenes = sceneNames.mapIndexed { index, name -> Scene("scene-$index", name, index) }
         withLedger(LedgerSnapshot(tags = tags, scenes = scenes)) { repository, activity ->
-            ui.waitUntil(10_000) { ui.onNodeWithText("记一笔").isDisplayed() }
+            ui.waitUntil(10_000) { ui.onNodeWithContentDescription("记一笔").isDisplayed() }
             openManagement()
             drag(names[0], names[1])
             waitForTagOrder(repository, listOf("tag-1", "tag-0"))
@@ -48,7 +48,7 @@ class LedgerReorderingUiTest {
             back()
             back()
 
-            ui.onNodeWithText("记一笔").performClick()
+            ui.onNodeWithContentDescription("记一笔").performClick()
             ui.onNodeWithText("类型").assertIsDisplayed()
             ui.onNodeWithText("必选").assertDoesNotExist()
             ui.onNodeWithText(sceneNames[0]).assertIsOn()
@@ -66,11 +66,11 @@ class LedgerReorderingUiTest {
             }
             ui.onNodeWithText(sceneNames[0]).assertIsOn()
             back()
-            ui.onNodeWithText("记一笔").performClick()
+            ui.onNodeWithContentDescription("记一笔").performClick()
             ui.onNodeWithText(sceneNames[1]).assertIsOn()
             back()
             activity.recreate()
-            ui.waitUntil(10_000) { ui.onNodeWithText("记一笔").isDisplayed() }
+            ui.waitUntil(10_000) { ui.onNodeWithContentDescription("记一笔").isDisplayed() }
             openManagement()
             assertTrue(position(names[4]).y < position(names[0]).y)
         }
@@ -86,7 +86,7 @@ class LedgerReorderingUiTest {
         val old = Entry("old", Kind.EXPENSE.name, 500, tag.id, null, "", now, day)
         withLedger(LedgerSnapshot(entries = listOf(old), tags = listOf(tag),
             accounts = listOf(primary, secondary, archived))) { repository, _ ->
-            ui.waitUntil(10_000) { ui.onNodeWithText("记一笔").isDisplayed() }
+            ui.waitUntil(10_000) { ui.onNodeWithContentDescription("记一笔").isDisplayed() }
             ui.onNodeWithContentDescription("个人设置").performClick()
             ui.onNode(hasText("资产") and hasText("¥150.00")).assertIsDisplayed().performClick()
             ui.onNodeWithText("¥150.00").assertIsDisplayed()
@@ -100,7 +100,7 @@ class LedgerReorderingUiTest {
             ui.onNodeWithText("个人设置").assertIsDisplayed()
             back()
 
-            ui.onNodeWithText("记一笔").performClick()
+            ui.onNodeWithContentDescription("记一笔").performClick()
             openAccountPicker()
             ui.onNode(hasText("不关联") and !hasText("账户")).performClick()
             openAccountPicker()
@@ -115,7 +115,7 @@ class LedgerReorderingUiTest {
             ui.onNodeWithText(tag.name).performClick()
             assertAccount("不关联")
             back()
-            ui.onNodeWithText("记一笔").performClick()
+            ui.onNodeWithContentDescription("记一笔").performClick()
             assertAccount(primary.name)
             openAccountPicker()
             ui.onNodeWithText("默认关联账户").performClick()

@@ -132,19 +132,20 @@ internal fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, active
                     }
                 }
             }
-            item("backup-title") {
-                SectionTitle("备份") { if (fileBusy) CircularProgressIndicator(Modifier.size(19.dp), strokeWidth = 2.dp) }
-            }
             item("backup") {
                 GroupCard {
-                    SettingsRow("导出备份", icon = Glyph.DOWNLOAD, enabled = !fileBusy) { exportWarning = true }
+                    SettingsRow(
+                        "导出备份",
+                        icon = Glyph.DOWNLOAD,
+                        enabled = !fileBusy,
+                        end = if (fileBusy) "处理中" else null,
+                    ) { exportWarning = true }
                     Hairline(14)
                     SettingsRow("从备份恢复", enabled = !fileBusy, icon = Glyph.UPLOAD) {
                         backupChooser.launch(arrayOf("application/json", "application/octet-stream", "text/plain"))
                     }
                 }
             }
-            item("about-title") { SectionTitle("关于") }
             item("about") { AboutSettings() }
         }
     }

@@ -13,6 +13,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -32,8 +33,8 @@ class RecordUiTest {
 
     @Test fun firstEntryUsesNewTagAndSceneThenShowsInStatsAndCanBeRemoved() {
         val tag = "验收${System.nanoTime().toString().takeLast(8)}"
-        ui.waitUntil(10_000) { ui.onAllNodesWithText("记一笔").fetchSemanticsNodes().isNotEmpty() }
-        ui.onNodeWithText("记一笔").performClick()
+        ui.waitUntil(10_000) { ui.onAllNodesWithContentDescription("记一笔").fetchSemanticsNodes().isNotEmpty() }
+        ui.onNodeWithContentDescription("记一笔").performClick()
         ui.onNodeWithTag("entry-amount").assertIsFocused().performTextInput("12.35")
         ui.onNodeWithText("保存流水").assertIsNotEnabled()
         ui.onNodeWithText("新建标签").performScrollTo().performClick()
@@ -93,7 +94,7 @@ class RecordUiTest {
     }
 
     @Test fun statsFiltersAndBottomTabsShowOnlyTheSelectedContentOnTheNextFrame() {
-        ui.waitUntil(10_000) { ui.onAllNodesWithText("记一笔").fetchSemanticsNodes().isNotEmpty() }
+        ui.waitUntil(10_000) { ui.onAllNodesWithContentDescription("记一笔").fetchSemanticsNodes().isNotEmpty() }
         ui.mainClock.autoAdvance = false
         try {
             ui.onNodeWithText("收支统计").performClick()
@@ -138,7 +139,7 @@ class RecordUiTest {
     }
 
     @Test fun bottomTabDragCommitsOnReleaseAndKeepsThePageOnCancel() {
-        ui.waitUntil(10_000) { ui.onAllNodesWithText("记一笔").fetchSemanticsNodes().isNotEmpty() }
+        ui.waitUntil(10_000) { ui.onAllNodesWithContentDescription("记一笔").fetchSemanticsNodes().isNotEmpty() }
         val ledger = ui.onNode(hasText("账本") and hasClickAction())
         val stats = ui.onNode(hasText("统计") and hasClickAction())
         val distance = stats.fetchSemanticsNode().boundsInRoot.center.x - ledger.fetchSemanticsNode().boundsInRoot.center.x
@@ -147,7 +148,7 @@ class RecordUiTest {
             down(center)
             repeat(8) { step -> moveTo(center + Offset(distance * (step + 1) / 8, 0f)) }
         }
-        ui.onNodeWithText("记一笔").assertIsDisplayed()
+        ui.onNodeWithContentDescription("记一笔").assertIsDisplayed()
         ledger.performTouchInput { up() }
         ui.onNodeWithText("本月收支看板").assertIsDisplayed()
 
@@ -163,12 +164,12 @@ class RecordUiTest {
             repeat(8) { step -> moveTo(center - Offset(distance * (step + 1) / 8, 0f)) }
             up()
         }
-        ui.onNodeWithText("记一笔").assertIsDisplayed()
+        ui.onNodeWithContentDescription("记一笔").assertIsDisplayed()
     }
 
     @Test fun assetAccountCanBeAddedAndCalibratedFromItsCard() {
         val account = "验收卡${System.nanoTime().toString().takeLast(8)}"
-        ui.waitUntil(10_000) { ui.onAllNodesWithText("记一笔").fetchSemanticsNodes().isNotEmpty() }
+        ui.waitUntil(10_000) { ui.onAllNodesWithContentDescription("记一笔").fetchSemanticsNodes().isNotEmpty() }
         ui.onNodeWithText("资产").assertDoesNotExist()
         ui.onNodeWithContentDescription("个人设置").performClick()
         ui.onNodeWithText("资产").performScrollTo().performClick()
@@ -186,10 +187,10 @@ class RecordUiTest {
     }
 
     @Test fun recordActionOpensFromStatsAndReturnsToTheSameTab() {
-        ui.waitUntil(10_000) { ui.onAllNodesWithText("记一笔").fetchSemanticsNodes().isNotEmpty() }
+        ui.waitUntil(10_000) { ui.onAllNodesWithContentDescription("记一笔").fetchSemanticsNodes().isNotEmpty() }
         val ledger = ui.onNode(hasText("账本") and hasClickAction())
         val stats = ui.onNode(hasText("统计") and hasClickAction())
-        val record = ui.onNodeWithText("记一笔")
+        val record = ui.onNodeWithContentDescription("记一笔")
         val ledgerX = ledger.fetchSemanticsNode().boundsInRoot.center.x
         val statsX = stats.fetchSemanticsNode().boundsInRoot.center.x
         val recordX = record.fetchSemanticsNode().boundsInRoot.center.x
