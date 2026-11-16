@@ -12,7 +12,10 @@ dependencyResolutionManagement {
         mavenCentral()
         exclusiveContent {
             forRepository { maven("https://maven-central.storage-download.googleapis.com/maven2") }
-            filter { includeGroup("net.zetetic") }
+            filter {
+                includeGroup("net.zetetic")
+                includeGroup("com.mohamedrejeb.dnd")
+            }
         }
     }
 }

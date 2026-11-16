@@ -39,8 +39,7 @@ class LedgerRulesTest {
         assertEquals(200L, snapshot.stats(Period.DAY, yearEnd, newYear).expense)
         assertEquals(200L, snapshot.stats(Period.MONTH, yearEnd, newYear).tagTotals.single().cents)
         assertEquals(200L, snapshot.stats(Period.YEAR, newYear, newYear).net)
-        assertEquals(emptyList<Tag>(), snapshot.frequentTags(Kind.EXPENSE))
-        assertEquals("tag", snapshot.frequentTags(Kind.EXPENSE, "tag").single().id)
+        assertEquals(emptyList<Tag>(), snapshot.orderedTags(Kind.EXPENSE))
     }
 
     @Test fun reportGroupsYearByMonthAndOnlyComparesCompletePeriods() {

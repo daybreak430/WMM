@@ -121,13 +121,15 @@ fun LedgerSnapshot.accountBalances(): Map<String, Long> {
     return balances
 }
 
-fun LedgerSnapshot.frequentTags(kind: Kind, keepId: String? = null): List<Tag> {
+fun LedgerSnapshot.orderedTags(kind: Kind): List<Tag> {
     val usage = entries.groupingBy { it.tagId }.eachCount()
-    return tags.filter { it.kind == kind.name && (!it.archived || it.id == keepId) }
-        .sortedWith(compareByDescending<Tag> { usage[it.id] ?: 0 }.thenBy { it.name })
+    return tags.filter { it.kind == kind.name && !it.archived }
+        .sortedWith(compareBy<Tag> { it.sortOrder ?: Int.MAX_VALUE }
+            .thenByDescending { usage[it.id] ?: 0 }.thenBy { it.name })
 }
 
-fun LedgerSnapshot.frequentScenes(): List<Scene> {
+fun LedgerSnapshot.orderedScenes(): List<Scene> {
     val usage = entries.mapNotNull { it.sceneId }.groupingBy { it }.eachCount()
-    return scenes.sortedWith(compareByDescending<Scene> { usage[it.id] ?: 0 }.thenBy { it.name })
+    return scenes.sortedWith(compareBy<Scene> { it.sortOrder ?: Int.MAX_VALUE }
+        .thenByDescending { usage[it.id] ?: 0 }.thenBy { it.name })
 }

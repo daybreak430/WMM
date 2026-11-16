@@ -1,6 +1,8 @@
 package com.wmm.ledger.ui
 
+import androidx.compose.animation.animateBounds
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -31,6 +33,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -40,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.LookaheadScope
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -65,10 +69,14 @@ import com.wmm.ledger.data.LedgerSnapshot
 import com.wmm.ledger.data.MAX_NAME
 import com.wmm.ledger.data.MAX_NOTE
 import com.wmm.ledger.data.editableAmount
-import com.wmm.ledger.data.frequentScenes
-import com.wmm.ledger.data.frequentTags
+import com.wmm.ledger.data.Tag
+import com.wmm.ledger.data.orderedScenes
+import com.wmm.ledger.data.orderedTags
 import com.wmm.ledger.data.parseCents
 import com.wmm.ledger.data.validName
+import com.mohamedrejeb.compose.dnd.DragAndDropContainer
+import com.mohamedrejeb.compose.dnd.DragAndDropState
+import com.mohamedrejeb.compose.dnd.scroll.dragAutoScroll
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -101,14 +109,15 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
     var showScenes by rememberSaveable { mutableStateOf(false) }
     var showTags by rememberSaveable { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
-    val tags = remember(data, kind, initial?.tagId) { data.frequentTags(kind, initial?.tagId) }
-    val scenes = remember(data) { data.frequentScenes() }
-    val currentScene = scenes.firstOrNull { it.id == sceneId }
-    val visibleScenes = if (showScenes) scenes
-        else (scenes.take(VISIBLE_TAG_LIMIT) + listOfNotNull(currentScene)).distinctBy { it.id }
+    val tags = remember(data.tags, data.entries, kind) { data.orderedTags(kind) }
+    val scenes = remember(data.scenes, data.entries) { data.orderedScenes() }
+    val sceneLabels = remember(scenes) { scenes.associate { it.id to it.name } }
+    val tagLabels = remember(tags) { tags.associate { it.id to it.name } }
+    val archivedTag = data.tags.firstOrNull { it.archived && it.id == initial?.tagId && it.kind == kindName }
     val account = data.accounts.firstOrNull { it.id == accountId }
-    val currentTag = tags.firstOrNull { it.id == tagId }
-    val visibleTags = if (showTags) tags else (tags.take(VISIBLE_TAG_LIMIT) + listOfNotNull(currentTag)).distinctBy { it.id }
+    val tagDrag = key(kind) { rememberTagDragState() }
+    val sceneDrag = rememberTagDragState()
+    val scroll = rememberScrollState()
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = LocalFocusManager.current
     val pageInset = LedgerPageInset()
@@ -124,7 +133,10 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
                 LucideIcon(Glyph.DELETE, MaterialTheme.colorScheme.error, "删除流水")
             }
         }
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())
+        Column(Modifier.weight(1f)
+            .dragAutoScroll(tagDrag, scroll, Orientation.Vertical)
+            .dragAutoScroll(sceneDrag, scroll, Orientation.Vertical)
+            .verticalScroll(scroll)
             .padding(horizontal = pageInset, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             LedgerSegments(
                 Kind.entries, kind, { it.title },
@@ -148,13 +160,12 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
             }
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (kind == Kind.EXPENSE) {
-                    EntryTagGroup("场景", hint = "选填") {
-                        visibleScenes.forEach { scene ->
-                            EntryTagChip(scene.name, selected = sceneId == scene.id, optional = true) {
-                                sceneId = scene.id.takeUnless { it == sceneId }
-                                dismissKeyboard()
-                            }
-                        }
+                    EntryTagGroup(
+                        title = "场景", labels = sceneLabels, selected = sceneId, expanded = showScenes,
+                        dragState = sceneDrag, optional = true,
+                        save = { order, failed -> model.reorderScenes(order, failed) },
+                        select = { sceneId = it.takeUnless { id -> id == sceneId }; dismissKeyboard() },
+                    ) {
                         EntryTagChip("新建场景", add = true) {
                             dismissKeyboard()
                             newScene = true
@@ -165,19 +176,20 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
                     }
                     HorizontalDivider(Modifier.padding(vertical = 2.dp), color = colors.outlineVariant.copy(alpha = .54f))
                 }
-                EntryTagGroup("类型标签", hint = if (tagId == null) "必选" else null) {
-                    visibleTags.forEach { tag ->
-                        EntryTagChip(tag.name, selected = tagId == tag.id) {
-                            tagId = tag.id
+                key(kind) {
+                    EntryTagGroup(
+                        title = "类型", labels = tagLabels, selected = tagId, expanded = showTags,
+                        dragState = tagDrag, archivedTag = archivedTag,
+                        save = { order, failed -> model.reorderTags(kind, order, failed) },
+                        select = { tagId = it; dismissKeyboard() },
+                    ) {
+                        EntryTagChip("新建标签", add = true) {
                             dismissKeyboard()
+                            tagDialog = true
                         }
-                    }
-                    EntryTagChip("新建标签", add = true) {
-                        dismissKeyboard()
-                        tagDialog = true
-                    }
-                    if (tags.size > VISIBLE_TAG_LIMIT) {
-                        EntryTagChip(if (showTags) "收起类型" else "全部类型") { showTags = !showTags }
+                        if (tags.size > VISIBLE_TAG_LIMIT) {
+                            EntryTagChip(if (showTags) "收起类型" else "全部类型") { showTags = !showTags }
+                        }
                     }
                 }
             }
@@ -277,15 +289,46 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun EntryTagGroup(title: String, hint: String?, content: @Composable () -> Unit) {
+private fun EntryTagGroup(
+    title: String,
+    labels: Map<String, String>,
+    selected: String?,
+    expanded: Boolean,
+    dragState: DragAndDropState<String>,
+    save: (List<String>, () -> Unit) -> Unit,
+    select: (String) -> Unit,
+    optional: Boolean = false,
+    archivedTag: Tag? = null,
+    actions: @Composable () -> Unit,
+) {
     val colors = MaterialTheme.colorScheme
-    val typography = MaterialTheme.typography.labelMedium
+    val savedIds = labels.keys.toList()
+    val order = rememberTagOrder(savedIds)
+    val visibleIds = remember(savedIds, selected, expanded) {
+        if (expanded) labels.keys
+        else (savedIds.take(VISIBLE_TAG_LIMIT) + listOfNotNull(selected?.takeIf { it in labels })).toSet()
+    }
     Column {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 1.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(title, style = typography.copy(fontWeight = FontWeight.SemiBold), color = colors.onSurfaceVariant)
-            if (hint != null) Text(hint, style = typography, color = colors.onSurfaceVariant)
+        Text(title, Modifier.padding(horizontal = 1.dp),
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = colors.onSurfaceVariant)
+        DragAndDropContainer(dragState) {
+            LookaheadScope {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    order.ids.filter { it in visibleIds }.forEach { id ->
+                        key(id) {
+                            ReorderableTag(id, order, visibleIds, dragState, save, Modifier.animateBounds(this@LookaheadScope)) {
+                                EntryTagChip(labels.getValue(id), selected = selected == id, optional = optional) { select(id) }
+                            }
+                        }
+                    }
+                    if (archivedTag != null) {
+                        EntryTagChip(archivedTag.name, selected = selected == archivedTag.id) { select(archivedTag.id) }
+                    }
+                    actions()
+                }
+            }
         }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { content() }
     }
 }
 

@@ -26,7 +26,7 @@ class LedgerRepository(context: Context) {
         val key = secrets.databaseKey(!app.getDatabasePath(DATABASE_NAME).exists())
         Room.databaseBuilder(app, LedgerDatabase::class.java, DATABASE_NAME)
             .openHelperFactory(SupportOpenHelperFactory(key))
-            .addMigrations(MIGRATION_1_2)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
             .build()
     }
     private val dao get() = database.ledger()
@@ -51,12 +51,30 @@ class LedgerRepository(context: Context) {
             if (duplicate != null && duplicate.id != id) {
                 throw LedgerError(if (duplicate.archived) "已有同名归档标签，可在标签管理中恢复。" else "已有同名标签。")
             }
-            Tag(id ?: newId(), old?.kind ?: kind.name, trimmed, old?.archived ?: false).also { dao.save(it) }
+            (old?.copy(name = trimmed) ?: Tag(newId(), kind.name, trimmed)).also { dao.save(it) }
         }
     }
 
     suspend fun archiveTag(id: String, archive: Boolean) = withContext(Dispatchers.IO) {
-        database.withTransaction { dao.tag(id)?.let { dao.save(it.copy(archived = archive)) } }
+        database.withTransaction {
+            dao.tag(id)?.takeIf { it.archived != archive }?.let { dao.save(it.copy(archived = archive, sortOrder = null)) }
+        }
+    }
+
+    suspend fun reorderTags(kind: Kind, order: List<String>) = database.withTransaction {
+        val tags = dao.tags().filter { it.kind == kind.name && !it.archived }.associateBy { it.id }
+        verifyOrder(order, tags.keys)
+        dao.updateTags(order.mapIndexed { index, id -> tags.getValue(id).copy(sortOrder = index) })
+    }
+
+    suspend fun reorderScenes(order: List<String>) = database.withTransaction {
+        val scenes = dao.scenes().associateBy { it.id }
+        verifyOrder(order, scenes.keys)
+        dao.updateScenes(order.mapIndexed { index, id -> scenes.getValue(id).copy(sortOrder = index) })
+    }
+
+    private fun verifyOrder(order: List<String>, ids: Set<String>) {
+        if (order.size != ids.size || order.toSet() != ids) throw LedgerError("标签列表已更新，请重新排序。")
     }
 
     suspend fun saveScene(name: String): Scene = withContext(Dispatchers.IO) {

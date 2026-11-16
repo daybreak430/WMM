@@ -12,8 +12,8 @@ android {
         applicationId = "com.wmm.ledger"
         minSdk = 26
         targetSdk = 36
-        versionCode = 12
-        versionName = "0.4.6"
+        versionCode = 13
+        versionName = "0.4.7"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildTypes {
@@ -34,6 +34,11 @@ dependencies {
     implementation(platform("androidx.compose:compose-bom:2026.05.00"))
     implementation("androidx.activity:activity-compose:1.9.0")
     implementation("androidx.compose.foundation:foundation")
+    implementation("com.mohamedrejeb.dnd:compose-dnd:1.0.0-alpha01") {
+        // Android 端使用项目已有的 AndroidX Compose BOM。
+        exclude(group = "org.jetbrains.compose.foundation", module = "foundation")
+        exclude(group = "org.jetbrains.compose.ui", module = "ui")
+    }
     implementation("androidx.compose.material3:material3:1.4.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")

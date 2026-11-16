@@ -25,9 +25,10 @@ class StorageAndModelTest {
         val today = LocalDate.now()
         val now = System.currentTimeMillis()
         val originalData = LedgerSnapshot(
-            tags = listOf(Tag("tag", "EXPENSE", "电影", true)),
+            tags = listOf(Tag("tag", "EXPENSE", "电影", archived = true),
+                Tag("lunch", "EXPENSE", "餐饮", sortOrder = 0)),
             entries = listOf(Entry("entry", "EXPENSE", 5_000, "tag", "card", "不可发送的备注", now, today.toString(), "trip")),
-            scenes = listOf(Scene("trip", "出差")),
+            scenes = listOf(Scene("trip", "出差", sortOrder = 0)),
             accounts = listOf(Account("card", "SAVINGS", "我的卡", 500_000, now - 3_600_000)),
             profile = Profile(nickname = "仅本地"),
         )
@@ -69,6 +70,14 @@ class StorageAndModelTest {
         val imported = Backup.decode(legacy.toString().byteInputStream())
         assertTrue(imported.scenes.isEmpty())
         assertEquals(complete.entries.map { it.copy(sceneId = null) }, imported.entries)
+
+        val versionTwo = JSONObject(encoded.decodeToString()).put("version", 2).apply {
+            getJSONArray("scenes").getJSONObject(0).remove("sortOrder")
+            getJSONArray("tags").apply { repeat(length()) { index -> getJSONObject(index).remove("sortOrder") } }
+        }
+        val importedTwo = Backup.decode(versionTwo.toString().byteInputStream())
+        assertEquals(complete.tags.map { it.copy(sortOrder = null) }, importedTwo.tags)
+        assertEquals(complete.scenes.map { it.copy(sortOrder = null) }, importedTwo.scenes)
     }
 
     @Test fun accountRelinkAndDeletionRespectPersistedCalibration() = runBlocking {

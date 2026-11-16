@@ -12,6 +12,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.room.Upsert
+import androidx.room.Update
 
 @Entity(tableName = "tags", indices = [Index(value = ["kind", "name"], unique = true)])
 data class Tag(
@@ -19,10 +20,11 @@ data class Tag(
     val kind: String,
     val name: String,
     val archived: Boolean = false,
+    val sortOrder: Int? = null,
 )
 
 @Entity(tableName = "scenes", indices = [Index(value = ["name"], unique = true)])
-data class Scene(@PrimaryKey val id: String, val name: String)
+data class Scene(@PrimaryKey val id: String, val name: String, val sortOrder: Int? = null)
 
 @Entity(tableName = "accounts")
 data class Account(
@@ -81,6 +83,8 @@ interface LedgerDao {
     @Query("SELECT * FROM tags WHERE id = :id") suspend fun tag(id: String): Tag?
     @Query("SELECT * FROM accounts WHERE id = :id") suspend fun account(id: String): Account?
     @Upsert suspend fun save(tag: Tag)
+    @Update suspend fun updateTags(tags: List<Tag>)
+    @Update suspend fun updateScenes(scenes: List<Scene>)
     @Insert suspend fun addScene(scene: Scene)
     @Upsert suspend fun save(account: Account)
     @Upsert suspend fun save(entry: Entry)
@@ -99,7 +103,7 @@ interface LedgerDao {
     @Query("DELETE FROM reports") suspend fun clearReports()
 }
 
-@Database(entities = [Tag::class, Account::class, Entry::class, Report::class, Profile::class, Scene::class], version = 2)
+@Database(entities = [Tag::class, Account::class, Entry::class, Report::class, Profile::class, Scene::class], version = 3)
 abstract class LedgerDatabase : RoomDatabase() {
     abstract fun ledger(): LedgerDao
 }
@@ -111,5 +115,12 @@ internal val MIGRATION_1_2 = object : Migration(1, 2) {
         // 新列允许为空，旧支出保留原值且不会被自动归入任何场景。
         db.execSQL("ALTER TABLE entries ADD COLUMN sceneId TEXT REFERENCES scenes(id)")
         db.execSQL("CREATE INDEX index_entries_sceneId ON entries (sceneId)")
+    }
+}
+
+internal val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE tags ADD COLUMN sortOrder INTEGER")
+        db.execSQL("ALTER TABLE scenes ADD COLUMN sortOrder INTEGER")
     }
 }

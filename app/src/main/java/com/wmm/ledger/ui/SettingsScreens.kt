@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
@@ -24,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -39,6 +41,9 @@ import com.wmm.ledger.LedgerViewModel
 import com.wmm.ledger.data.Kind
 import com.wmm.ledger.data.LedgerSnapshot
 import com.wmm.ledger.data.Provider
+import com.wmm.ledger.data.orderedTags
+import com.mohamedrejeb.compose.dnd.DragAndDropContainer
+import com.mohamedrejeb.compose.dnd.scroll.dragAutoScroll
 import kotlinx.coroutines.launch
 
 private class OpenLocal : ActivityResultContracts.OpenDocument() {
@@ -223,25 +228,53 @@ fun ModelSettings(model: LedgerViewModel, provider: Provider, providersWithKeys:
 fun TagsScreen(data: LedgerSnapshot, model: LedgerViewModel, back: () -> Unit) {
     var kindName by rememberSaveable { mutableStateOf(Kind.EXPENSE.name) }
     val kind = Kind.valueOf(kindName)
-    val tags = data.tags.filter { it.kind == kindName }
+    val tags = remember(data.tags, data.entries, kind) { data.orderedTags(kind) }
+    val archived = remember(data.tags, kind) { data.tags.filter { it.kind == kindName && it.archived } }
+    val tagsById = remember(tags) { tags.associateBy { it.id } }
+    val colors = MaterialTheme.colorScheme
     var edit by rememberSaveable { mutableStateOf<String?>(null) }
     var open by rememberSaveable { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize()) {
         PageHeader("标签管理", back) {
             IconButton(onClick = { edit = "new" }) { LucideIcon(Glyph.PLUS, description = "添加标签") }
         }
-        LazyColumn(contentPadding = PaddingValues(horizontal = PagePadding, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(9.dp)) {
-            item("tag-kinds") {
-                LedgerSegments(Kind.entries, kind, { it.title }) { kindName = it.name }
-            }
-            if (tags.isEmpty()) item("empty") { GroupCard { EmptyPanel("还没有${kind.title}标签", glyph = Glyph.TAG) } }
-            items(tags.sortedBy { it.archived }, key = { it.id }) { tag ->
-                GroupCard { SettingsRow(tag.name, icon = Glyph.TAG, end = if (tag.archived) "已归档" else null) { open = tag.id } }
+        key(kind) {
+            val dragState = rememberTagDragState()
+            val order = rememberTagOrder(tags.map { it.id })
+            val listState = rememberLazyListState()
+            DragAndDropContainer(dragState, modifier = Modifier.weight(1f)) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize().dragAutoScroll(dragState, listState),
+                    state = listState,
+                    contentPadding = PaddingValues(horizontal = PagePadding, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(9.dp),
+                ) {
+                    item {
+                        LedgerSegments(
+                            Kind.entries, kind, { it.title },
+                            containerColor = if (LocalLedgerDark.current) colors.surfaceContainerHigh else colors.surface,
+                        ) { kindName = it.name }
+                    }
+                    if (tags.isEmpty() && archived.isEmpty()) {
+                        item { GroupCard { EmptyPanel("还没有${kind.title}标签", glyph = Glyph.TAG) } }
+                    }
+                    items(order.ids, key = { it }) { id ->
+                        ReorderableTag(
+                            id, order, tagsById.keys, dragState,
+                            save = { updated, failed -> model.reorderTags(kind, updated, failed) },
+                            modifier = Modifier.fillMaxWidth().animateItem(),
+                        ) {
+                            GroupCard { SettingsRow(tagsById.getValue(id).name, icon = Glyph.TAG) { open = id } }
+                        }
+                    }
+                    items(archived, key = { it.id }) { tag ->
+                        GroupCard { SettingsRow(tag.name, icon = Glyph.TAG, end = "已归档") { open = tag.id } }
+                    }
+                }
             }
         }
     }
-    val viewing = tags.firstOrNull { it.id == open }
+    val viewing = tagsById[open] ?: archived.firstOrNull { it.id == open }
     if (viewing != null) {
         LedgerAlertDialog(onDismissRequest = { open = null }, title = { Text(viewing.name) }, text = {
             Column {
@@ -254,7 +287,7 @@ fun TagsScreen(data: LedgerSnapshot, model: LedgerViewModel, back: () -> Unit) {
             }
         }, confirmButton = { TextButton(onClick = { open = null }) { Text("关闭") } })
     }
-    val editing = tags.firstOrNull { it.id == edit }
+    val editing = tagsById[edit] ?: archived.firstOrNull { it.id == edit }
     if (edit == "new" || editing != null) {
         NameDialog(if (edit == "new") "新建${kind.title}标签" else "标签改名", "标签名称", editing?.name.orEmpty(),
             onDismiss = { edit = null }) { name ->

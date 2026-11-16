@@ -80,6 +80,12 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
     fun saveScene(name: String, done: (Scene) -> Unit) =
         perform("无法保存场景。") { done(repository.saveScene(name)) }
 
+    fun reorderTags(kind: Kind, order: List<String>, onFailure: () -> Unit) =
+        perform("无法保存标签顺序。", onFailure) { repository.reorderTags(kind, order) }
+
+    fun reorderScenes(order: List<String>, onFailure: () -> Unit) =
+        perform("无法保存场景顺序。", onFailure) { repository.reorderScenes(order) }
+
     fun saveEntry(id: String?, kind: Kind, amount: Long, tag: String, account: String?, note: String, at: Long,
         day: LocalDate, sceneId: String?, done: () -> Unit) = perform("无法保存流水。") {
         repository.saveEntry(id, kind, amount, tag, account, note, at, day, sceneId)
@@ -199,12 +205,13 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun configured() = Provider.entries.filter { repository.secrets.hasKey(it) }.toSet()
 
-    private fun perform(fallback: String, action: suspend () -> Unit) = viewModelScope.launch {
+    private fun perform(fallback: String, onFailure: () -> Unit = {}, action: suspend () -> Unit) = viewModelScope.launch {
         try {
             action()
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
+            onFailure()
             notify((error as? LedgerError)?.display ?: fallback)
         }
     }
