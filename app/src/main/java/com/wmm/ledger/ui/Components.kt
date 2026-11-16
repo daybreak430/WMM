@@ -3,7 +3,6 @@ package com.wmm.ledger.ui
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.graphics.BitmapFactory
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -64,7 +63,6 @@ fun PageHeader(title: String, back: (() -> Unit)? = null, mark: Glyph? = null, c
             IconButton(onClick = back, modifier = Modifier.size(48.dp)) {
                 Surface(
                     modifier = Modifier.size(40.dp), shape = CircleShape, color = colors.surface,
-                    border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .65f)),
                 ) {
                     Box(contentAlignment = Alignment.Center) { LucideIcon(Glyph.BACK, description = "返回", size = 19) }
                 }
@@ -73,7 +71,6 @@ fun PageHeader(title: String, back: (() -> Unit)? = null, mark: Glyph? = null, c
         if (mark != null) {
             Surface(
                 modifier = Modifier.size(38.dp), shape = FieldShape, color = colors.surface,
-                border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .50f)),
             ) {
                 Box(contentAlignment = Alignment.Center) { LucideIcon(mark, color = colors.primary, size = 21) }
             }
@@ -97,7 +94,6 @@ fun UserAvatar(profile: Profile, onClick: () -> Unit, size: Int = 44, descriptio
             shape = CircleShape,
             color = colors.surface,
             modifier = Modifier.size(size.dp),
-            border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .75f)),
         ) {
             Box(contentAlignment = Alignment.Center) {
                 if (image == null) LucideIcon(Glyph.PERSON, colors.primary, description, size = 21)
@@ -129,7 +125,7 @@ fun AmountText(amount: String, color: Color = MaterialTheme.colorScheme.onSurfac
 fun ledgerFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedContainerColor = MaterialTheme.colorScheme.surface,
     unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+    unfocusedBorderColor = Color.Transparent,
     focusedBorderColor = MaterialTheme.colorScheme.primary,
 )
 

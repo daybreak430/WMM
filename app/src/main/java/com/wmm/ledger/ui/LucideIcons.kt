@@ -1,7 +1,6 @@
 package com.wmm.ledger.ui
 
 import androidx.annotation.DrawableRes
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -57,7 +56,6 @@ fun IconBadge(glyph: Glyph, emphasis: Boolean = false) {
         modifier = Modifier.size(40.dp),
         shape = RoundedCornerShape(13.dp),
         color = if (emphasis) colors.primaryContainer else colors.surfaceVariant,
-        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .40f)),
     ) {
         Box(contentAlignment = Alignment.Center) {
             LucideIcon(glyph, if (emphasis) colors.primary else colors.onSurfaceVariant, size = 19)

@@ -2,7 +2,6 @@ package com.wmm.ledger.ui
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -351,13 +351,16 @@ private fun EntryTagChip(label: String, selected: Boolean? = null, optional: Boo
         optional -> Modifier.toggleable(selected, role = Role.Checkbox) { onClick() }
         else -> Modifier.selectable(selected, role = Role.RadioButton, onClick = onClick)
     }
+    val chipFill = when (selected) {
+        true -> colors.primaryContainer
+        false -> colors.surfaceVariant
+        null -> Color.Transparent
+    }
     val tint by animateColorAsState(if (selected != false) colors.primary else colors.onSurface,
         tween(140), label = "标签文字")
-    val fill by animateColorAsState(if (selected == true) colors.primaryContainer else colors.surface,
-        tween(140), label = "标签背景")
+    val fill by animateColorAsState(chipFill, tween(140), label = "标签背景")
     Box(Modifier.heightIn(min = 44.dp).clip(shape).then(interaction), contentAlignment = Alignment.Center) {
-        Surface(shape = shape, color = fill,
-            border = BorderStroke(1.dp, colors.outlineVariant)) {
+        Surface(shape = shape, color = fill) {
             Row(Modifier.heightIn(min = 34.dp).padding(horizontal = 11.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (add) LucideIcon(Glyph.PLUS, tint, size = 16)

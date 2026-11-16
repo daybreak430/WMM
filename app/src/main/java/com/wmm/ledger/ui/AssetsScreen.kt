@@ -1,6 +1,5 @@
 package com.wmm.ledger.ui
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -134,8 +133,7 @@ fun AssetsScreen(data: LedgerSnapshot, model: LedgerViewModel) {
 @Composable
 private fun AccountCard(account: Account, balance: Long, open: () -> Unit) {
     val colors = MaterialTheme.colorScheme
-    Surface(onClick = open, shape = CardShape, color = colors.surface,
-        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .70f))) {
+    Surface(onClick = open, shape = CardShape, color = colors.surface) {
         Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically) {
             IconBadge(if (account.archived) Glyph.BOX else Glyph.WALLET)

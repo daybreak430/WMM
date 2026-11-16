@@ -1,6 +1,5 @@
 package com.wmm.ledger.ui
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -28,7 +27,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,7 +41,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -118,11 +117,10 @@ fun LedgerScreen(data: LedgerSnapshot, today: LocalDate, openSettings: () -> Uni
 @Composable
 fun SummaryLabel(text: String, icon: Glyph? = null) {
     val colors = MaterialTheme.colorScheme
-    Surface(shape = RoundedCornerShape(9.dp), color = colors.surface.copy(alpha = .75f),
-        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .62f))) {
-        Row(Modifier.padding(horizontal = 9.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically,
+    Surface(shape = CircleShape, color = colors.surfaceVariant) {
+        Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (icon != null) LucideIcon(icon, colors.primary, size = 15)
+            if (icon != null) LucideIcon(icon, colors.onSurfaceVariant, size = 13)
             Text(text, color = colors.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
         }
     }
@@ -164,11 +162,8 @@ fun LazyListScope.ledgerRows(entries: List<Entry>, data: LedgerSnapshot, today: 
             val colors = MaterialTheme.colorScheme
             val refined = LocalLedgerRefinement.current
             val shape = RoundedCornerShape(topStart = first, topEnd = first, bottomStart = last, bottomEnd = last)
-            // 列表按单条流水虚拟化；描边只在分组外沿，组内保留缩进分隔线。
-            val frame = if (refined) Modifier.clip(shape).background(colors.outlineVariant)
-                .padding(start = 1.dp, end = 1.dp, top = if (first > 0.dp) 1.dp else 0.dp,
-                    bottom = if (last > 0.dp) 1.dp else 0.dp) else Modifier
-            Surface(modifier = frame, color = colors.surface, shape = shape) {
+            // 流水逐行加载，首尾圆角和组内分隔线组成连续的卡面。
+            Surface(color = colors.surface, shape = shape) {
                 Column {
                     val type = tagById[entry.tagId]?.name.orEmpty()
                     val scene = sceneById[entry.sceneId]?.name
@@ -327,10 +322,8 @@ private fun RankRow(rank: RankedAmount, total: Long, first: Boolean, last: Boole
     val fraction = if (total > 0) (rank.amount.toDouble() / total).coerceIn(0.0, 1.0) else 0.0
     val percent = if (fraction > 0 && fraction < .001) "<0.1%"
         else String.format(Locale.CHINA, "%.1f", fraction * 100).removeSuffix(".0") + "%"
-    // 榜单逐行加载，分组描边只在外边缘绘制。
     Surface(
-        modifier = Modifier.fillMaxWidth().clip(shape).background(colors.outlineVariant.copy(alpha = .70f))
-            .padding(start = 1.dp, end = 1.dp, top = if (first) 1.dp else 0.dp, bottom = if (last) 1.dp else 0.dp),
+        modifier = Modifier.fillMaxWidth(),
         shape = shape,
         color = colors.surface,
     ) {
@@ -382,7 +375,10 @@ private fun ReportPanel(summary: PeriodStats, report: Report?, stale: Boolean, b
                     color = colors.onSurfaceVariant)
             }
             if (!hasKey) {
-                OutlinedButton(onClick = openModel) { Text("设置模型") }
+                FilledTonalButton(onClick = openModel, shape = FieldShape,
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = colors.surfaceVariant, contentColor = colors.primary),
+                ) { Text("设置模型") }
             } else {
                 Button(onClick = generate, enabled = !busy && summary.entries.isNotEmpty(), shape = FieldShape) {
                     if (busy) {

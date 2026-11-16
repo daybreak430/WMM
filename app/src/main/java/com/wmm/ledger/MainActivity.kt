@@ -10,7 +10,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -292,7 +291,6 @@ private fun LedgerNavigation(selected: Tab, onSelect: (Tab) -> Unit) {
     val colors = MaterialTheme.colorScheme
     Surface(
         color = colors.surface,
-        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .65f)),
     ) {
         BoxWithConstraints(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 12.dp)) {
             val indicatorWidth = 14.dp

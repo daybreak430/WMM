@@ -3,7 +3,6 @@ package com.wmm.ledger.ui
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -101,7 +100,6 @@ fun BalancePanel(content: @Composable ColumnScope.() -> Unit) {
         shape = if (refined) RoundedCornerShape(24.dp) else SummaryShape,
         color = if (dark) Color(0xFF1E2E45) else Color(0xFFECF5FF),
         contentColor = colors.onSurface,
-        border = BorderStroke(1.dp, if (dark) Color(if (refined) 0xFF49617F else 0xFF415977) else Color.White),
         shadowElevation = if (refined) 2.dp else 1.dp,
     ) {
         Box {
@@ -132,7 +130,6 @@ fun GroupCard(content: @Composable ColumnScope.() -> Unit) {
         modifier = Modifier.fillMaxWidth(),
         shape = if (refined) RoundedCornerShape(18.dp) else CardShape,
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (refined) 1f else .70f)),
     ) {
         Column(content = content)
     }
@@ -174,8 +171,7 @@ fun <T> LedgerSegments(options: List<T>, selected: T, title: (T) -> String,
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = FieldShape,
-        color = colors.surface.copy(alpha = .75f),
-        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .80f)),
+        color = colors.surfaceVariant,
     ) {
         Row(
             Modifier.padding(3.dp).selectableGroup(),
