@@ -85,14 +85,17 @@ class LedgerReorderingUiTest {
         val old = Entry("old", Kind.EXPENSE.name, 500, tag.id, null, "", now, day)
         withLedger(LedgerSnapshot(entries = listOf(old), tags = listOf(tag), accounts = listOf(primary, secondary))) { repository, _ ->
             ui.waitUntil(10_000) { ui.onNodeWithText("记一笔").isDisplayed() }
-            ui.onNodeWithText("资产").performClick()
+            ui.onNodeWithContentDescription("个人设置").performClick()
+            ui.onNodeWithText("资产").performScrollTo().performClick()
             drag(primary.name, secondary.name)
             ui.waitUntil(8_000) { runBlocking { repository.snapshot().accounts.first().id == secondary.id } }
             assertTrue(position(secondary.name).y < position(primary.name).y)
             ui.onNodeWithText(primary.name).performClick()
             ui.onNodeWithText("校准余额").assertIsDisplayed()
             ui.onNodeWithText("关闭").performClick()
-            ui.onNodeWithText("账本").performClick()
+            back()
+            ui.onNodeWithText("个人设置").assertIsDisplayed()
+            back()
 
             ui.onNodeWithText("记一笔").performClick()
             openAccountPicker()

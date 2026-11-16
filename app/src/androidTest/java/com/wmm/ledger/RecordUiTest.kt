@@ -117,15 +117,15 @@ class RecordUiTest {
             ui.onNodeWithText("${LocalDate.now().year - 1}年").assertIsDisplayed()
             ui.onNodeWithText("${LocalDate.now().year}年").assertDoesNotExist()
 
-            ui.onNodeWithText("资产").performClick()
+            ui.onNodeWithText("账本").performClick()
             ui.mainClock.advanceTimeByFrame()
-            ui.onNodeWithText("添加账户").assertIsDisplayed()
+            ui.onNodeWithText("最近流水").assertIsDisplayed()
             ui.onNodeWithText("年度收支看板").assertDoesNotExist()
 
             ui.onNodeWithText("统计").performClick()
             ui.mainClock.advanceTimeByFrame()
             ui.onNodeWithText("年度收支看板").assertIsDisplayed()
-            ui.onNodeWithText("添加账户").assertDoesNotExist()
+            ui.onNodeWithText("最近流水").assertDoesNotExist()
 
             ui.onNodeWithText("账本").performClick()
             ui.mainClock.advanceTimeByFrame()
@@ -168,7 +168,9 @@ class RecordUiTest {
     @Test fun assetAccountCanBeAddedAndCalibratedFromItsCard() {
         val account = "验收卡${System.nanoTime().toString().takeLast(8)}"
         ui.waitUntil(10_000) { ui.onAllNodesWithText("记一笔").fetchSemanticsNodes().isNotEmpty() }
-        ui.onNodeWithText("资产").performClick()
+        ui.onNodeWithText("资产").assertDoesNotExist()
+        ui.onNodeWithContentDescription("个人设置").performClick()
+        ui.onNodeWithText("资产").performScrollTo().performClick()
         ui.onNodeWithText("添加账户").performClick()
         ui.onNodeWithText("账户名称").performTextInput(account)
         ui.onNodeWithText("初始余额").performTextReplacement("127.31")
@@ -180,5 +182,24 @@ class RecordUiTest {
         ui.onNodeWithText("确认校准").performClick()
         ui.waitUntil(10_000) { ui.onAllNodesWithText("¥5,000.00").fetchSemanticsNodes().isNotEmpty() }
         ui.onNodeWithText(account).assertIsDisplayed()
+    }
+
+    @Test fun recordActionOpensFromStatsAndReturnsToTheSameTab() {
+        ui.waitUntil(10_000) { ui.onAllNodesWithText("记一笔").fetchSemanticsNodes().isNotEmpty() }
+        val stats = ui.onNode(hasText("统计") and hasClickAction())
+        stats.performClick()
+        val record = ui.onNodeWithText("记一笔")
+        val distance = record.fetchSemanticsNode().boundsInRoot.center.x - stats.fetchSemanticsNode().boundsInRoot.center.x
+        stats.performTouchInput {
+            down(center)
+            repeat(8) { step -> moveTo(center + Offset(distance * (step + 1) / 8, 0f)) }
+            up()
+        }
+        ui.onNodeWithText("本月收支看板").assertIsDisplayed()
+
+        record.performClick()
+        ui.onNodeWithTag("entry-amount").assertIsFocused()
+        ui.onNodeWithContentDescription("返回").performClick()
+        ui.onNodeWithText("本月收支看板").assertIsDisplayed()
     }
 }

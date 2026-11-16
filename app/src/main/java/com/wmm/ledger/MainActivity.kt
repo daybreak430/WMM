@@ -117,7 +117,7 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
     val pendingRestore by model.pendingRestore.collectAsStateWithLifecycle()
     val fileBusy by model.fileBusy.collectAsStateWithLifecycle()
     var tabName by rememberSaveable { mutableStateOf(Tab.LEDGER.name) }
-    val tab = Tab.valueOf(tabName)
+    val tab = if (tabName == Tab.STATS.name) Tab.STATS else Tab.LEDGER
     var route by rememberSaveable { mutableStateOf<String?>(null) }
     var parent by rememberSaveable { mutableStateOf<String?>(null) }
     var periodName by rememberSaveable { mutableStateOf(Period.MONTH.name) }
@@ -174,7 +174,7 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
     val refined = route == "new" || route?.startsWith("entry:") == true || (route == null && tab == Tab.LEDGER)
     val tabHeight = ledgerNavigationHeight()
     val tabSpace = tabHeight + NavigationBottomGap + NavigationTopGap
-    LedgerScreenFrame(refined, tabName) {
+    LedgerScreenFrame(refined, tab.name) {
         Scaffold(
             containerColor = Color.Transparent,
             contentColor = MaterialTheme.colorScheme.onBackground,
@@ -232,7 +232,7 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
                                                 followToday = true
                                                 periodName = Period.MONTH.name
                                                 tabName = Tab.STATS.name
-                                            }, { route = "new" }, { route = "entry:${it.id}" }, bottomInset)
+                                            }, { route = "entry:${it.id}" }, bottomInset)
                                             Tab.STATS -> StatsScreen(data, today, period, day, { periodName = it.name }, {
                                                 dayText = it.toString()
                                                 followToday = it == today
@@ -240,7 +240,6 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
                                                 provider in keys, model.hasReportConsent(),
                                                 { agreed -> model.generate(period, day, agreed) },
                                                 { route = "model" }, bottomInset)
-                                            Tab.ASSETS -> AssetsScreen(data, model, bottomInset)
                                         }
                                     }
                                 }
@@ -250,6 +249,7 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
                                 Modifier.align(Alignment.BottomCenter).padding(
                                     start = 22.dp, end = 22.dp, bottom = systemBottom + NavigationBottomGap,
                                 ),
+                                onRecord = { if (active) route = "new" },
                             ) { if (active) tabName = it.name }
                         }
                     } else {
@@ -258,9 +258,11 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
                                 when {
                                     current == "settings" -> SettingsScreen(data, model, provider, provider in keys,
                                         fileBusy, appearance, ::back,
+                                        assets = { parent = current; route = "assets" },
                                         tags = { parent = current; route = "tags" },
                                         openModel = { parent = current; route = "model" },
                                         importBill = { parent = current; route = "bill-import" })
+                                    current == "assets" -> AssetsScreen(data, model, ::back)
                                     current == "tags" -> TagsScreen(data, model, ::back)
                                     current == "model" -> ModelSettings(model, provider, keys, ::back)
                                     current == "bill-import" -> BillImportScreen(data, model, provider, provider in keys, ::back) {

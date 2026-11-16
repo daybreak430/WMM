@@ -62,7 +62,7 @@ internal class OpenLocal : ActivityResultContracts.OpenDocument() {
 
 @Composable
 internal fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, activeProvider: Provider, hasKey: Boolean,
-    fileBusy: Boolean, appearance: Appearance, back: () -> Unit, tags: () -> Unit, openModel: () -> Unit,
+    fileBusy: Boolean, appearance: Appearance, back: () -> Unit, assets: () -> Unit, tags: () -> Unit, openModel: () -> Unit,
     importBill: () -> Unit) {
     var editNickname by rememberSaveable { mutableStateOf(false) }
     var avatarOptions by rememberSaveable { mutableStateOf(false) }
@@ -111,6 +111,8 @@ internal fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, active
             }
             item("preferences") {
                 GroupCard {
+                    SettingsRow("资产", icon = Glyph.WALLET, onClick = assets)
+                    Hairline(14)
                     SettingsRow("标签管理", icon = Glyph.TAG, onClick = tags)
                     Hairline(14)
                     SettingsRow("AI 模型", icon = Glyph.SPARK, end = if (hasKey) activeProvider.title else "未配置", onClick = openModel)

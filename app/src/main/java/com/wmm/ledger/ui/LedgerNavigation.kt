@@ -7,12 +7,16 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -25,7 +29,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -35,10 +41,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
@@ -54,13 +63,15 @@ import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.Shadow
+import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 internal enum class Tab(val label: String, val icon: Glyph) {
-    LEDGER("账本", Glyph.BOOK), STATS("统计", Glyph.CHART), ASSETS("资产", Glyph.WALLET)
+    LEDGER("账本", Glyph.BOOK), STATS("统计", Glyph.CHART)
 }
 
 internal val NavigationBottomGap = 6.dp
@@ -78,25 +89,25 @@ internal fun LedgerNavigation(
     backdrop: Backdrop,
     height: Dp,
     modifier: Modifier = Modifier,
+    onRecord: () -> Unit,
     onSelect: (Tab) -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
     val dark = LocalLedgerDark.current
-    val glassTint = if (dark) Color(0xFF203D61).copy(alpha = .28f) else Color(0xFFE8F3FF).copy(alpha = .20f)
+    val glassTint = if (dark) Color(0xFF243D5D).copy(alpha = .34f) else Color(0xFFEAF4FF).copy(alpha = .30f)
     val glass = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        // 沿用 Backdrop 示例的模糊和折射顺序，让滚动内容透过底栏边缘。
         Modifier.drawBackdrop(
             backdrop = backdrop,
             shape = { CircleShape },
             effects = {
                 vibrancy()
-                blur(8.dp.toPx())
-                lens(21.dp.toPx(), 20.dp.toPx())
+                blur(11.dp.toPx())
+                lens(20.dp.toPx(), 17.dp.toPx())
             },
-            highlight = { Highlight(width = .75.dp, alpha = if (dark) .66f else .90f) },
+            highlight = { Highlight(width = .55.dp, alpha = if (dark) .56f else .66f) },
             shadow = {
                 Shadow(radius = 9.dp, offset = DpOffset(0.dp, 3.dp),
-                    color = Color(0xFF16396B).copy(alpha = if (dark) .26f else .13f))
+                    color = Color(0xFF16396B).copy(alpha = if (dark) .26f else .12f))
             },
             onDrawSurface = { drawRect(glassTint) },
         )
@@ -105,90 +116,133 @@ internal fun LedgerNavigation(
             .background(colors.surface.copy(alpha = .83f), CircleShape)
             .border(1.dp, colors.outlineVariant.copy(alpha = .65f), CircleShape)
     }
-    BoxWithConstraints(
-        modifier.widthIn(max = 364.dp).fillMaxWidth().height(height).then(glass).padding(4.dp),
-        contentAlignment = Alignment.CenterStart,
+    Row(
+        modifier.widthIn(max = 364.dp).fillMaxWidth().height(height).then(glass).padding(5.dp),
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        val gap = 4.dp
-        val capsuleWidth = (maxWidth - gap * (Tab.entries.size - 1)) / Tab.entries.size
-        val step = with(LocalDensity.current) { (capsuleWidth + gap).toPx().coerceAtLeast(1f) }
-        val direction = if (LocalLayoutDirection.current == LayoutDirection.Ltr) 1f else -1f
-        val currentTab by rememberUpdatedState(selected)
-        val selectTab by rememberUpdatedState(onSelect)
-        val scope = rememberCoroutineScope()
-        var dragPosition by remember { mutableStateOf<Float?>(null) }
-        var dragging by remember { mutableStateOf(false) }
-        var settleJob by remember { mutableStateOf<Job?>(null) }
-        val expansion by animateFloatAsState(if (dragging) 1f else 0f,
-            spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
-            label = "玻璃胶囊伸展")
+        GlassTabStrip(selected, backdrop, Modifier.weight(1f).fillMaxHeight(), onSelect)
+        RecordNavigationButton(onRecord, Modifier.fillMaxHeight())
+    }
+}
 
-        fun settle(tab: Tab) {
-            val start = dragPosition ?: return
-            dragging = false
-            settleJob = scope.launch {
-                animate(start, tab.ordinal.toFloat(),
-                    animationSpec = spring(dampingRatio = .8f, stiffness = Spring.StiffnessMedium)) { value, _ ->
-                    dragPosition = value
-                }
-                dragPosition = null
+@Composable
+private fun GlassTabStrip(selected: Tab, backdrop: Backdrop, modifier: Modifier, onSelect: (Tab) -> Unit) {
+    val dark = LocalLedgerDark.current
+    val activeInk = if (dark) Color(0xFFB6DAFF) else Color(0xFF075AD0)
+    val idleInk = if (dark) Color(0xFFBDCEE4) else Color(0xFF405977)
+    val interactions = remember { Tab.entries.associateWith { MutableInteractionSource() } }
+    val ledgerPressed by interactions.getValue(Tab.LEDGER).collectIsPressedAsState()
+    val statsPressed by interactions.getValue(Tab.STATS).collectIsPressedAsState()
+    val currentTab by rememberUpdatedState(selected)
+    val selectTab by rememberUpdatedState(onSelect)
+    val scope = rememberCoroutineScope()
+    var capsulePosition by remember { mutableStateOf<Float?>(null) }
+    var dragging by remember { mutableStateOf(false) }
+    var dragSpeed by remember { mutableFloatStateOf(0f) }
+    var settleJob by remember { mutableStateOf<Job?>(null) }
+    val expansion by animateFloatAsState(
+        if (dragging || ledgerPressed || statsPressed) 1f else 0f,
+        spring(dampingRatio = .72f, stiffness = Spring.StiffnessMedium),
+        label = "玻璃触摸形变",
+    )
+    val stretch by animateFloatAsState(
+        dragSpeed, spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh),
+        label = "玻璃拖动惯性",
+    )
+    val highlighted by remember {
+        derivedStateOf { capsulePosition?.roundToInt()?.coerceIn(0, Tab.entries.lastIndex) ?: currentTab.ordinal }
+    }
+
+    fun settle(tab: Tab) {
+        val start = capsulePosition ?: currentTab.ordinal.toFloat()
+        dragging = false
+        dragSpeed = 0f
+        settleJob?.cancel()
+        val end = tab.ordinal.toFloat()
+        capsulePosition = start
+        settleJob = scope.launch {
+            animate(start, end, animationSpec = spring(dampingRatio = .78f, stiffness = Spring.StiffnessMedium)) { value, _ ->
+                capsulePosition = value
             }
+            capsulePosition = null
         }
+    }
 
-        GlassSelectionCapsule(backdrop, Modifier
-            .offset { IntOffset(((dragPosition ?: currentTab.ordinal.toFloat()) * step).roundToInt(), 0) }
-            .width(capsuleWidth)
-            .height(height - 8.dp),
-            expansion = { expansion })
+    BoxWithConstraints(modifier, contentAlignment = Alignment.CenterStart) {
+        val gap = 3.dp
+        val width = (maxWidth - gap) / 2
+        val step = with(LocalDensity.current) { (width + gap).toPx().coerceAtLeast(1f) }
+        val direction = if (LocalLayoutDirection.current == LayoutDirection.Ltr) 1f else -1f
+        GlassSelectionCapsule(
+            backdrop,
+            Modifier
+                .offset { IntOffset(((capsulePosition ?: currentTab.ordinal.toFloat()) * step).roundToInt(), 0) }
+                .width(width)
+                .fillMaxHeight(),
+            expansion = { expansion.coerceIn(0f, 1f) },
+            stretch = { stretch },
+        )
 
-        // 横向拖动只更新胶囊，松手提交页面切换。手势取消时回到当前页。
+        // 导航和主操作各用自己的触控区域。拖动只影响胶囊，松手才提交标签切换。
         Row(
             Modifier.fillMaxWidth().selectableGroup().pointerInput(step, direction) {
+                val tracker = VelocityTracker()
+                var translation = 0f
                 try {
                     detectHorizontalDragGestures(
                         onDragStart = {
                             settleJob?.cancel()
+                            tracker.resetTracking()
+                            translation = capsulePosition ?: currentTab.ordinal.toFloat()
                             dragging = true
-                            dragPosition = dragPosition ?: currentTab.ordinal.toFloat()
+                            capsulePosition = translation
                         },
-                        onHorizontalDrag = { _, delta ->
-                            dragPosition = ((dragPosition ?: currentTab.ordinal.toFloat()) + delta * direction / step)
-                                .coerceIn(0f, Tab.entries.lastIndex.toFloat())
+                        onHorizontalDrag = { change, delta ->
+                            val last = Tab.entries.lastIndex.toFloat()
+                            // 超出轨道后压缩位移，避免形变越过主操作按钮。
+                            translation = (translation + delta * direction / step).coerceIn(-.35f, last + .35f)
+                            val within = translation.coerceIn(0f, last)
+                            capsulePosition = within + (translation - within) * .12f
+                            tracker.addPosition(change.uptimeMillis, change.position)
+                            dragSpeed = (abs(tracker.calculateVelocity().x) / (step * 9f)).coerceIn(0f, 1f)
                         },
                         onDragEnd = {
-                            val target = Tab.entries[(dragPosition ?: currentTab.ordinal.toFloat()).roundToInt()]
-                            selectTab(target)
+                            val target = Tab.entries[translation.roundToInt().coerceIn(0, Tab.entries.lastIndex)]
                             settle(target)
+                            selectTab(target)
                         },
                         onDragCancel = { settle(currentTab) },
                     )
                 } finally {
                     if (dragging) {
                         dragging = false
-                        dragPosition = null
+                        capsulePosition = null
+                        dragSpeed = 0f
                     }
                 }
             },
             horizontalArrangement = Arrangement.spacedBy(gap),
         ) {
-            val highlighted = dragPosition?.roundToInt() ?: selected.ordinal
             for (tab in Tab.entries) {
                 val active = tab == selected
-                val focusedByCapsule = tab.ordinal == highlighted
-                val tint = if (focusedByCapsule) colors.primary else colors.onSurfaceVariant
+                val focused = tab.ordinal == highlighted
+                val tint = if (focused) activeInk else idleInk
                 Column(
-                    Modifier.weight(1f).height(height - 8.dp).clip(CircleShape)
-                        .selectable(active, interactionSource = null, indication = null, role = Role.Tab) {
-                            settleJob?.cancel()
-                            dragPosition = null
-                            onSelect(tab)
+                    Modifier.weight(1f).fillMaxHeight().clip(CircleShape)
+                        .selectable(active, interactionSource = interactions.getValue(tab),
+                            indication = null, role = Role.Tab) {
+                            if (tab != currentTab) {
+                                settle(tab)
+                                onSelect(tab)
+                            }
                         },
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
+                    verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
                 ) {
-                    LucideIcon(tab.icon, tint, size = 21)
+                    LucideIcon(tab.icon, tint, size = 22)
                     Text(tab.label, color = tint, style = MaterialTheme.typography.labelMedium,
-                        fontWeight = if (focusedByCapsule) FontWeight.SemiBold else FontWeight.Medium)
+                        fontWeight = if (focused) FontWeight.Bold else FontWeight.SemiBold)
                 }
             }
         }
@@ -196,31 +250,72 @@ internal fun LedgerNavigation(
 }
 
 @Composable
-private fun GlassSelectionCapsule(backdrop: Backdrop, modifier: Modifier, expansion: () -> Float) {
-    val accent = MaterialTheme.colorScheme.primary
+private fun GlassSelectionCapsule(
+    backdrop: Backdrop, modifier: Modifier, expansion: () -> Float, stretch: () -> Float,
+) {
     val dark = LocalLedgerDark.current
-    val tint = accent.copy(alpha = if (dark) .22f else .14f)
+    val tint = if (dark) Color(0xFF4677B3).copy(alpha = .42f) else Color(0xFFD4E8FF).copy(alpha = .67f)
     val scale: GraphicsLayerScope.() -> Unit = {
-        scaleX = 1f + .08f * expansion()
-        scaleY = 1f + .065f * expansion()
+        scaleX = 1f + .045f * expansion() + .085f * stretch()
+        scaleY = 1f + .035f * expansion() - .038f * stretch()
     }
     val glass = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        // 延续上游选中镜片的动态折射、内阴影和速度形变，压低静止时的白色边缘。
         Modifier.drawBackdrop(
             backdrop = backdrop,
             shape = { CircleShape },
             effects = {
-                blur(6.dp.toPx())
-                lens((8.dp + 3.dp * expansion()).toPx(), (8.dp + 7.dp * expansion()).toPx())
+                blur(11.dp.toPx())
+                val pressed = expansion()
+                lens((7.dp + 4.dp * pressed).toPx(), (7.dp + 9.dp * pressed).toPx(),
+                    chromaticAberration = pressed > .2f)
             },
-            highlight = { Highlight(width = .85.dp, alpha = .75f) },
-            shadow = { Shadow(radius = 5.dp, offset = DpOffset(0.dp, 1.dp), color = accent.copy(alpha = .18f)) },
+            highlight = { Highlight(width = .6.dp, alpha = .42f + .4f * expansion()) },
+            shadow = {
+                Shadow(radius = 5.dp, offset = DpOffset(0.dp, 1.dp),
+                    color = Color(0xFF407CBD).copy(alpha = .14f + .10f * expansion()))
+            },
+            innerShadow = {
+                InnerShadow(radius = 7.dp, offset = DpOffset(0.dp, 3.dp),
+                    color = Color(0xFF3D75B6).copy(alpha = .22f), alpha = expansion())
+            },
             layerBlock = scale,
-            onDrawSurface = { drawRect(tint) },
+            onDrawSurface = {
+                drawRect(tint)
+                val pressed = expansion()
+                if (pressed > 0f) {
+                    drawRect(Brush.radialGradient(
+                        listOf(Color.White.copy(alpha = .22f * pressed), Color.Transparent),
+                        center = Offset(size.width * .43f, 0f), radius = size.width * .68f,
+                    ))
+                }
+            },
         )
     } else {
         Modifier.graphicsLayer(scale)
             .background(tint, CircleShape)
-            .border(1.dp, accent.copy(alpha = .22f), CircleShape)
+            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = .22f), CircleShape)
     }
     Box(modifier.then(glass))
+}
+
+@Composable
+private fun RecordNavigationButton(onRecord: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = MaterialTheme.colorScheme
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) .96f else 1f,
+        spring(dampingRatio = .8f, stiffness = Spring.StiffnessMedium), label = "记一笔按压")
+    Row(
+        modifier.graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(CircleShape)
+            .background(colors.primary)
+            .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onRecord)
+            .padding(horizontal = 13.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        LucideIcon(Glyph.PLUS, colors.onPrimary, size = 20)
+        Text("记一笔", color = colors.onPrimary, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+    }
 }

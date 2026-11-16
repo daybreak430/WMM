@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -29,7 +28,6 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,7 +39,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -74,27 +71,17 @@ import java.util.Locale
 
 @Composable
 fun LedgerScreen(data: LedgerSnapshot, today: LocalDate, openSettings: () -> Unit, openStats: () -> Unit,
-    record: () -> Unit, edit: (Entry) -> Unit, bottomInset: Dp) {
+    edit: (Entry) -> Unit, bottomInset: Dp) {
     val stats = remember(data, today) { data.stats(Period.MONTH, today, today) }
     val colors = MaterialTheme.colorScheme
     val inset = LedgerPageInset()
-    Scaffold(
-        containerColor = Color.Transparent,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            PageHeader(stringResource(R.string.app_name), mark = Glyph.BOOK) { UserAvatar(data.profile, openSettings) }
-        },
-        bottomBar = {
-            PrimaryAction("记一笔", record,
-                Modifier.fillMaxWidth().padding(start = inset, end = inset, top = 10.dp, bottom = bottomInset + 4.dp),
-                Glyph.PLUS)
-        },
-    ) { overlayPadding ->
+    Column(Modifier.fillMaxSize()) {
+        PageHeader(stringResource(R.string.app_name), mark = Glyph.BOOK) { UserAvatar(data.profile, openSettings) }
         // 流水绘制到悬浮底栏背后，末尾留出悬浮控件的高度，便于滑出并点中最后一笔。
         LazyColumn(
-            Modifier.fillMaxSize().padding(top = overlayPadding.calculateTopPadding()),
+            Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                start = inset, end = inset, top = 4.dp, bottom = overlayPadding.calculateBottomPadding() + 14.dp,
+                start = inset, end = inset, top = 4.dp, bottom = bottomInset + 14.dp,
             ),
         ) {
             item("cover") {
