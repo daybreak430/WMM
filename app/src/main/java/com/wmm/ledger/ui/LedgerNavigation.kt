@@ -89,7 +89,8 @@ private val RecordButtonHeight = 34.dp
 @Composable
 internal fun ledgerNavigationHeight(): Dp {
     val lineHeight = MaterialTheme.typography.labelMedium.lineHeight
-    return maxOf(62.dp, with(LocalDensity.current) { lineHeight.toDp() } + 42.dp)
+    // 上下各留 5dp，标签的可点按高度至少为 48dp。
+    return maxOf(58.dp, with(LocalDensity.current) { lineHeight.toDp() } + 38.dp)
 }
 
 @Composable
@@ -277,7 +278,7 @@ private fun GlassSelectionCapsule(
         scaleY = 1f + .035f * expansion() - .038f * stretch()
     }
     val glass = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        // 延续上游选中镜片的动态折射、内阴影和速度形变，压低静止时的白色边缘。
+        // 胶囊用填色和折射显示选中态，外缘高光由底栏容器绘制。
         Modifier.drawBackdrop(
             backdrop = backdrop,
             shape = { CircleShape },
@@ -287,7 +288,7 @@ private fun GlassSelectionCapsule(
                 lens((7.dp + 4.dp * pressed).toPx(), (7.dp + 9.dp * pressed).toPx(),
                     chromaticAberration = pressed > .2f)
             },
-            highlight = { Highlight(width = .6.dp, alpha = .42f + .4f * expansion()) },
+            highlight = null,
             shadow = {
                 Shadow(radius = 5.dp, offset = DpOffset(0.dp, 1.dp),
                     color = Color(0xFF407CBD).copy(alpha = .14f + .10f * expansion()))
@@ -311,7 +312,6 @@ private fun GlassSelectionCapsule(
     } else {
         Modifier.graphicsLayer(scale)
             .background(tint, CircleShape)
-            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = .22f), CircleShape)
     }
     Box(modifier.then(glass))
 }
