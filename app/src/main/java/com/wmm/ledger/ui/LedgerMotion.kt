@@ -29,6 +29,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 
 internal const val PAGE_TRANSITION_MS = 230
 private const val EXIT_MS = 160
+private const val ENTRY_DRAWER_EXIT_MS = 340
 
 internal fun pageMotion(direction: Int): ContentTransform {
     val enter = fadeIn(tween(PAGE_TRANSITION_MS)) +
@@ -45,9 +46,11 @@ internal fun entryDrawerEnterMotion(): ContentTransform {
 }
 
 internal fun entryDrawerExitMotion(): ContentTransform {
-    val exit = fadeOut(tween(180)) +
-        slideOutVertically(tween(280, easing = FastOutSlowInEasing)) { height -> height }
-    return ContentTransform(fadeIn(tween(120)), exit, sizeTransform = null)
+    // 让记账页在发起页上方向下滑动，滑出一段距离后再淡出。
+    val fadeDelay = 80
+    val exit = fadeOut(tween(ENTRY_DRAWER_EXIT_MS - fadeDelay, delayMillis = fadeDelay)) +
+        slideOutVertically(tween(ENTRY_DRAWER_EXIT_MS, easing = FastOutSlowInEasing)) { height -> height }
+    return ContentTransform(fadeIn(tween(120)), exit, targetContentZIndex = -1f, sizeTransform = null)
 }
 
 internal fun Modifier.blockExitingPage(active: Boolean): Modifier {

@@ -47,9 +47,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -135,6 +137,7 @@ private fun GlassNavigationControls(
     selected: Tab, backdrop: Backdrop, modifier: Modifier, onRecord: () -> Unit, onSelect: (Tab) -> Unit,
 ) {
     val dark = LocalLedgerDark.current
+    val haptics = LocalHapticFeedback.current
     val activeInk = if (dark) Color(0xFFB6DAFF) else Color(0xFF075AD0)
     val idleInk = if (dark) Color(0xFFBDCEE4) else Color(0xFF405977)
     val interactions = remember { Tab.entries.associateWith { MutableInteractionSource() } }
@@ -241,6 +244,7 @@ private fun GlassNavigationControls(
                     Modifier.weight(1f).fillMaxHeight().clip(CircleShape)
                         .selectable(active, interactionSource = interactions.getValue(tab),
                             indication = null, role = Role.Tab) {
+                            haptics.performHapticFeedback(HapticFeedbackType.VirtualKey)
                             if (tab != currentTab) {
                                 settle(tab)
                                 onSelect(tab)
@@ -315,6 +319,7 @@ private fun GlassSelectionCapsule(
 @Composable
 private fun RecordNavigationButton(onRecord: () -> Unit, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
+    val haptics = LocalHapticFeedback.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) .96f else 1f,
@@ -324,7 +329,10 @@ private fun RecordNavigationButton(onRecord: () -> Unit, modifier: Modifier = Mo
             .clip(CircleShape)
             .background(colors.primary)
             .semantics { contentDescription = RECORD_DESCRIPTION }
-            .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onRecord),
+            .clickable(interactionSource = interaction, indication = null, role = Role.Button) {
+                haptics.performHapticFeedback(HapticFeedbackType.VirtualKey)
+                onRecord()
+            },
         contentAlignment = Alignment.Center,
     ) {
         LucideIcon(
