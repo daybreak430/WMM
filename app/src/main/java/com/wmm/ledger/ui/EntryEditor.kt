@@ -290,21 +290,33 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
         }
     }
     if (tagDialog) {
-        NameDialog("新建${kind.title}标签", "标签名称", "", onDismiss = { tagDialog = false }) { name ->
-            model.saveTag(kind, name, null) { tag ->
-                manualTagId = tag.id
-                tagChosen = true
-                tagDialog = false
-            }
+        NewLabelDialog(
+            model = model,
+            title = "新建${kind.title}标签",
+            fieldLabel = "标签名称",
+            section = kind.title,
+            onDismiss = { tagDialog = false },
+        ) { name, style ->
+            model.saveTag(kind, name, null, done = { tag ->
+                    manualTagId = tag.id
+                    tagChosen = true
+                    tagDialog = false
+                }, style = style)
         }
     }
     if (newScene && kind == Kind.EXPENSE) {
-        NameDialog("新建场景", "场景名称", "", onDismiss = { newScene = false }) { name ->
-            model.saveScene(name) {
-                manualSceneId = it.id
-                sceneChosen = true
-                newScene = false
-            }
+        NewLabelDialog(
+            model = model,
+            title = "新建场景",
+            fieldLabel = "场景名称",
+            section = "场景",
+            onDismiss = { newScene = false },
+        ) { name, style ->
+            model.saveScene(name, done = {
+                    manualSceneId = it.id
+                    sceneChosen = true
+                    newScene = false
+                }, style = style)
         }
     }
     if (accountDialog && defaultAccountDialog) {

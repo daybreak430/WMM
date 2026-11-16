@@ -151,12 +151,13 @@ fun EmptyPanel(title: String, detail: String? = null, glyph: Glyph = Glyph.BOOK)
 
 @Composable
 fun SettingsRow(title: String, description: String? = null, icon: Glyph? = null, enabled: Boolean = true,
-    end: String? = null, endContent: (@Composable () -> Unit)? = null, onClick: () -> Unit) {
+    end: String? = null, endContent: (@Composable () -> Unit)? = null,
+    leadingContent: (@Composable () -> Unit)? = null, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth().clickable(enabled = enabled, role = Role.Button, onClick = onClick)
         .padding(horizontal = 14.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (icon != null) IconBadge(icon)
+        if (leadingContent != null) leadingContent() else if (icon != null) IconBadge(icon)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium,
                 color = if (enabled) colors.onSurface else colors.onSurfaceVariant)

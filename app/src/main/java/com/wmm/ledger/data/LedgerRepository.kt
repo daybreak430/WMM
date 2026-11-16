@@ -44,7 +44,12 @@ class LedgerRepository(context: Context) {
         }
     }
 
-    suspend fun saveTag(kind: Kind, name: String, id: String? = null): Tag = withContext(Dispatchers.IO) {
+    internal suspend fun saveTag(
+        kind: Kind,
+        name: String,
+        id: String? = null,
+        style: LabelStyle? = null,
+    ): Tag = withContext(Dispatchers.IO) {
         val trimmed = name.trim()
         if (!validName(trimmed)) throw LedgerError("标签名称需为 1–$MAX_NAME 个字。")
         database.withTransaction {
@@ -53,7 +58,11 @@ class LedgerRepository(context: Context) {
             if (duplicate != null && duplicate.id != id) {
                 throw LedgerError(if (duplicate.archived) "已有同名归档标签，可在标签管理中恢复。" else "已有同名标签。")
             }
-            (old?.copy(name = trimmed) ?: Tag(newId(), kind.name, trimmed)).also { dao.save(it) }
+            val saved = old?.copy(name = trimmed) ?: Tag(newId(), kind.name, trimmed)
+            val styled = style?.let {
+                saved.copy(iconKey = it.icon.name, iconColor = it.color.name)
+            } ?: saved
+            styled.also { dao.save(it) }
         }
     }
 
@@ -79,13 +88,17 @@ class LedgerRepository(context: Context) {
         if (order.size != ids.size || order.toSet() != ids) throw LedgerError("列表已更新，请重新排序。")
     }
 
-    suspend fun saveScene(name: String): Scene = withContext(Dispatchers.IO) {
+    internal suspend fun saveScene(name: String, style: LabelStyle? = null): Scene = withContext(Dispatchers.IO) {
         val trimmed = name.trim()
         if (!validName(trimmed)) throw LedgerError("场景名称需为 1–$MAX_NAME 个字。")
         database.withTransaction {
             val key = trimmed.lowercase(Locale.ROOT)
             dao.scenes().firstOrNull { it.name.lowercase(Locale.ROOT) == key }
-                ?: Scene(newId(), trimmed).also { dao.addScene(it) }
+                ?: Scene(
+                    newId(), trimmed,
+                    iconKey = style?.icon?.name,
+                    iconColor = style?.color?.name,
+                ).also { dao.addScene(it) }
         }
     }
 
@@ -132,6 +145,25 @@ class LedgerRepository(context: Context) {
         LabelIconPreview(targets.mapIndexed { index, target ->
             LabelIconChange(target, modelStyles[index] ?: LabelIcons.local(target.name, target.section))
         }, modelStyles.isNotEmpty())
+    }
+
+    internal suspend fun suggestLabelIcon(
+        provider: Provider?,
+        name: String,
+        section: String,
+    ): LabelIconSuggestion = withContext(Dispatchers.IO) {
+        val target = StyleLabel("new-label", name.trim(), section, null)
+        val key = provider?.let(secrets::modelKey)
+        val modelStyle = if (provider != null && key != null) {
+            try {
+                LabelIcons.parse(modelClient.send(provider, key, LabelIcons.request(provider, listOf(target))))[0]
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            }
+        } else null
+        LabelIconSuggestion(modelStyle ?: LabelIcons.local(target.name, section), modelStyle != null)
     }
 
     internal suspend fun saveLabelIcons(changes: List<LabelIconChange>, onlyUnstyled: Boolean = false) = database.withTransaction {

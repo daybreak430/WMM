@@ -70,6 +70,7 @@ class HabitsAndIconsUiTest {
                 }
             }
             ui.onNodeWithContentDescription("返回").performClick()
+            ui.onNodeWithTag("tag-list-icon:${meal.id}", useUnmergedTree = true).assertIsDisplayed()
             ui.onNodeWithContentDescription("返回").performClick()
             ui.onNodeWithContentDescription("返回").performClick()
             ui.onAllNodes(hasText("工作日 · 午餐") and hasText("支出"))[0].assertIsDisplayed()

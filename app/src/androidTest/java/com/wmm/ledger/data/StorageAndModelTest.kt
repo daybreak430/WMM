@@ -317,6 +317,20 @@ class StorageAndModelTest {
         assertEquals(null, repository.snapshot().entries.single().habitArea)
     }
 
+    @Test fun newLabelsCanBeSavedWithSuggestedIcons() = runBlocking {
+        val repository = LedgerRepository(isolated())
+        val tagStyle = LabelStyle(LabelIcon.COFFEE, IconColor.AMBER)
+        val sceneStyle = LabelStyle(LabelIcon.TRAVEL, IconColor.AZURE)
+
+        val tag = repository.saveTag(Kind.EXPENSE, "咖啡", style = tagStyle)
+        val scene = repository.saveScene("旅行", style = sceneStyle)
+
+        assertEquals(tagStyle.icon.name, tag.iconKey)
+        assertEquals(tagStyle.color.name, tag.iconColor)
+        assertEquals(sceneStyle.icon.name, scene.iconKey)
+        assertEquals(sceneStyle.color.name, scene.iconColor)
+    }
+
     private fun isolated(): Context {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val id = UUID.randomUUID().toString()

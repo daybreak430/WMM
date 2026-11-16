@@ -47,6 +47,7 @@ internal data class StyleLabel(val id: String, val name: String, val section: St
 
 internal data class LabelIconChange(val target: StyleLabel, val style: LabelStyle?)
 internal data class LabelIconPreview(val changes: List<LabelIconChange>, val usedModel: Boolean)
+internal data class LabelIconSuggestion(val style: LabelStyle, val usedModel: Boolean)
 
 internal fun LedgerSnapshot.styleLabels(): List<StyleLabel> =
     tags.filterNot(Tag::archived).map { tag ->

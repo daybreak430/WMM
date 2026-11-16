@@ -125,7 +125,7 @@ internal fun LedgerNavigation(
     }
     GlassNavigationControls(
         selected, backdrop,
-        modifier.widthIn(max = 364.dp).fillMaxWidth().height(height).then(glass).padding(5.dp),
+        modifier.widthIn(max = 320.dp).fillMaxWidth().height(height).then(glass).padding(5.dp),
         onRecord, onSelect,
     )
 }

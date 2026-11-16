@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -46,6 +47,7 @@ import com.wmm.ledger.Appearance
 import com.wmm.ledger.BuildConfig
 import com.wmm.ledger.LedgerViewModel
 import com.wmm.ledger.data.Kind
+import com.wmm.ledger.data.LabelStyle
 import com.wmm.ledger.data.LedgerSnapshot
 import com.wmm.ledger.data.Provider
 import com.wmm.ledger.data.currency
@@ -320,11 +322,33 @@ fun TagsScreen(data: LedgerSnapshot, model: LedgerViewModel, back: () -> Unit) {
                             save = { updated, failed -> model.reorderTags(kind, updated, failed) },
                             modifier = Modifier.fillMaxWidth().animateItem(),
                         ) {
-                            GroupCard { SettingsRow(tagsById.getValue(id).name, icon = Glyph.TAG) { open = id } }
+                            val tag = tagsById.getValue(id)
+                            GroupCard {
+                                SettingsRow(
+                                    tag.name,
+                                    leadingContent = {
+                                        LabelBadge(
+                                            LabelStyle.from(tag.iconKey, tag.iconColor), 40,
+                                            Modifier.testTag("tag-list-icon:${tag.id}"),
+                                        )
+                                    },
+                                ) { open = id }
+                            }
                         }
                     }
                     items(archived, key = { it.id }) { tag ->
-                        GroupCard { SettingsRow(tag.name, icon = Glyph.TAG, end = "已归档") { open = tag.id } }
+                        GroupCard {
+                            SettingsRow(
+                                tag.name,
+                                end = "已归档",
+                                leadingContent = {
+                                    LabelBadge(
+                                        LabelStyle.from(tag.iconKey, tag.iconColor), 40,
+                                        Modifier.testTag("tag-list-icon:${tag.id}"),
+                                    )
+                                },
+                            ) { open = tag.id }
+                        }
                     }
                 }
             }
@@ -344,10 +368,19 @@ fun TagsScreen(data: LedgerSnapshot, model: LedgerViewModel, back: () -> Unit) {
         }, confirmButton = { TextButton(onClick = { open = null }) { Text("关闭") } })
     }
     val editing = tagsById[edit] ?: archived.firstOrNull { it.id == edit }
-    if (edit == "new" || editing != null) {
-        NameDialog(if (edit == "new") "新建${kind.title}标签" else "标签改名", "标签名称", editing?.name.orEmpty(),
-            onDismiss = { edit = null }) { name ->
-            model.saveTag(kind, name, editing?.id) { edit = null }
+    if (edit == "new") {
+        NewLabelDialog(
+            model = model,
+            title = "新建${kind.title}标签",
+            fieldLabel = "标签名称",
+            section = kind.title,
+            onDismiss = { edit = null },
+        ) { name, style ->
+            model.saveTag(kind, name, null, done = { edit = null }, style = style)
+        }
+    } else if (editing != null) {
+        NameDialog("标签改名", "标签名称", editing.name, onDismiss = { edit = null }) { name ->
+            model.saveTag(kind, name, editing.id, done = { edit = null })
         }
     }
 }

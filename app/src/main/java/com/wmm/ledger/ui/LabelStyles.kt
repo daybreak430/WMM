@@ -105,10 +105,10 @@ internal fun IconColor.labelColors(): LabelColors {
 }
 
 @Composable
-internal fun LabelBadge(style: LabelStyle?, size: Int = 38) {
+internal fun LabelBadge(style: LabelStyle?, size: Int = 38, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
     val palette = style?.color?.labelColors()
-    Box(Modifier.size(size.dp)
+    Box(modifier.size(size.dp)
         .background(palette?.fill ?: colors.surfaceVariant, RoundedCornerShape(11.dp)),
         contentAlignment = Alignment.Center) {
         val iconSize = if (size <= 36) 17 else 19

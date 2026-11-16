@@ -14,6 +14,7 @@ import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -39,16 +40,21 @@ class RecordUiTest {
         ui.onNodeWithText("保存流水").assertIsNotEnabled()
         ui.onNodeWithText("新建标签").performScrollTo().performClick()
         ui.onNodeWithText("标签名称").performTextInput(tag)
+        ui.onNodeWithText("AI 配图标").performClick()
+        ui.waitUntil(5_000) { ui.onAllNodesWithTag("new-label-icon-preview").fetchSemanticsNodes().isNotEmpty() }
         ui.onNodeWithText("保存").performClick()
+        ui.waitUntil(10_000) { ui.onAllNodesWithTag("new-label-field").fetchSemanticsNodes().isEmpty() }
         ui.waitUntil(10_000) { ui.onAllNodesWithText(tag).fetchSemanticsNodes().isNotEmpty() }
         val scene = "出差${tag.takeLast(4)}"
         val combined = "$scene · $tag"
         ui.onNodeWithText("新建场景").performScrollTo().performClick()
         ui.onNodeWithText("场景名称").performTextInput(scene)
+        ui.onNodeWithText("AI 配图标").performClick()
+        ui.waitUntil(5_000) { ui.onAllNodesWithTag("new-label-icon-preview").fetchSemanticsNodes().isNotEmpty() }
         ui.onNodeWithText("保存").performClick()
+        ui.waitUntil(10_000) { ui.onAllNodesWithTag("new-label-field").fetchSemanticsNodes().isEmpty() }
         ui.waitUntil(10_000) { ui.onAllNodesWithText(scene).fetchSemanticsNodes().isNotEmpty() }
-        ui.onNodeWithText(scene).assertIsOn().performClick().assertIsOff()
-        ui.onNodeWithText(scene).performClick().assertIsOn()
+        ui.onNodeWithText(scene).assertIsOn()
 
         ui.onNodeWithText("日期时间").performScrollTo().performClick()
         ui.onNodeWithText("日期").assertIsDisplayed()

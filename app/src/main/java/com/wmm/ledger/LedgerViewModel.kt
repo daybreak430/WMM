@@ -12,6 +12,7 @@ import com.wmm.ledger.data.BillRow
 import com.wmm.ledger.data.similarBillRows
 import com.wmm.ledger.data.LabelIconChange
 import com.wmm.ledger.data.LabelIconPreview
+import com.wmm.ledger.data.LabelIconSuggestion
 import com.wmm.ledger.data.LabelStyle
 import com.wmm.ledger.data.StyleLabel
 import com.wmm.ledger.data.Kind
@@ -96,14 +97,14 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun saveTag(kind: Kind, name: String, id: String?, done: (Tag) -> Unit) =
-        perform("无法保存标签。") { done(repository.saveTag(kind, name, id)) }
+    internal fun saveTag(kind: Kind, name: String, id: String?, done: (Tag) -> Unit, style: LabelStyle? = null) =
+        perform("无法保存标签。") { done(repository.saveTag(kind, name, id, style)) }
 
     fun archiveTag(id: String, archive: Boolean) =
         perform("无法修改标签。") { repository.archiveTag(id, archive) }
 
-    fun saveScene(name: String, done: (Scene) -> Unit) =
-        perform("无法保存场景。") { done(repository.saveScene(name)) }
+    internal fun saveScene(name: String, done: (Scene) -> Unit, style: LabelStyle? = null) =
+        perform("无法保存场景。") { done(repository.saveScene(name, style)) }
 
     fun reorderTags(kind: Kind, order: List<String>, onFailure: () -> Unit) =
         perform("无法保存标签顺序。", onFailure) { repository.reorderTags(kind, order) }
@@ -135,6 +136,16 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
                 stylingIcons.value = false
             }
         }
+    }
+
+    internal fun suggestNewLabelIcon(
+        name: String,
+        section: String,
+        useModel: Boolean,
+        done: (LabelIconSuggestion) -> Unit,
+        onFailure: () -> Unit,
+    ) = perform("无法生成图标建议。", onFailure) {
+        done(repository.suggestLabelIcon(provider.value.takeIf { useModel }, name, section))
     }
 
     internal fun applyIconPreview() {
