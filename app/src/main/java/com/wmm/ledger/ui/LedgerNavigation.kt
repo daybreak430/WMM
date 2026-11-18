@@ -136,7 +136,7 @@ private fun GlassNavigationControls(
 ) {
     val dark = LocalLedgerDark.current
     val haptics = LocalHapticFeedback.current
-    val activeInk = if (dark) Color(0xFFB6DAFF) else MaterialTheme.colorScheme.primary
+    val activeInk = if (dark) Color(0xFFC9E6FF) else Color(0xFF087CF0)
     val idleInk = if (dark) Color(0xFFBDCEE4) else Color(0xFF405977)
     val interactions = remember { Tab.entries.associateWith { MutableInteractionSource() } }
     val ledgerPressed by interactions.getValue(Tab.LEDGER).collectIsPressedAsState()
