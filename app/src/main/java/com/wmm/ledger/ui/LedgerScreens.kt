@@ -149,7 +149,6 @@ private fun SummaryMetric(kind: Kind, cents: Long, modifier: Modifier = Modifier
 
 fun LazyListScope.ledgerRows(entries: List<Entry>, data: LedgerSnapshot, today: LocalDate, edit: (Entry) -> Unit) {
     val tagById = data.tags.associateBy { it.id }
-    val accountById = data.accounts.associateBy { it.id }
     val sceneById = data.scenes.associateBy { it.id }
     entries.groupBy { it.day }.toSortedMap(reverseOrder()).forEach { (date, records) ->
         item("day:$date") {
@@ -175,8 +174,7 @@ fun LazyListScope.ledgerRows(entries: List<Entry>, data: LedgerSnapshot, today: 
                     val scene = sceneById[entry.sceneId]?.name
                     val name = type?.name.orEmpty()
                     val label = if (scene == null) name else "$scene · $name"
-                    LedgerRow(entry, label, LabelStyle.from(type?.iconKey, type?.iconColor),
-                        accountById[entry.accountId]?.name, edit)
+                    LedgerRow(entry, label, LabelStyle.from(type?.iconKey, type?.iconColor), edit)
                     if (position < records.lastIndex) {
                         if (refined) HorizontalDivider(Modifier.padding(start = 60.dp, end = 14.dp), color = colors.outlineVariant)
                         else Hairline(14)
@@ -188,7 +186,7 @@ fun LazyListScope.ledgerRows(entries: List<Entry>, data: LedgerSnapshot, today: 
 }
 
 @Composable
-private fun LedgerRow(entry: Entry, tag: String, icon: LabelStyle?, account: String?, edit: (Entry) -> Unit) {
+private fun LedgerRow(entry: Entry, tag: String, icon: LabelStyle?, edit: (Entry) -> Unit) {
     val income = entry.kind == Kind.INCOME.name
     val colors = MaterialTheme.colorScheme
     val refined = LocalLedgerRefinement.current
@@ -205,10 +203,6 @@ private fun LedgerRow(entry: Entry, tag: String, icon: LabelStyle?, account: Str
                         .padding(horizontal = 5.dp, vertical = 1.dp),
                     color = if (income) colors.primary else colors.onSurfaceVariant,
                     style = MaterialTheme.typography.labelSmall, maxLines = 1)
-            }
-            if (!account.isNullOrEmpty()) {
-                Text(account, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (entry.note.isNotBlank()) {
                 Text(entry.note, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,

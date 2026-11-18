@@ -42,10 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -68,7 +65,6 @@ import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
-import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.Shadow
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -127,7 +123,7 @@ internal fun LedgerNavigation(
             .border(1.dp, colors.outlineVariant.copy(alpha = .65f), CircleShape)
     }
     GlassNavigationControls(
-        selected, backdrop,
+        selected,
         modifier.widthIn(max = 224.dp).fillMaxWidth().height(height).then(glass).padding(5.dp),
         onRecord, onSelect,
     )
@@ -135,11 +131,11 @@ internal fun LedgerNavigation(
 
 @Composable
 private fun GlassNavigationControls(
-    selected: Tab, backdrop: Backdrop, modifier: Modifier, onRecord: () -> Unit, onSelect: (Tab) -> Unit,
+    selected: Tab, modifier: Modifier, onRecord: () -> Unit, onSelect: (Tab) -> Unit,
 ) {
     val dark = LocalLedgerDark.current
     val haptics = LocalHapticFeedback.current
-    val activeInk = if (dark) Color(0xFFB6DAFF) else Color(0xFF075AD0)
+    val activeInk = Color(0xFFB6DAFF)
     val idleInk = if (dark) Color(0xFFBDCEE4) else Color(0xFF405977)
     val interactions = remember { Tab.entries.associateWith { MutableInteractionSource() } }
     val ledgerPressed by interactions.getValue(Tab.LEDGER).collectIsPressedAsState()
@@ -186,8 +182,7 @@ private fun GlassNavigationControls(
         val width = (available - RecordButtonWidth) / 2
         val step = with(density) { (width + RecordButtonWidth + gap * 2).toPx().coerceAtLeast(1f) }
         val direction = if (LocalLayoutDirection.current == LayoutDirection.Ltr) 1f else -1f
-        GlassSelectionCapsule(
-            backdrop,
+        SelectionCapsule(
             Modifier
                 .offset { IntOffset(((capsulePosition ?: currentTab.ordinal.toFloat()) * step).roundToInt(), 0) }
                 .width(width)
@@ -268,52 +263,14 @@ private fun GlassNavigationControls(
 }
 
 @Composable
-private fun GlassSelectionCapsule(
-    backdrop: Backdrop, modifier: Modifier, expansion: () -> Float, stretch: () -> Float,
-) {
-    val dark = LocalLedgerDark.current
-    val tint = if (dark) Color(0xFF4677B3).copy(alpha = .42f) else Color(0xFFD4E8FF).copy(alpha = .67f)
-    val scale: GraphicsLayerScope.() -> Unit = {
-        scaleX = 1f + .045f * expansion() + .085f * stretch()
-        scaleY = 1f + .035f * expansion() - .038f * stretch()
-    }
-    val glass = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        // 胶囊用填色和折射显示选中态，外缘高光由底栏容器绘制。
-        Modifier.drawBackdrop(
-            backdrop = backdrop,
-            shape = { CircleShape },
-            effects = {
-                blur(11.dp.toPx())
-                val pressed = expansion()
-                lens((7.dp + 4.dp * pressed).toPx(), (7.dp + 9.dp * pressed).toPx(),
-                    chromaticAberration = pressed > .2f)
-            },
-            highlight = null,
-            shadow = {
-                Shadow(radius = 5.dp, offset = DpOffset(0.dp, 1.dp),
-                    color = Color(0xFF407CBD).copy(alpha = .14f + .10f * expansion()))
-            },
-            innerShadow = {
-                InnerShadow(radius = 7.dp, offset = DpOffset(0.dp, 3.dp),
-                    color = Color(0xFF3D75B6).copy(alpha = .22f), alpha = expansion())
-            },
-            layerBlock = scale,
-            onDrawSurface = {
-                drawRect(tint)
-                val pressed = expansion()
-                if (pressed > 0f) {
-                    drawRect(Brush.radialGradient(
-                        listOf(Color.White.copy(alpha = .22f * pressed), Color.Transparent),
-                        center = Offset(size.width * .43f, 0f), radius = size.width * .68f,
-                    ))
-                }
-            },
-        )
-    } else {
-        Modifier.graphicsLayer(scale)
-            .background(tint, CircleShape)
-    }
-    Box(modifier.then(glass))
+private fun SelectionCapsule(modifier: Modifier, expansion: () -> Float, stretch: () -> Float) {
+    // 深灰实色承载选中态，滑动时仅做轻微形变，保持平整的视觉层级。
+    Box(
+        modifier.graphicsLayer {
+            scaleX = 1f + .045f * expansion() + .085f * stretch()
+            scaleY = 1f + .035f * expansion() - .038f * stretch()
+        }.background(Color(0xFF1F1F1F), CircleShape),
+    )
 }
 
 @Composable

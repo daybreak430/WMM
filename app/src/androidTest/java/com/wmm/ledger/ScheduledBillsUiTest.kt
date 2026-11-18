@@ -11,6 +11,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import com.wmm.ledger.data.Entry
+import com.wmm.ledger.data.Account
 import com.wmm.ledger.data.Kind
 import com.wmm.ledger.data.LedgerSnapshot
 import com.wmm.ledger.data.Tag
@@ -30,11 +31,14 @@ class ScheduledBillsUiTest {
         val tag = Tag("ui-subscription", Kind.EXPENSE.name, "自动订阅")
         val yesterday = LocalDate.now().minusDays(1)
         val at = yesterday.atTime(8, 17).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        val entry = Entry("timed", Kind.EXPENSE.name, 800, tag.id, null, "", at, yesterday.toString())
-        withLedger(LedgerSnapshot(tags = listOf(tag), entries = listOf(entry))) { repository, activity ->
+        val account = Account("hidden-account", "SAVINGS", "验收关联账户", 100_000, at - 1)
+        val entry = Entry("timed", Kind.EXPENSE.name, 800, tag.id, account.id, "", at, yesterday.toString())
+        withLedger(LedgerSnapshot(tags = listOf(tag), entries = listOf(entry), accounts = listOf(account))) { repository, activity ->
             ui.waitUntil(10_000) { ui.onNodeWithText(tag.name).isDisplayed() }
             ui.onNodeWithText("08:17").assertDoesNotExist()
+            ui.onNodeWithText(account.name).assertDoesNotExist()
             ui.onNodeWithText(tag.name).performClick()
+            ui.onNodeWithText(account.name).performScrollTo().assertIsDisplayed()
             ui.onNodeWithText("日期时间").performScrollTo().performClick()
             ui.onNodeWithText("08:17").assertIsDisplayed()
             ui.onNodeWithText("取消").performClick()
