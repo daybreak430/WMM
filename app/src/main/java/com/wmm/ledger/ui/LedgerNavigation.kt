@@ -265,8 +265,8 @@ private fun GlassNavigationControls(
 
 @Composable
 private fun SelectionCapsule(modifier: Modifier, expansion: () -> Float, stretch: () -> Float) {
-    val tint = if (LocalLedgerDark.current) Color(0xFF3B3D41) else Color(0xFFDFE1E4)
-    // 用轻量灰色填充区分选中项，滑动时仅做轻微形变，保持平整的视觉层级。
+    val tint = (if (LocalLedgerDark.current) Color(0xFF85898F) else Color(0xFFA4A7AD)).copy(alpha = .32f)
+    // 半透明灰色叠在底栏材料上，让选中区域继续透出下方的内容。
     Box(
         modifier.graphicsLayer {
             scaleX = 1f + .045f * expansion() + .085f * stretch()
@@ -279,9 +279,9 @@ private fun SelectionCapsule(modifier: Modifier, expansion: () -> Float, stretch
 private fun RecordNavigationButton(onRecord: () -> Unit, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
     val gradient = if (LocalLedgerDark.current) {
-        Brush.horizontalGradient(listOf(Color(0xFF9DCDFF), Color(0xFF6A9FEC)))
+        Brush.horizontalGradient(listOf(Color(0xFF81D8F5), Color(0xFF7892F7)))
     } else {
-        Brush.horizontalGradient(listOf(Color(0xFF438BE0), colors.primary))
+        Brush.horizontalGradient(listOf(Color(0xFF2EB4DC), Color(0xFF2A56DF)))
     }
     val haptics = LocalHapticFeedback.current
     val interaction = remember { MutableInteractionSource() }
