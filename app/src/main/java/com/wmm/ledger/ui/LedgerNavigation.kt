@@ -42,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -135,7 +136,7 @@ private fun GlassNavigationControls(
 ) {
     val dark = LocalLedgerDark.current
     val haptics = LocalHapticFeedback.current
-    val activeInk = Color(0xFFB6DAFF)
+    val activeInk = if (dark) Color(0xFFB6DAFF) else MaterialTheme.colorScheme.primary
     val idleInk = if (dark) Color(0xFFBDCEE4) else Color(0xFF405977)
     val interactions = remember { Tab.entries.associateWith { MutableInteractionSource() } }
     val ledgerPressed by interactions.getValue(Tab.LEDGER).collectIsPressedAsState()
@@ -264,18 +265,24 @@ private fun GlassNavigationControls(
 
 @Composable
 private fun SelectionCapsule(modifier: Modifier, expansion: () -> Float, stretch: () -> Float) {
-    // 深灰实色承载选中态，滑动时仅做轻微形变，保持平整的视觉层级。
+    val tint = if (LocalLedgerDark.current) Color(0xFF3B3D41) else Color(0xFFDFE1E4)
+    // 用轻量灰色填充区分选中项，滑动时仅做轻微形变，保持平整的视觉层级。
     Box(
         modifier.graphicsLayer {
             scaleX = 1f + .045f * expansion() + .085f * stretch()
             scaleY = 1f + .035f * expansion() - .038f * stretch()
-        }.background(Color(0xFF1F1F1F), CircleShape),
+        }.background(tint, CircleShape),
     )
 }
 
 @Composable
 private fun RecordNavigationButton(onRecord: () -> Unit, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
+    val gradient = if (LocalLedgerDark.current) {
+        Brush.horizontalGradient(listOf(Color(0xFF9DCDFF), Color(0xFF6A9FEC)))
+    } else {
+        Brush.horizontalGradient(listOf(Color(0xFF438BE0), colors.primary))
+    }
     val haptics = LocalHapticFeedback.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -284,7 +291,7 @@ private fun RecordNavigationButton(onRecord: () -> Unit, modifier: Modifier = Mo
     Box(
         modifier.graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(CircleShape)
-            .background(colors.primary)
+            .background(gradient)
             .semantics { contentDescription = RECORD_DESCRIPTION }
             .clickable(interactionSource = interaction, indication = null, role = Role.Button) {
                 haptics.performHapticFeedback(HapticFeedbackType.VirtualKey)
