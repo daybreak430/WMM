@@ -10,8 +10,9 @@ enum class Kind(val title: String) {
     EXPENSE("支出"), INCOME("收入");
 }
 
-enum class AccountType(val title: String) {
-    SAVINGS("储蓄卡"), HOUSING("公积金"), PREPAID("充值卡"), DEPOSIT("保证金"), INVESTMENT("理财账户");
+enum class AccountType(val title: String, val isCredit: Boolean = false) {
+    SAVINGS("储蓄卡"), HOUSING("公积金"), PREPAID("充值卡"), DEPOSIT("保证金"), INVESTMENT("理财账户"),
+    CREDIT_CARD("信用卡", true), MEITUAN_CREDIT("美团月付", true), HUABEI("花呗", true), CREDIT("其他信用账户", true);
 }
 
 enum class Period(val title: String) {
@@ -40,6 +41,7 @@ data class LedgerSnapshot(
     val profile: Profile = Profile(),
     val scenes: List<Scene> = emptyList(),
     val scheduledBills: List<ScheduledBill> = emptyList(),
+    val transfers: List<Transfer> = emptyList(),
 )
 
 data class TagTotal(val tag: Tag, val cents: Long, val count: Int)
@@ -122,6 +124,17 @@ fun LedgerSnapshot.accountBalances(): Map<String, Long> {
         if (entry.occurredAt <= account.calibratedAt) continue
         val delta = if (entry.kind == Kind.INCOME.name) entry.cents else -entry.cents
         balances[account.id] = balances.getValue(account.id) + delta
+    }
+    // 转账两端分别按各自的校准时间判断，信用账户收款会减少欠款；转账独立存储以免重复计入收支。
+    for (transfer in transfers) {
+        val from = accountById[transfer.fromAccountId]
+        val to = accountById[transfer.toAccountId]
+        if (from != null && transfer.occurredAt > from.calibratedAt) {
+            balances[from.id] = balances.getValue(from.id) - transfer.cents
+        }
+        if (to != null && transfer.occurredAt > to.calibratedAt) {
+            balances[to.id] = balances.getValue(to.id) + transfer.cents
+        }
     }
     return balances
 }

@@ -14,6 +14,7 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
@@ -28,20 +29,21 @@ class LedgerRepository(context: Context) {
         val key = secrets.databaseKey(!app.getDatabasePath(DATABASE_NAME).exists())
         Room.databaseBuilder(app, LedgerDatabase::class.java, DATABASE_NAME)
             .openHelperFactory(SupportOpenHelperFactory(key))
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
             .build()
     }
     private val dao get() = database.ledger()
 
     suspend fun observe() = withContext(Dispatchers.IO) {
-        database.invalidationTracker.createFlow("entries", "tags", "accounts", "reports", "profile", "scenes", "scheduled_bills")
+        database.invalidationTracker.createFlow("entries", "tags", "accounts", "reports", "profile", "scenes", "scheduled_bills",
+            "transfers")
             .conflate().map { snapshot() }.flowOn(Dispatchers.IO)
     }
 
     suspend fun snapshot(): LedgerSnapshot = withContext(Dispatchers.IO) {
         database.withTransaction {
             LedgerSnapshot(dao.entries(), dao.tags(), dao.accounts(), dao.reports(), dao.profile() ?: Profile(),
-                dao.scenes(), dao.scheduledBills())
+                dao.scenes(), dao.scheduledBills(), dao.transfers())
         }
     }
 
@@ -128,6 +130,33 @@ class LedgerRepository(context: Context) {
     }
 
     suspend fun deleteEntry(id: String) = withContext(Dispatchers.IO) { dao.deleteEntry(id) }
+
+    internal suspend fun saveTransfer(
+        id: String?, cents: Long, fromAccountId: String, toAccountId: String,
+        note: String, occurredAt: Long, day: LocalDate, hasTime: Boolean,
+    ) = withContext(Dispatchers.IO) {
+        if (cents !in 1..MAX_CENTS) throw LedgerError("请输入有效的转账金额。")
+        val utcDay = bookingDay(occurredAt, ZoneOffset.UTC)
+        if (day !in FIRST_DAY..LAST_DAY || occurredAt > System.currentTimeMillis() ||
+            day !in utcDay.minusDays(1)..utcDay.plusDays(1)) {
+            throw LedgerError("请选择有效的转账日期和时间。")
+        }
+        if (fromAccountId == toAccountId) throw LedgerError("转出和转入账户不能相同。")
+        database.withTransaction {
+            val old = id?.let { dao.transfer(it) ?: throw LedgerError("转账已变更，请重新打开。") }
+            val from = dao.account(fromAccountId)
+            val to = dao.account(toAccountId)
+            if (from == null || from.archived && old?.fromAccountId != fromAccountId ||
+                to == null || to.archived && old?.toAccountId != toAccountId) {
+                throw LedgerError("请选择可用的转出和转入账户。")
+            }
+            // 一条转账同时表达两端的余额变化，避免保存中断只写入一端。
+            dao.save(Transfer(old?.id ?: newId(), cents, fromAccountId, toAccountId,
+                note.trim().take(MAX_NOTE), occurredAt, day.toString(), hasTime))
+        }
+    }
+
+    internal suspend fun deleteTransfer(id: String) = withContext(Dispatchers.IO) { dao.deleteTransfer(id) }
 
     internal suspend fun saveScheduledBill(draft: ScheduledBill) = database.withTransaction {
         val old = draft.id.takeIf(String::isNotEmpty)?.let {
@@ -244,7 +273,7 @@ class LedgerRepository(context: Context) {
             val old = id?.let { dao.account(it) ?: throw LedgerError("账户已变更，请重新打开。") }
             if (old == null && (initial == null || initial !in -MAX_CENTS..MAX_CENTS)) throw LedgerError("请输入有效的初始余额。")
             dao.save(old?.copy(type = type.name, name = trimmed)
-                ?: Account(newId(), type.name, trimmed, checkNotNull(initial), System.currentTimeMillis()))
+                ?: Account(newId(), type.name, trimmed, type.balanceFromInput(checkNotNull(initial)), System.currentTimeMillis()))
         }
     }
 
@@ -252,7 +281,8 @@ class LedgerRepository(context: Context) {
         if (amount !in -MAX_CENTS..MAX_CENTS) throw LedgerError("请输入有效的余额。")
         database.withTransaction {
             val old = dao.account(id) ?: throw LedgerError("账户已变更，请重新打开。")
-            dao.save(old.copy(baselineCents = amount, calibratedAt = System.currentTimeMillis()))
+            dao.save(old.copy(baselineCents = AccountType.valueOf(old.type).balanceFromInput(amount),
+                calibratedAt = System.currentTimeMillis()))
         }
     }
 
@@ -288,6 +318,7 @@ class LedgerRepository(context: Context) {
     suspend fun replace(snapshot: LedgerSnapshot) = withContext(Dispatchers.IO) {
         database.withTransaction {
             dao.clearEntries()
+            dao.clearTransfers()
             dao.clearScheduledBills()
             dao.clearTags()
             dao.clearScenes()
@@ -297,6 +328,7 @@ class LedgerRepository(context: Context) {
             dao.restoreScenes(snapshot.scenes)
             dao.restoreAccounts(snapshot.accounts)
             dao.restoreEntries(snapshot.entries)
+            dao.restoreTransfers(snapshot.transfers)
             dao.restoreScheduledBills(snapshot.scheduledBills)
             dao.restoreReports(snapshot.reports)
             dao.save(snapshot.profile)

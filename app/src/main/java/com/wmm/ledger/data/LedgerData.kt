@@ -90,6 +90,12 @@ interface LedgerDao {
     @Query("SELECT * FROM reports") suspend fun reports(): List<Report>
     @Query("SELECT * FROM profile WHERE id = 0") suspend fun profile(): Profile?
     @Query("SELECT * FROM entries WHERE id = :id") suspend fun entry(id: String): Entry?
+    @Query("SELECT * FROM transfers ORDER BY day DESC, occurredAt DESC, id") suspend fun transfers(): List<Transfer>
+    @Query("SELECT * FROM transfers WHERE id = :id") suspend fun transfer(id: String): Transfer?
+    @Upsert suspend fun save(transfer: Transfer)
+    @Query("DELETE FROM transfers WHERE id = :id") suspend fun deleteTransfer(id: String)
+    @Query("DELETE FROM transfers") suspend fun clearTransfers()
+    @Insert suspend fun restoreTransfers(transfers: List<Transfer>)
     @Query("SELECT * FROM scheduled_bills ORDER BY startDay, id") suspend fun scheduledBills(): List<ScheduledBill>
     @Query("SELECT * FROM scheduled_bills WHERE id = :id") suspend fun scheduledBill(id: String): ScheduledBill?
     @Upsert suspend fun save(bill: ScheduledBill)
@@ -128,8 +134,9 @@ interface LedgerDao {
 }
 
 @Database(
-    entities = [Tag::class, Account::class, Entry::class, Report::class, Profile::class, Scene::class, ScheduledBill::class],
-    version = 6,
+    entities = [Tag::class, Account::class, Entry::class, Report::class, Profile::class, Scene::class, ScheduledBill::class,
+        Transfer::class],
+    version = 7,
 )
 abstract class LedgerDatabase : RoomDatabase() {
     abstract fun ledger(): LedgerDao
@@ -180,5 +187,22 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
                 period TEXT NOT NULL, startDay TEXT NOT NULL, lastRecordedDay TEXT
             )
         """.trimIndent())
+    }
+}
+
+internal val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE transfers (
+                id TEXT NOT NULL PRIMARY KEY, cents INTEGER NOT NULL,
+                fromAccountId TEXT NOT NULL, toAccountId TEXT NOT NULL,
+                note TEXT NOT NULL, occurredAt INTEGER NOT NULL, day TEXT NOT NULL, hasTime INTEGER NOT NULL,
+                FOREIGN KEY(fromAccountId) REFERENCES accounts(id) ON UPDATE NO ACTION ON DELETE NO ACTION,
+                FOREIGN KEY(toAccountId) REFERENCES accounts(id) ON UPDATE NO ACTION ON DELETE NO ACTION
+            )
+        """.trimIndent())
+        db.execSQL("CREATE INDEX index_transfers_fromAccountId ON transfers (fromAccountId)")
+        db.execSQL("CREATE INDEX index_transfers_toAccountId ON transfers (toAccountId)")
+        db.execSQL("CREATE INDEX index_transfers_day ON transfers (day)")
     }
 }
