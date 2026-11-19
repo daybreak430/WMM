@@ -12,8 +12,8 @@ android {
         applicationId = "com.wmm.ledger"
         minSdk = 26
         targetSdk = 36
-        versionCode = 40
-        versionName = "0.9.0"
+        versionCode = 41
+        versionName = "0.9.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildTypes {

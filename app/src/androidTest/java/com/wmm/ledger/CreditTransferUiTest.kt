@@ -34,7 +34,7 @@ class CreditTransferUiTest {
     @Test fun creditPaymentAndRepaymentCanBeCreatedEditedAndDeleted() {
         val cutoff = System.currentTimeMillis() - 10_000
         val bank = Account("bank", AccountType.SAVINGS.name, "验收银行卡", 1_000_000, cutoff)
-        val credit = Account("credit", AccountType.CREDIT_CARD.name, "验收信用卡", -100_000, cutoff, isDefault = true)
+        val credit = Account("credit", AccountType.CREDIT.name, "验收信用卡", -100_000, cutoff, isDefault = true)
         val tag = Tag("meal", Kind.EXPENSE.name, "验收餐饮")
         withLedger(LedgerSnapshot(accounts = listOf(bank, credit), tags = listOf(tag))) { repository, activity ->
             ui.waitUntil(10_000) { ui.onNodeWithContentDescription("记一笔").isDisplayed() }
@@ -108,11 +108,16 @@ class CreditTransferUiTest {
             ui.onNodeWithText("添加账户").performClick()
             ui.onNodeWithText("账户名称").performTextInput("月付验收")
             ui.onNodeWithText("账户类型").performClick()
-            ui.onNodeWithText("美团月付").performScrollTo().performClick()
+            ui.onNodeWithText("信用卡").assertDoesNotExist()
+            ui.onNodeWithText("花呗").assertDoesNotExist()
+            ui.onNodeWithText("美团月付").assertDoesNotExist()
+            ui.onNodeWithText("其他信用账户").assertDoesNotExist()
+            ui.onNodeWithText("信用账户").performScrollTo().performClick()
             ui.onNodeWithText("当前欠款").performTextReplacement("123.45")
             ui.onNodeWithText("保存账户").performClick()
             ui.waitUntil(10_000) { ui.onNodeWithText("待还 ¥123.45").isDisplayed() }
             val account = runBlocking { repository.snapshot() }.accounts.single()
+            assertEquals(AccountType.CREDIT.name, account.type)
             assertEquals(-12_345L, account.baselineCents)
             ui.onNodeWithText("月付验收").performClick()
             ui.onNodeWithText("校准余额").performClick()

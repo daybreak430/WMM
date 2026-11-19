@@ -101,7 +101,7 @@ object Backup {
         val sceneIds = scenes.mapTo(mutableSetOf()) { it.id }
         require(sceneIds.size == scenes.size && scenes.distinctBy { it.name.lowercase(Locale.ROOT) }.size == scenes.size)
         val accounts = root.list("accounts", 50_000) {
-            Account(id(), enumValueOf<AccountType>(string("type")).name, name(),
+            Account(id(), AccountType.fromStoredName(string("type")).name, name(),
                 number("baselineCents").also { require(it in -MAX_CENTS..MAX_CENTS) }, time("calibratedAt"), flag("archived"),
                 sortOrder(version, since = 4), version >= 4L && flag("isDefault"))
         }

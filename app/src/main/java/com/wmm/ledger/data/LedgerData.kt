@@ -136,7 +136,7 @@ interface LedgerDao {
 @Database(
     entities = [Tag::class, Account::class, Entry::class, Report::class, Profile::class, Scene::class, ScheduledBill::class,
         Transfer::class],
-    version = 7,
+    version = 8,
 )
 abstract class LedgerDatabase : RoomDatabase() {
     abstract fun ledger(): LedgerDao
@@ -204,5 +204,12 @@ internal val MIGRATION_6_7 = object : Migration(6, 7) {
         db.execSQL("CREATE INDEX index_transfers_fromAccountId ON transfers (fromAccountId)")
         db.execSQL("CREATE INDEX index_transfers_toAccountId ON transfers (toAccountId)")
         db.execSQL("CREATE INDEX index_transfers_day ON transfers (day)")
+    }
+}
+
+internal val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // 仅统一旧分类编码；账户标识、名称、欠款、校准点和流水关联均保留。
+        db.execSQL("UPDATE accounts SET type = 'CREDIT' WHERE type IN ('CREDIT_CARD', 'MEITUAN_CREDIT', 'HUABEI')")
     }
 }

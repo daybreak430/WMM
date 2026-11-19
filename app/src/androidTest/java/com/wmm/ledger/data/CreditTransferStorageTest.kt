@@ -13,12 +13,37 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CreditTransferStorageTest {
+    @Test fun legacyCreditBackupTypesBecomeOneCategoryWithoutChangingBalancesOrLinks() = runBlocking {
+        val now = System.currentTimeMillis()
+        val bank = Account("bank", "SAVINGS", "银行卡", 100_000, now - 10_000)
+        val creditAccounts = listOf("信用卡", "花呗", "美团月付").mapIndexed { index, name ->
+            Account("credit-$index", "CREDIT", name, -20_000, now - 10_000,
+                archived = index == 2, sortOrder = index, isDefault = index == 0)
+        }
+        val transfer = Transfer("repayment", 5_000, bank.id, creditAccounts.first().id,
+            "还款", now - 1_000, LocalDate.now().toString())
+        val original = LedgerSnapshot(accounts = listOf(bank) + creditAccounts, transfers = listOf(transfer))
+        val oldBackup = JSONObject(Backup.encode(original).decodeToString())
+        val oldTypes = listOf("CREDIT_CARD", "HUABEI", "MEITUAN_CREDIT")
+        oldTypes.forEachIndexed { index, type ->
+            oldBackup.getJSONArray("accounts").getJSONObject(index + 1).put("type", type)
+        }
+        val decoded = Backup.decode(oldBackup.toString().byteInputStream())
+        assertEquals(original.accounts, decoded.accounts)
+        assertEquals(original.transfers, decoded.transfers)
+        val repository = LedgerRepository(isolated())
+        repository.replace(decoded)
+        assertEquals(original.accountBalances(), repository.snapshot().accountBalances())
+        assertEquals(original.accounts.associateBy { it.id },
+            Backup.decode(Backup.encode(repository.snapshot()).inputStream()).accounts.associateBy { it.id })
+    }
+
     @Test fun transfersPersistEditDeleteAndRoundTripWithCreditAccounts() = runBlocking {
         val repository = LedgerRepository(isolated())
         val now = System.currentTimeMillis()
         val day = LedgerRepository.bookingDay(now)
         val bank = Account("bank", AccountType.SAVINGS.name, "银行卡", 100_000, now - 10_000)
-        val credit = Account("credit", AccountType.CREDIT_CARD.name, "信用卡", -20_000, now - 10_000)
+        val credit = Account("credit", AccountType.CREDIT.name, "信用卡", -20_000, now - 10_000)
         val tag = Tag("tag", Kind.EXPENSE.name, "晚餐")
         repository.replace(LedgerSnapshot(accounts = listOf(bank, credit), tags = listOf(tag)))
         repository.saveEntry(null, Kind.EXPENSE, 3_000, tag.id, credit.id, "", now - 2_000, day)
@@ -58,7 +83,7 @@ class CreditTransferStorageTest {
 
     @Test fun creditCreationCalibrationAndArchivedTransferReferencesRemainConsistent() = runBlocking {
         val repository = LedgerRepository(isolated())
-        repository.saveAccount(null, AccountType.HUABEI, "花呗", 12_345)
+        repository.saveAccount(null, AccountType.CREDIT, "花呗", 12_345)
         val credit = repository.snapshot().accounts.single()
         assertEquals(-12_345L, credit.baselineCents)
         repository.calibrate(credit.id, 8_000)

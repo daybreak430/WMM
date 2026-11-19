@@ -15,7 +15,15 @@ enum class Kind(val title: String) {
 
 enum class AccountType(val title: String, val isCredit: Boolean = false) {
     SAVINGS("储蓄卡"), HOUSING("公积金"), PREPAID("充值卡"), DEPOSIT("保证金"), INVESTMENT("理财账户"),
-    CREDIT_CARD("信用卡", true), MEITUAN_CREDIT("美团月付", true), HUABEI("花呗", true), CREDIT("其他信用账户", true);
+    CREDIT("信用账户", true);
+
+    companion object {
+        // 兼容 0.9.0 导出的品牌分类，统一为信用账户并保留账户名称和余额。
+        internal fun fromStoredName(name: String): AccountType = when (name) {
+            "CREDIT_CARD", "MEITUAN_CREDIT", "HUABEI" -> CREDIT
+            else -> valueOf(name)
+        }
+    }
 }
 
 enum class Period(val title: String) {

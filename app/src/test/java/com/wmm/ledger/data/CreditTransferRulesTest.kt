@@ -11,7 +11,7 @@ import org.junit.Test
 class CreditTransferRulesTest {
     private val day = LocalDate.of(2026, 11, 19)
     private val bank = Account("bank", AccountType.SAVINGS.name, "银行卡", 100_000, 100)
-    private val credit = Account("credit", AccountType.CREDIT_CARD.name, "信用卡", -20_000, 100)
+    private val credit = Account("credit", AccountType.CREDIT.name, "信用卡", -20_000, 100)
     private val repayment = Transfer("repayment", 5_000, bank.id, credit.id, "还款", 120, day.toString())
 
     @Test fun creditExpenseAndRepaymentHaveSeparateCashflowMeanings() {
@@ -45,7 +45,9 @@ class CreditTransferRulesTest {
     }
 
     @Test fun creditInputUsesPositiveDebtAndSupportsOverpayment() {
-        for (type in listOf(AccountType.CREDIT_CARD, AccountType.MEITUAN_CREDIT, AccountType.HUABEI, AccountType.CREDIT)) {
+        for (storedName in listOf("CREDIT", "CREDIT_CARD", "MEITUAN_CREDIT", "HUABEI")) {
+            val type = AccountType.fromStoredName(storedName)
+            assertEquals(AccountType.CREDIT, type)
             val account = credit.copy(type = type.name)
             assertTrue(account.isCredit)
             assertEquals(-18_000L, type.balanceFromInput(18_000))
