@@ -286,14 +286,6 @@ class LedgerRepository(context: Context) {
         }
     }
 
-    suspend fun archiveAccount(id: String, archive: Boolean) = withContext(Dispatchers.IO) {
-        database.withTransaction {
-            dao.account(id)?.takeIf { it.archived != archive }?.let {
-                dao.save(it.copy(archived = archive, sortOrder = null, isDefault = false))
-            }
-        }
-    }
-
     suspend fun setDefaultAccount(id: String?) = database.withTransaction {
         if (id != null && dao.account(id)?.archived != false) throw LedgerError("请选择可用账户。")
         dao.setDefaultAccount(id)

@@ -25,6 +25,7 @@ import com.wmm.ledger.data.LedgerSnapshot
 import com.wmm.ledger.data.Scene
 import com.wmm.ledger.data.Tag
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -96,11 +97,17 @@ class LedgerReorderingUiTest {
             ui.onNodeWithContentDescription("显示净资产").performClick()
             ui.onNode(hasText("资产") and hasText("¥150.00")).assertIsDisplayed().performClick()
             ui.onNodeWithText("¥150.00").assertIsDisplayed()
+            ui.onNodeWithText("已归档").assertDoesNotExist()
+            ui.onNodeWithText(archived.name).assertDoesNotExist()
             drag(primary.name, secondary.name)
             ui.waitUntil(8_000) { runBlocking { repository.snapshot().accounts.first().id == secondary.id } }
             assertTrue(position(secondary.name).y < position(primary.name).y)
             ui.onNodeWithText(primary.name).performClick()
             ui.onNodeWithText("校准余额").assertIsDisplayed()
+            ui.onNodeWithText("编辑账户").assertIsDisplayed()
+            ui.onNodeWithText("归档账户").assertDoesNotExist()
+            ui.onNodeWithText("恢复账户").assertDoesNotExist()
+            assertEquals(archived, runBlocking { repository.snapshot() }.accounts.single { it.id == archived.id })
             ui.onNodeWithText("关闭").performClick()
             back()
             ui.onNodeWithText("个人设置").assertIsDisplayed()

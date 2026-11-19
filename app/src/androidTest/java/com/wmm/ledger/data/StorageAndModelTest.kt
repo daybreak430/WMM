@@ -91,7 +91,9 @@ class StorageAndModelTest {
         val importedThree = Backup.decode(versionThree.toString().byteInputStream())
         assertEquals(complete.accounts.map { it.copy(sortOrder = null, isDefault = false) }, importedThree.accounts)
 
-        restored.archiveAccount("card", true)
+        restored.replace(complete.copy(accounts = complete.accounts.map {
+            it.copy(archived = true, isDefault = false, sortOrder = null)
+        }))
         assertFalse(restored.snapshot().accounts.single().isDefault)
         assertEquals(complete.entries, restored.snapshot().entries)
     }

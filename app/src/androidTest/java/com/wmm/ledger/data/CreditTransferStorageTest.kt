@@ -96,7 +96,10 @@ class CreditTransferStorageTest {
         val now = System.currentTimeMillis()
         repository.saveTransfer(null, 1_000, bank.id, credit.id, "", now, LocalDate.now(), false)
         val transfer = repository.snapshot().transfers.single()
-        repository.archiveAccount(credit.id, true)
+        val beforeRestore = repository.snapshot()
+        repository.replace(beforeRestore.copy(accounts = beforeRestore.accounts.map {
+            if (it.id == credit.id) it.copy(archived = true, isDefault = false, sortOrder = null) else it
+        }))
         assertTrue(runCatching {
             repository.saveTransfer(null, 1_000, bank.id, credit.id, "", now, LocalDate.now(), false)
         }.isFailure)

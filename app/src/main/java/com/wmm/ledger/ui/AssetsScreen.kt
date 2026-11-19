@@ -55,14 +55,12 @@ fun AssetsScreen(data: LedgerSnapshot, model: LedgerViewModel, back: () -> Unit)
     val balances = remember(data) { data.accountBalances() }
     val active = remember(data.accounts) { data.accounts.filterNot { it.archived } }
     val activeById = remember(active) { active.associateBy { it.id } }
-    val archived = data.accounts.filter { it.archived }
     val order = rememberItemOrder(active.map { it.id })
     val dragState = rememberReorderDragState()
     val listState = rememberLazyListState()
     var accountEditor by rememberSaveable { mutableStateOf<String?>(null) }
     var accountOptions by rememberSaveable { mutableStateOf<String?>(null) }
     var accountCalibration by rememberSaveable { mutableStateOf<String?>(null) }
-    var accountArchive by rememberSaveable { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize()) {
         PageHeader("资产", back = back, end = {
             Button(onClick = { accountEditor = "new" }, shape = FieldShape) {
@@ -101,21 +99,15 @@ fun AssetsScreen(data: LedgerSnapshot, model: LedgerViewModel, back: () -> Unit)
                         AccountCard(activeById.getValue(id), balances[id] ?: 0) { accountOptions = id }
                     }
                 }
-                if (archived.isNotEmpty()) {
-                    item("archived-title") { SectionTitle("已归档", Modifier.padding(top = 7.dp)) }
-                    items(archived, key = { "account:${it.id}" }) { account ->
-                        AccountCard(account, balances[account.id] ?: 0) { accountOptions = account.id }
-                    }
-                }
             }
         }
     }
 
-    val editing = data.accounts.firstOrNull { it.id == accountEditor }
+    val editing = active.firstOrNull { it.id == accountEditor }
     if (accountEditor == "new" || editing != null) {
         AccountDialog(editing, model) { accountEditor = null }
     }
-    val opening = data.accounts.firstOrNull { it.id == accountOptions }
+    val opening = active.firstOrNull { it.id == accountOptions }
     if (opening != null) {
         val calibrated = Instant.ofEpochMilli(opening.calibratedAt).atZone(ZoneId.systemDefault())
             .format(DateTimeFormatter.ofPattern("yyyy/M/d HH:mm:ss"))
@@ -123,38 +115,21 @@ fun AssetsScreen(data: LedgerSnapshot, model: LedgerViewModel, back: () -> Unit)
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 AmountText(opening.balanceDescription(balances[opening.id] ?: 0), style = HeroNumber)
                 Text("上次校准 $calibrated", style = MaterialTheme.typography.bodySmall)
-                if (!opening.archived) {
-                    SettingsRow("校准余额", icon = Glyph.WALLET) {
-                        accountCalibration = opening.id
-                        accountOptions = null
-                    }
-                    Hairline()
+                SettingsRow("校准余额", icon = Glyph.WALLET) {
+                    accountCalibration = opening.id
+                    accountOptions = null
                 }
+                Hairline()
                 SettingsRow("编辑账户", icon = Glyph.EDIT) {
                     accountEditor = opening.id
                     accountOptions = null
                 }
-                Hairline()
-                SettingsRow(if (opening.archived) "恢复账户" else "归档账户", icon = Glyph.BOX) {
-                    accountOptions = null
-                    if (opening.archived) model.archiveAccount(opening.id, false) else accountArchive = opening.id
-                }
             }
         }, confirmButton = { TextButton(onClick = { accountOptions = null }) { Text("关闭") } })
     }
-    val calibrating = data.accounts.firstOrNull { it.id == accountCalibration }
+    val calibrating = active.firstOrNull { it.id == accountCalibration }
     if (calibrating != null) {
         CalibrationDialog(calibrating, balances[calibrating.id] ?: 0, model) { accountCalibration = null }
-    }
-    if (accountArchive != null) {
-        val clearsDefault = data.accounts.any { it.id == accountArchive && it.isDefault }
-        val message = "归档后不再计入净资产总额，关联的旧流水仍会保留。" +
-            if (clearsDefault) "归档也会取消此账户的默认关联。" else ""
-        ConfirmDialog("归档账户？", message, "归档",
-            { accountArchive = null }) {
-            accountArchive?.let { model.archiveAccount(it, true) }
-            accountArchive = null
-        }
     }
 }
 
@@ -164,7 +139,7 @@ private fun AccountCard(account: Account, balance: Long, open: () -> Unit) {
     Surface(onClick = open, shape = CardShape, color = colors.surface) {
         Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            IconBadge(if (account.archived) Glyph.BOX else Glyph.WALLET)
+            IconBadge(Glyph.WALLET)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(account.name, style = MaterialTheme.typography.titleMedium)
                 val typeLabel = AccountType.valueOf(account.type).title

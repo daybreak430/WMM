@@ -223,9 +223,6 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
         notify("余额已校准")
     }
 
-    fun archiveAccount(id: String, archive: Boolean) =
-        perform("无法修改账户。") { repository.archiveAccount(id, archive) }
-
     fun reorderAccounts(order: List<String>, onFailure: () -> Unit) =
         perform("无法保存账户顺序。", onFailure) { repository.reorderAccounts(order) }
 
