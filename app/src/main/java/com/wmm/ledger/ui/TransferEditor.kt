@@ -40,6 +40,7 @@ import com.wmm.ledger.data.accountBalances
 import com.wmm.ledger.data.editableAmount
 import com.wmm.ledger.data.isCredit
 import com.wmm.ledger.data.parseCents
+import com.wmm.ledger.data.changedOccurrenceTime
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -183,12 +184,7 @@ internal fun TransferEditor(
             if (changedDay != day || changedTime != time) {
                 dayText = changedDay.toString()
                 hasTime = changedTime != null
-                at = when {
-                    changedTime != null -> changedDay.atTime(changedTime).atZone(zone).toInstant().toEpochMilli()
-                    changedDay == day -> at
-                    changedDay == LocalDate.now(zone) -> System.currentTimeMillis()
-                    else -> changedDay.atStartOfDay(zone).toInstant().toEpochMilli()
-                }
+                at = changedOccurrenceTime(at, day, changedDay, changedTime, zone)
             }
             dateEditor = false
         }

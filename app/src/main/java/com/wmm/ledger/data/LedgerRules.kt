@@ -1,7 +1,10 @@
 package com.wmm.ledger.data
 
 import java.math.BigDecimal
+import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
 import java.time.DayOfWeek
 import java.time.temporal.TemporalAdjusters
 import java.util.Locale
@@ -69,6 +72,17 @@ const val MAX_NAME = 30
 const val MAX_NOTE = 200
 val FIRST_DAY: LocalDate = LocalDate.of(1900, 1, 1)
 val LAST_DAY: LocalDate = LocalDate.of(2199, 12, 31)
+
+internal fun changedOccurrenceTime(
+    previousAt: Long, previousDay: LocalDate, day: LocalDate, time: LocalTime?,
+    zone: ZoneId = ZoneId.systemDefault(), now: Long = System.currentTimeMillis(),
+): Long = when {
+    time != null -> day.atTime(time).atZone(zone).toInstant().toEpochMilli()
+    // 清除时分时保留同一天的内部时间戳，避免改变余额校准的前后关系。
+    day == previousDay -> previousAt
+    day == Instant.ofEpochMilli(now).atZone(zone).toLocalDate() -> now
+    else -> day.atStartOfDay(zone).toInstant().toEpochMilli()
+}
 
 private val moneyPattern = Regex("""-?(?:\d+(?:\.\d{0,2})?|\.\d{1,2})""")
 fun parseCents(text: String, signed: Boolean = false): Long? {

@@ -1,6 +1,8 @@
 package com.wmm.ledger.data
 
 import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneOffset
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -54,5 +56,17 @@ class CreditTransferRulesTest {
         }
         assertFalse(bank.isCredit)
         assertEquals(18_000L, AccountType.SAVINGS.balanceFromInput(18_000))
+    }
+
+    @Test fun changingOnlyTimeVisibilityKeepsTheCalibrationCutoff() {
+        val zone = ZoneOffset.ofHours(8)
+        val now = day.atTime(15, 30).atZone(zone).toInstant().toEpochMilli()
+        val before = day.minusDays(1).atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
+        assertEquals(before, changedOccurrenceTime(before, day.minusDays(1), day.minusDays(1), null, zone, now))
+        assertEquals(now, changedOccurrenceTime(before, day.minusDays(1), day, null, zone, now))
+        val backdated = day.minusDays(2).atStartOfDay(zone).toInstant().toEpochMilli()
+        assertEquals(backdated, changedOccurrenceTime(before, day.minusDays(1), day.minusDays(2), null, zone, now))
+        val explicit = day.atTime(8, 15).atZone(zone).toInstant().toEpochMilli()
+        assertEquals(explicit, changedOccurrenceTime(now, day, day, LocalTime.of(8, 15), zone, now))
     }
 }

@@ -79,6 +79,7 @@ import com.wmm.ledger.data.LedgerSnapshot
 import com.wmm.ledger.data.MAX_NAME
 import com.wmm.ledger.data.MAX_NOTE
 import com.wmm.ledger.data.editableAmount
+import com.wmm.ledger.data.changedOccurrenceTime
 import com.wmm.ledger.data.Tag
 import com.wmm.ledger.data.orderedScenes
 import com.wmm.ledger.data.orderedTags
@@ -391,13 +392,7 @@ private fun IncomeExpenseEditor(
             if (changedDay != day || changedTime != time) {
                 bookedDay = changedDay.toString()
                 hasTime = changedTime != null
-                // 只清除原时间的显示时保留时间戳，避免影响账户的余额校准。
-                occurredAt = when {
-                    changedTime != null -> changedDay.atTime(changedTime).atZone(zone).toInstant().toEpochMilli()
-                    changedDay == day -> occurredAt
-                    changedDay == LocalDate.now(zone) -> System.currentTimeMillis()
-                    else -> changedDay.atStartOfDay(zone).toInstant().toEpochMilli()
-                }
+                occurredAt = changedOccurrenceTime(occurredAt, day, changedDay, changedTime, zone)
             }
             dateEditor = false
         }
