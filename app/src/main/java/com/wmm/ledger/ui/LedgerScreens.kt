@@ -253,7 +253,10 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
     chooseDay: (LocalDate) -> Unit, drill: (String) -> Unit, drillScene: (String) -> Unit,
     bottomInset: Dp) {
     val summary = remember(data, period, day, today) { data.stats(period, day, today) }
-    var expenseTypesExpanded by rememberSaveable(period, summary.start) { mutableStateOf(false) }
+    val expenseRange = "${period.name}:${summary.start}"
+    // 恢复页面时同时核对区间，避免首页切换了统计范围却恢复旧区间的展开状态。
+    var expandedExpenseRange by rememberSaveable(period, summary.start) { mutableStateOf("") }
+    val expenseTypesExpanded = expandedExpenseRange == expenseRange
     val calendar = CalendarAction(day, today, onSelect = chooseDay)
     val colors = MaterialTheme.colorScheme
     val trend = remember(data.entries, summary.start, period) {
@@ -309,7 +312,9 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
             }
             shareSection("支出类型占比", Glyph.TAG, "expense", "支出合计", summary.expense,
                 expenses.map { RankedAmount(it.tag.id, it.tag.name, it.cents) }, drill,
-                expanded = expenseTypesExpanded, toggleExpanded = { expenseTypesExpanded = !expenseTypesExpanded })
+                expanded = expenseTypesExpanded, toggleExpanded = {
+                    expandedExpenseRange = if (expenseTypesExpanded) "" else expenseRange
+                })
             shareSection("支出场景占比", Glyph.BOX, "scene", "支出合计", summary.expense, sceneRanks, drillScene)
             shareSection("收入类型占比", Glyph.INCOME, "income", "收入合计", summary.income,
                 income.map { RankedAmount(it.tag.id, it.tag.name, it.cents) }, drill)

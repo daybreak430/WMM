@@ -104,7 +104,7 @@ internal fun LazyListScope.shareSection(
     if (collapsible) item("share-toggle:$key") {
         Surface(Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface,
             shape = RoundedCornerShape(bottomStart = 18.dp, bottomEnd = 18.dp)) {
-            TextButton(onClick = { toggleExpanded?.invoke() },
+            TextButton(onClick = { toggleExpanded() },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("share-toggle:$key")
                     .semantics { stateDescription = if (expanded) "已展开" else "已收起" }) {
                 Text(if (expanded) "收起" else "查看更多")

@@ -69,6 +69,11 @@ class StatsChartsUiTest {
             ui.onNodeWithText("年").performClick()
             list.performScrollToNode(toggle)
             ui.onNodeWithText("查看更多").assertIsDisplayed()
+            ui.onNodeWithTag("share-toggle:expense").performTouchInput { click() }
+            ui.onNodeWithText("账本").performClick()
+            ui.onNodeWithText("收支统计").performClick()
+            list.performScrollToNode(toggle)
+            ui.onNodeWithText("查看更多").assertIsDisplayed()
         }
     }
 
