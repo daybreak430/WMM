@@ -65,6 +65,7 @@ internal class LedgerAssistantViewModel(application: Application) : AndroidViewM
 
     fun clearQuestions() {
         questionJob?.cancel()
+        questionJob = null
         turns.value = emptyList()
         draft.value = ""
     }

@@ -77,12 +77,15 @@ internal fun LedgerSearchScreen(data: LedgerSnapshot, query: String, result: Led
 @Composable
 internal fun LedgerQuestionScreen(turns: List<QuestionTurn>, question: String, change: (String) -> Unit,
     provider: Provider, hasKey: Boolean, hasConsent: Boolean,
-    back: () -> Unit, openModel: () -> Unit, submit: (String, Boolean) -> Unit, evidence: (Long) -> Unit) {
+    back: () -> Unit, openModel: () -> Unit, submit: (String, Boolean) -> Unit, evidence: (Long) -> Unit,
+    clear: () -> Unit) {
     var pendingConsent by remember { mutableStateOf<String?>(null) }
+    var confirmClear by remember { mutableStateOf(false) }
     val list = rememberLazyListState()
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     val busy = turns.any { it.answer == null && it.error == null }
+    val canClear = turns.isNotEmpty() || question.isNotEmpty()
     fun send(text: String, consent: Boolean = false) {
         if (text.isBlank() || busy) return
         if (!hasKey) { openModel(); return }
@@ -95,7 +98,12 @@ internal fun LedgerQuestionScreen(turns: List<QuestionTurn>, question: String, c
         if (turns.isNotEmpty()) list.animateScrollToItem(turns.lastIndex)
     }
     Column(Modifier.fillMaxSize().imePadding()) {
-        PageHeader("问 AI", back)
+        PageHeader("问 AI", back) {
+            IconButton(onClick = { confirmClear = true }, enabled = canClear) {
+                LucideIcon(Glyph.DELETE, color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (canClear) 1f else .38f),
+                    description = "清空对话")
+            }
+        }
         LazyColumn(Modifier.weight(1f), state = list,
             contentPadding = PaddingValues(horizontal = PagePadding, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -153,6 +161,13 @@ internal fun LedgerQuestionScreen(turns: List<QuestionTurn>, question: String, c
             confirmButton = { TextButton(onClick = { pendingConsent = null; send(pending, true) }) { Text("同意并提问") } },
             dismissButton = { TextButton(onClick = { pendingConsent = null }) { Text("取消") } })
     }
+    if (confirmClear) ConfirmDialog("清空当前对话？", "当前对话和未发送内容将被清除，无法恢复。", "清空",
+        onDismiss = { confirmClear = false }, onConfirm = {
+            confirmClear = false
+            pendingConsent = null
+            focus.clearFocus(); keyboard?.hide()
+            clear()
+        })
 }
 
 @Composable

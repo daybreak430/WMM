@@ -4,6 +4,8 @@ import androidx.activity.compose.setContent
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.text.AnnotatedString
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import com.wmm.ledger.data.*
@@ -16,6 +18,54 @@ import org.junit.Test
 
 class LedgerAssistantUiTest {
     @get:Rule val ui = createEmptyComposeRule()
+
+    @Test fun clearDraftFromThePageHeaderSupportsCancelAndConfirmation() {
+        withLedger(LedgerSnapshot()) { _, _ ->
+            ui.waitUntil(10_000) { ui.onNodeWithContentDescription("问 AI").isDisplayed() }
+            ui.onNodeWithContentDescription("问 AI").performClick()
+            ui.onNodeWithContentDescription("清空对话").assertIsNotEnabled()
+            ui.onNodeWithText("今年支出最大的一笔是多少？").performClick()
+            ui.onNodeWithContentDescription("清空对话").performClick()
+            ui.onNodeWithText("取消").performClick()
+            ui.onNodeWithTag("ledger-question").assertTextContains("今年支出最大的一笔是多少？")
+            ui.onNodeWithContentDescription("清空对话").performClick()
+            ui.onNodeWithText("清空当前对话？").assertIsDisplayed()
+            InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand("input keyevent KEYCODE_BACK").close()
+            ui.waitUntil(5_000) { ui.onNodeWithTag("ledger-question").isDisplayed() }
+            ui.onNodeWithTag("ledger-question").assertTextContains("今年支出最大的一笔是多少？")
+            ui.onNodeWithContentDescription("清空对话").performClick()
+            ui.onNodeWithText("清空", substring = false).performClick()
+            ui.onNodeWithTag("ledger-question").assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString("")))
+            ui.onNodeWithContentDescription("清空对话").assertIsNotEnabled()
+        }
+    }
+
+    @Test fun clearRemovesPendingAndCompletedTurnsAndAllowsAnotherQuestion() {
+        val turns = mutableStateOf(listOf(
+            QuestionTurn(1, "上一个问题", LedgerAnswer("上一个回答", emptyList(), false)),
+            QuestionTurn(2, "正在回答的问题")))
+        val draft = mutableStateOf("未发送的内容")
+        ActivityScenario.launch(MainActivity::class.java).use { activity ->
+            activity.onActivity { owner -> owner.setContent {
+                LedgerTheme(false) {
+                    LedgerQuestionScreen(turns.value, draft.value, { draft.value = it }, Provider.DEEPSEEK, true, true,
+                        {}, {}, { question, _ -> turns.value = listOf(QuestionTurn(3, question,
+                            LedgerAnswer("新的回答", emptyList(), false))) }, {}, clear = {
+                            turns.value = emptyList(); draft.value = ""
+                        })
+                }
+            } }
+            ui.onNodeWithContentDescription("发送问题").assertIsNotEnabled()
+            ui.onNodeWithContentDescription("清空对话").performClick()
+            ui.onNodeWithText("清空", substring = false).performClick()
+            ui.onNodeWithText("上一个问题").assertDoesNotExist()
+            ui.onNodeWithText("正在回答的问题").assertDoesNotExist()
+            ui.onNodeWithTag("ledger-question").assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString("")))
+            ui.onNodeWithTag("ledger-question").performTextInput("重新提问")
+            ui.onNodeWithTag("ledger-question").performImeAction()
+            ui.onNodeWithText("新的回答").assertIsDisplayed()
+        }
+    }
 
     @Test fun homeSearchFindsCombinedFieldsAndReturnsFromEditing() {
         val day = LocalDate.now().toString()
@@ -64,7 +114,7 @@ class LedgerAssistantUiTest {
                         assertTrue(consent); sent++
                         turns.value = listOf(QuestionTurn(1, question, LedgerAnswer("最大一笔 18.50 元。",
                             listOf(LedgerReference(QuerySource.ENTRIES, "found")), false)))
-                    }, { opened = it })
+                    }, { opened = it }, clear = { turns.value = emptyList(); draft.value = "" })
                 }
             } }
             ui.onNodeWithTag("ledger-question").performTextInput("今年最大一笔？")

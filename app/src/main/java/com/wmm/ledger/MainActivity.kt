@@ -318,7 +318,7 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
                                             provider, provider in keys, assistant.hasConsent(provider),
                                             ::back, openModel = { parent = current; route = "model" },
                                             submit = { question, consent -> assistant.ask(question, provider, consent) },
-                                            evidence = { parent = current; route = "ask-evidence:$it" })
+                                            evidence = { parent = current; route = "ask-evidence:$it" }, clear = assistant::clearQuestions)
                                     }
                                     current.startsWith("ask-evidence:") -> {
                                         val turn = questionTurns.firstOrNull { it.id == current.substringAfter(':').toLongOrNull() }

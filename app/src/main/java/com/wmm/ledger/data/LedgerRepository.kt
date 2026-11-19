@@ -6,6 +6,8 @@ import androidx.room.Room
 import androidx.room.withTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -396,7 +398,11 @@ class LedgerRepository(context: Context) {
             if (!secrets.hasQuestionConsent(provider)) throw LedgerError("请先确认问答的数据发送范围。")
             val key = secrets.modelKey(provider) ?: throw LedgerError("请先在设置中保存 ${provider.title} 的 API Key。")
             val restoreVersion = restoreCount.get()
+            val requestContext = currentCoroutineContext()
             val result = LedgerQuestions.answer(snapshot(), question, history, LocalDate.now(), provider) { request ->
+                // 清空对话后，已发出的网络请求可能仍在返回，但不能继续发送下一阶段的旧问题数据。
+                requestContext.ensureActive()
+                if (restoreVersion != restoreCount.get()) throw LedgerError("账本已恢复，请重新提问。")
                 modelClient.send(provider, key, request, readTimeout = 45_000)
             }
             if (restoreVersion != restoreCount.get()) throw LedgerError("账本已恢复，请重新提问。")
