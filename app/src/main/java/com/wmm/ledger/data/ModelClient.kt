@@ -17,6 +17,17 @@ enum class Provider(val title: String, val host: String, val path: String, val m
 class LedgerError(val display: String) : Exception()
 
 internal object ModelProtocol {
+    fun chatRequest(provider: Provider, system: String, user: String, json: Boolean, maxTokens: Int = if (json) 1800 else 2000): JSONObject = JSONObject()
+        .put("model", provider.model).put("stream", false).put("max_tokens", maxTokens)
+        .put("messages", JSONArray().put(JSONObject().put("role", "system").put("content", system))
+            .put(JSONObject().put("role", "user").put("content", user)))
+        .apply {
+            if (provider == Provider.DEEPSEEK) {
+                put("thinking", JSONObject().put("type", "disabled"))
+                if (json) put("response_format", JSONObject().put("type", "json_object"))
+            } else put("reasoning_effort", "low")
+        }
+
     fun connectionRequest(provider: Provider): JSONObject = JSONObject().apply {
         put("model", provider.model)
         put("stream", false)

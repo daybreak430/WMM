@@ -25,6 +25,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 internal data class QuestionTurn(val id: Long, val question: String, val answer: LedgerAnswer? = null, val error: String? = null)
+internal data class QuestionSuggestionsState(val items: List<String> = emptyList(), val loading: Boolean = false,
+    val error: String? = null)
 
 // 搜索与问答独立管理临时状态，不把问题、备注或回答写入未加密缓存和日志。
 internal class LedgerAssistantViewModel(application: Application) : AndroidViewModel(application) {
@@ -39,10 +41,38 @@ internal class LedgerAssistantViewModel(application: Application) : AndroidViewM
     val questionDraft = draft.asStateFlow()
     private var nextId = 0L
     private var questionJob: Job? = null
+    private val suggestionState = MutableStateFlow(QuestionSuggestionsState())
+    val suggestions = suggestionState.asStateFlow()
+    private var suggestionProvider: Provider? = null
+    private var suggestionJob: Job? = null
+    private var suggestionGeneration = 0L
 
     fun search(query: String) { term.value = query.take(200) }
     fun editQuestion(question: String) { draft.value = question.take(1_000) }
     fun hasConsent(provider: Provider) = repository.secrets.hasQuestionConsent(provider)
+
+    fun suggest(provider: Provider, refresh: Boolean = false) {
+        val current = suggestionState.value
+        if (suggestionProvider == provider && (suggestionJob?.isActive == true ||
+                !refresh && (current.items.isNotEmpty() || current.error != null))) return
+        suggestionJob?.cancel()
+        val previous = if (suggestionProvider == provider) current.items else emptyList()
+        suggestionProvider = provider
+        val generation = ++suggestionGeneration
+        suggestionState.value = QuestionSuggestionsState(previous, loading = true)
+        suggestionJob = viewModelScope.launch {
+            try {
+                val items = repository.suggestQuestions(provider, previous)
+                // 切换模型时旧请求可能稍后返回，只接受当前批次，避免覆盖新模型的建议。
+                if (generation == suggestionGeneration) suggestionState.value = QuestionSuggestionsState(items)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                if (generation == suggestionGeneration) suggestionState.value = QuestionSuggestionsState(previous,
+                    error = (error as? LedgerError)?.display ?: "建议问题未生成，请重试。")
+            }
+        }
+    }
 
     fun ask(question: String, provider: Provider, consent: Boolean = false) {
         if (questionJob?.isActive == true || question.isBlank()) return

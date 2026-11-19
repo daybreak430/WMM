@@ -310,11 +310,13 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
                                     }
                                     current == "ask" -> navState.SaveableStateProvider("ask") {
                                         val question by assistant.questionDraft.collectAsStateWithLifecycle()
+                                        val suggestions by assistant.suggestions.collectAsStateWithLifecycle()
                                         LedgerQuestionScreen(questionTurns, question, assistant::editQuestion,
                                             provider, provider in keys, assistant.hasConsent(provider),
                                             ::back, openModel = { parent = current; route = "model" },
                                             submit = { question, consent -> assistant.ask(question, provider, consent) },
-                                            evidence = { parent = current; route = "ask-evidence:$it" }, clear = assistant::clearQuestions)
+                                            evidence = { parent = current; route = "ask-evidence:$it" }, clear = assistant::clearQuestions,
+                                            suggestions = suggestions, refreshSuggestions = { assistant.suggest(provider, it) })
                                     }
                                     current.startsWith("ask-evidence:") -> {
                                         val turn = questionTurns.firstOrNull { it.id == current.substringAfter(':').toLongOrNull() }

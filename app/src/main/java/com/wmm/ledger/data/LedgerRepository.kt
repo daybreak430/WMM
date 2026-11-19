@@ -376,6 +376,14 @@ class LedgerRepository(context: Context) {
         count
     }
 
+    internal suspend fun suggestQuestions(provider: Provider, previous: List<String>): List<String> = withContext(Dispatchers.IO) {
+        val key = secrets.modelKey(provider) ?: throw LedgerError("请先配置模型。")
+        currentCoroutineContext().ensureActive()
+        val reply = modelClient.send(provider, key, QuestionSuggestions.request(provider, previous), readTimeout = 30_000)
+        currentCoroutineContext().ensureActive()
+        QuestionSuggestions.parse(reply, previous)
+    }
+
     internal suspend fun askQuestion(question: String, history: List<QuestionContext>, provider: Provider): LedgerAnswer =
         withContext(Dispatchers.IO) {
             if (!secrets.hasQuestionConsent(provider)) throw LedgerError("请先确认问答的数据发送范围。")

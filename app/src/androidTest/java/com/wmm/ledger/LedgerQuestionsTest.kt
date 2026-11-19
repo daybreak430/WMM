@@ -63,6 +63,7 @@ class LedgerQuestionsTest {
     @Test fun unsupportedPlansAreRejectedWithoutExecutingModelCode() {
         listOf(
             """{"queries":[{"source":"SQL","mode":"RECORDS"}]}""",
+            """{"queries":[{"source":"REPORTS","mode":"RECORDS"}]}""",
             """{"queries":[{"source":"ENTRIES","mode":"SUMMARY","filter":{"from":"2026-02-30"}}]}""",
             """{"queries":[{"source":"ENTRIES","mode":"SUMMARY","filter":{"minCents":1.5}}]}""",
             """{"queries":[{"source":"ACCOUNTS","mode":"SUMMARY","filter":{"from":"2026-01-01"}}]}""",

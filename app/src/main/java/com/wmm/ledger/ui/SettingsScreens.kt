@@ -194,7 +194,7 @@ internal fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, active
         }
     }
     if (exportWarning) {
-        ConfirmDialog("导出普通备份？", "备份文件未加密，包含账本、资产、个人资料和报告。请在分享面板中选择可信的接收方。",
+        ConfirmDialog("导出普通备份？", "备份文件未加密，包含账本、资产和个人资料等历史数据。请在分享面板中选择可信的接收方。",
             "打开分享面板", { exportWarning = false }) {
             exportWarning = false
             model.exportForSharing()

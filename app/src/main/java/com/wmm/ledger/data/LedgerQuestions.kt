@@ -55,7 +55,7 @@ internal object LedgerQuestions {
                 JSONObject().put("name", it.name).put("type", AccountType.valueOf(it.type).title).put("archived", it.archived)
             })).put("定时账单数", data.scheduledBills.size)
             .put("名称目录有省略", data.tags.size > 100 || data.scenes.size > 100 || data.accounts.size > 100)
-        return request(provider, system, JSONObject().put("问题", question).put("最近问答", historyJson(history))
+        return ModelProtocol.chatRequest(provider, system, JSONObject().put("问题", question).put("最近问答", historyJson(history))
             .put("账本目录", catalog).toString(), json = true)
     }
 
@@ -95,7 +95,7 @@ internal object LedgerQuestions {
     }
 
     private fun answerRequest(question: String, history: List<QuestionContext>, today: LocalDate, provider: Provider,
-        results: List<QueryResult>): JSONObject = request(provider, """
+        results: List<QueryResult>): JSONObject = ModelProtocol.chatRequest(provider, """
             你是这本个人账本的问答助手。今天是 $today，只根据本次本机查询结果回答，不补造未返回的流水、金额、原因或偏好。
             直接回答问题，再给必要的金额、日期、次数和口径，语言自然简洁，不说相声、不写空话，不建议使用预算等本产品没有的功能。
             所有合计、排名和分组已由本机对完整匹配集计算。明细/分组可能只展示一部分，注意省略数量，不把局部结果当全部。
@@ -107,17 +107,6 @@ internal object LedgerQuestions {
         """.trimIndent(), JSONObject().put("问题", question).put("最近问答", historyJson(history))
             .put("本机查询结果", JSONArray(results.mapIndexed { index, result -> result.json(index + 1) }))
             .put("汇总比较", comparisons(results)).toString(), json = false)
-
-    private fun request(provider: Provider, system: String, user: String, json: Boolean): JSONObject = JSONObject()
-        .put("model", provider.model).put("stream", false).put("max_tokens", if (json) 1800 else 2000)
-        .put("messages", JSONArray().put(JSONObject().put("role", "system").put("content", system))
-            .put(JSONObject().put("role", "user").put("content", user)))
-        .apply {
-            if (provider == Provider.DEEPSEEK) {
-                put("thinking", JSONObject().put("type", "disabled"))
-                if (json) put("response_format", JSONObject().put("type", "json_object"))
-            } else put("reasoning_effort", "low")
-        }
 
     private fun historyJson(history: List<QuestionContext>) = JSONArray(history.takeLast(2).map {
         JSONObject().put("问题", it.question.take(1_000)).put("回答", it.answer.take(2_000))

@@ -19,12 +19,46 @@ import org.junit.Test
 class LedgerAssistantUiTest {
     @get:Rule val ui = createEmptyComposeRule()
 
+    @Test fun generatedSuggestionsRefreshAndFillTheDraftWithoutSending() {
+        val first = listOf("这个月哪天花得最多？", "最近收入主要来自哪类？", "哪些账户有待还金额？")
+        val second = listOf("周末的支出多于工作日吗？", "我最近记录了几次转账？", "本月哪个场景支出最多？")
+        val state = mutableStateOf(QuestionSuggestionsState())
+        val draft = mutableStateOf("")
+        var loads = 0
+        var sends = 0
+        ActivityScenario.launch(MainActivity::class.java).use { activity ->
+            activity.onActivity { owner -> owner.setContent {
+                LedgerTheme(false) {
+                    LedgerQuestionScreen(emptyList(), draft.value, { draft.value = it }, Provider.DEEPSEEK, true, true,
+                        {}, {}, { _, _ -> sends++ }, {}, {}, state.value, { refresh ->
+                            loads++
+                            state.value = QuestionSuggestionsState(if (refresh) second else first)
+                        })
+                }
+            } }
+            ui.onNodeWithText(first.first()).performClick()
+            ui.onNodeWithTag("ledger-question").assertTextContains(first.first())
+            ui.runOnIdle { assertEquals(1, loads); assertEquals(0, sends) }
+            ui.onNodeWithText("换一组").performClick()
+            ui.onNode(hasText(first.first()) and !hasSetTextAction()).assertDoesNotExist()
+            ui.onNodeWithText(second.first()).performClick()
+            ui.onNodeWithTag("ledger-question").assertTextContains(second.first())
+            ui.runOnIdle { assertEquals(2, loads); assertEquals(0, sends) }
+            ui.runOnIdle { state.value = state.value.copy(loading = true) }
+            ui.onNodeWithContentDescription("正在生成建议问题").assertIsDisplayed()
+            ui.onNodeWithText("换一组").assertIsNotEnabled()
+            ui.runOnIdle { state.value = state.value.copy(loading = false, error = "建议问题未生成，请重试。") }
+            ui.onNodeWithText("重试").performClick()
+            ui.runOnIdle { assertEquals(3, loads) }
+        }
+    }
+
     @Test fun clearDraftFromThePageHeaderSupportsCancelAndConfirmation() {
         withLedger(LedgerSnapshot()) { _, _ ->
             ui.waitUntil(10_000) { ui.onNodeWithContentDescription("问 AI").isDisplayed() }
             ui.onNodeWithContentDescription("问 AI").performClick()
             ui.onNodeWithContentDescription("清空对话").assertIsNotEnabled()
-            ui.onNodeWithText("今年支出最大的一笔是多少？").performClick()
+            ui.onNodeWithTag("ledger-question").performClick().performTextInput("今年支出最大的一笔是多少？")
             ui.onNodeWithContentDescription("清空对话").performClick()
             ui.onNodeWithText("取消").performClick()
             ui.onNodeWithTag("ledger-question").assertTextContains("今年支出最大的一笔是多少？")
@@ -52,7 +86,7 @@ class LedgerAssistantUiTest {
                         {}, {}, { question, _ -> turns.value = listOf(QuestionTurn(3, question,
                             LedgerAnswer("新的回答", emptyList(), false))) }, {}, clear = {
                             turns.value = emptyList(); draft.value = ""
-                        })
+                        }, suggestions = QuestionSuggestionsState(), refreshSuggestions = {})
                 }
             } }
             ui.onNodeWithContentDescription("发送问题").assertIsNotEnabled()
@@ -114,7 +148,8 @@ class LedgerAssistantUiTest {
                         assertTrue(consent); sent++
                         turns.value = listOf(QuestionTurn(1, question, LedgerAnswer("最大一笔 18.50 元。",
                             listOf(LedgerReference(QuerySource.ENTRIES, "found")), false)))
-                    }, { opened = it }, clear = { turns.value = emptyList(); draft.value = "" })
+                    }, { opened = it }, clear = { turns.value = emptyList(); draft.value = "" },
+                        suggestions = QuestionSuggestionsState(), refreshSuggestions = {})
                 }
             } }
             ui.onNodeWithTag("ledger-question").performTextInput("今年最大一笔？")

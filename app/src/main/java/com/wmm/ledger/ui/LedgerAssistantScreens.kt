@@ -37,7 +37,10 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import com.wmm.ledger.QuestionTurn
+import com.wmm.ledger.QuestionSuggestionsState
 import com.wmm.ledger.data.Entry
 import com.wmm.ledger.data.LedgerSearchResult
 import com.wmm.ledger.data.LedgerSnapshot
@@ -78,7 +81,7 @@ internal fun LedgerSearchScreen(data: LedgerSnapshot, query: String, result: Led
 internal fun LedgerQuestionScreen(turns: List<QuestionTurn>, question: String, change: (String) -> Unit,
     provider: Provider, hasKey: Boolean, hasConsent: Boolean,
     back: () -> Unit, openModel: () -> Unit, submit: (String, Boolean) -> Unit, evidence: (Long) -> Unit,
-    clear: () -> Unit) {
+    clear: () -> Unit, suggestions: QuestionSuggestionsState, refreshSuggestions: (Boolean) -> Unit) {
     var pendingConsent by remember { mutableStateOf<String?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
     val list = rememberLazyListState()
@@ -86,6 +89,9 @@ internal fun LedgerQuestionScreen(turns: List<QuestionTurn>, question: String, c
     val keyboard = LocalSoftwareKeyboardController.current
     val busy = turns.any { it.answer == null && it.error == null }
     val canClear = turns.isNotEmpty() || question.isNotEmpty()
+    LaunchedEffect(provider, hasKey, turns.isEmpty()) {
+        if (hasKey && turns.isEmpty()) refreshSuggestions(false)
+    }
     fun send(text: String, consent: Boolean = false) {
         if (text.isBlank() || busy) return
         if (!hasKey) { openModel(); return }
@@ -109,10 +115,23 @@ internal fun LedgerQuestionScreen(turns: List<QuestionTurn>, question: String, c
             verticalArrangement = Arrangement.spacedBy(14.dp)) {
             if (turns.isEmpty()) item("examples") {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("今年支出最大的一笔是多少？", "我最常用的通勤方式是什么？").forEach { example ->
-                        TextButton(onClick = { change(example) }) { Text(example) }
+                    if (hasKey) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically) {
+                            if (suggestions.loading) CircularProgressIndicator(Modifier.size(16.dp)
+                                .semantics { contentDescription = "正在生成建议问题" }, strokeWidth = 2.dp)
+                            TextButton(onClick = { refreshSuggestions(true) }, enabled = !suggestions.loading) {
+                                Text(if (suggestions.error == null) "换一组" else "重试")
+                            }
+                        }
+                        suggestions.items.forEach { example ->
+                            TextButton(onClick = { change(example) }) { Text(example, maxLines = 2) }
+                        }
+                        suggestions.error?.let { Text(it, style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    } else {
+                        TextButton(onClick = openModel) { Text("配置模型") }
                     }
-                    if (!hasKey) TextButton(onClick = openModel) { Text("配置模型") }
                 }
             }
             items(turns, key = { it.id }) { turn ->
