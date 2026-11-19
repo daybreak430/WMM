@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,6 +31,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -49,11 +52,16 @@ internal fun LazyListScope.shareSection(
     total: Long,
     ranks: List<RankedAmount>,
     open: (String) -> Unit,
+    expanded: Boolean = true,
+    toggleExpanded: (() -> Unit)? = null,
 ) {
     if (ranks.isEmpty() || total <= 0) return
     val named = ranks.filter { it.id != null }
     val other = named.drop(CHART_CATEGORY_LIMIT)
     val otherAmount = other.sumOf { it.amount }
+    // 只折叠明细行，环形图、其余项及百分比始终使用完整排名和总额。
+    val collapsible = toggleExpanded != null && ranks.size > CHART_CATEGORY_LIMIT
+    val visibleRanks = if (collapsible && !expanded) ranks.take(CHART_CATEGORY_LIMIT) else ranks
     item("chart:$key") {
         val colors = MaterialTheme.colorScheme
         val otherColor = shareOtherColor()
@@ -87,11 +95,21 @@ internal fun LazyListScope.shareSection(
             }
         }
     }
-    itemsIndexed(ranks, key = { _, row -> "share:$key:${row.id?.let { "id:$it" } ?: "unassigned"}" }) { index, row ->
+    itemsIndexed(visibleRanks, key = { _, row -> "share:$key:${row.id?.let { "id:$it" } ?: "unassigned"}" }) { index, row ->
         val colors = MaterialTheme.colorScheme
         val dotColor = if (row.id == null) colors.onSurfaceVariant
             else shareColors().getOrNull(index) ?: shareOtherColor()
-        ShareRow(row, total, dotColor, index == ranks.lastIndex, row.id?.let { id -> { open(id) } })
+        ShareRow(row, total, dotColor, index == visibleRanks.lastIndex && !collapsible, row.id?.let { id -> { open(id) } })
+    }
+    if (collapsible) item("share-toggle:$key") {
+        Surface(Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(bottomStart = 18.dp, bottomEnd = 18.dp)) {
+            TextButton(onClick = { toggleExpanded?.invoke() },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("share-toggle:$key")
+                    .semantics { stateDescription = if (expanded) "已展开" else "已收起" }) {
+                Text(if (expanded) "收起" else "查看更多")
+            }
+        }
     }
 }
 

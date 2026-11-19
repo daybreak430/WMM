@@ -29,6 +29,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -249,6 +253,7 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
     chooseDay: (LocalDate) -> Unit, drill: (String) -> Unit, drillScene: (String) -> Unit,
     bottomInset: Dp) {
     val summary = remember(data, period, day, today) { data.stats(period, day, today) }
+    var expenseTypesExpanded by rememberSaveable(period, summary.start) { mutableStateOf(false) }
     val calendar = CalendarAction(day, today, onSelect = chooseDay)
     val colors = MaterialTheme.colorScheme
     val trend = remember(data.entries, summary.start, period) {
@@ -303,7 +308,8 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
                 }
             }
             shareSection("支出类型占比", Glyph.TAG, "expense", "支出合计", summary.expense,
-                expenses.map { RankedAmount(it.tag.id, it.tag.name, it.cents) }, drill)
+                expenses.map { RankedAmount(it.tag.id, it.tag.name, it.cents) }, drill,
+                expanded = expenseTypesExpanded, toggleExpanded = { expenseTypesExpanded = !expenseTypesExpanded })
             shareSection("支出场景占比", Glyph.BOX, "scene", "支出合计", summary.expense, sceneRanks, drillScene)
             shareSection("收入类型占比", Glyph.INCOME, "income", "收入合计", summary.income,
                 income.map { RankedAmount(it.tag.id, it.tag.name, it.cents) }, drill)

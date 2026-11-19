@@ -8,11 +8,14 @@ import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.test.click
 import com.wmm.ledger.data.Entry
 import com.wmm.ledger.data.Kind
 import com.wmm.ledger.data.LedgerSnapshot
@@ -24,11 +27,50 @@ import kotlinx.coroutines.runBlocking
 import java.time.LocalDate
 import java.time.ZoneId
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Rule
 import org.junit.Test
 
 class StatsChartsUiTest {
     @get:Rule val ui = createEmptyComposeRule()
+
+    @Test fun expenseTypesExpandCollapseAndResetForAnotherPeriod() {
+        val today = LocalDate.now()
+        val tags = (1..7).map { Tag("expense-$it", "EXPENSE", "支出分类$it") }
+        val entries = tags.mapIndexed { index, tag ->
+            Entry("record-$index", tag.kind, (7 - index) * 10_000L, tag.id, null, "", 1, today.toString())
+        }
+        withLedger(LedgerSnapshot(tags = tags, entries = entries)) { _, activity ->
+            ui.waitUntil(10_000) { ui.onNodeWithText("收支统计").isDisplayed() }
+            ui.onNodeWithText("收支统计").performClick()
+            val list = ui.onNode(hasScrollAction())
+            val toggle = hasTestTag("share-toggle:expense")
+            list.performScrollToNode(toggle)
+            ui.onNodeWithTag("share-toggle:expense").assertIsDisplayed()
+            ui.onNodeWithText("查看更多").assertIsDisplayed()
+            assertThrows(AssertionError::class.java) { list.performScrollToNode(hasText("支出分类6")) }
+            list.performScrollToNode(toggle)
+            ui.onNodeWithTag("share-toggle:expense").performTouchInput { click() }
+            list.performScrollToNode(hasText("支出分类7"))
+            ui.onNode(hasText("支出分类7") and hasText("3.6%") and hasText("¥100.00")).performClick()
+            ui.onNodeWithText("1 笔").assertIsDisplayed()
+            ui.onNodeWithContentDescription("返回").performClick()
+            list.performScrollToNode(toggle)
+            ui.onNodeWithText("收起").assertIsDisplayed()
+            activity.recreate()
+            list.performScrollToNode(toggle)
+            ui.onNodeWithText("收起").performTouchInput { click() }
+            ui.onNodeWithText("查看更多").assertIsDisplayed()
+            list.performScrollToNode(hasText("其余 2 项 · 10.7%"))
+            ui.onNodeWithText("其余 2 项 · 10.7%").assertIsDisplayed()
+            list.performScrollToNode(toggle)
+            ui.onNodeWithTag("share-toggle:expense").performTouchInput { click() }
+            list.performScrollToIndex(0)
+            ui.onNodeWithText("年").performClick()
+            list.performScrollToNode(toggle)
+            ui.onNodeWithText("查看更多").assertIsDisplayed()
+        }
+    }
 
     @Test fun allPeriodsKeepChartsAndHideLegacyReportActions() {
         val today = LocalDate.now()
@@ -85,6 +127,7 @@ class StatsChartsUiTest {
             ui.onNode(unassigned and hasText(if (today.month == previousWeek.month) "33.3%" else "25%")).assertIsDisplayed()
             list.performScrollToNode(hasContentDescription("收入类型占比环形图"))
             ui.onNodeWithContentDescription("收入类型占比环形图").assertIsDisplayed()
+            ui.onNodeWithTag("share-toggle:expense").assertDoesNotExist()
 
             list.performScrollToIndex(0)
             ui.onNodeWithText("周").performClick()
