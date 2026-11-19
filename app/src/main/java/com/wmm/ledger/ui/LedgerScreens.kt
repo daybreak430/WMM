@@ -57,6 +57,7 @@ import com.wmm.ledger.data.Period
 import com.wmm.ledger.data.PeriodStats
 import com.wmm.ledger.data.Provider
 import com.wmm.ledger.data.Report
+import com.wmm.ledger.data.Transfer
 import com.wmm.ledger.data.ReportStory
 import com.wmm.ledger.data.Reports
 import com.wmm.ledger.data.reportAnalysis
@@ -71,7 +72,7 @@ import java.util.Locale
 
 @Composable
 fun LedgerScreen(data: LedgerSnapshot, today: LocalDate, openSettings: () -> Unit, openStats: () -> Unit,
-    edit: (Entry) -> Unit, bottomInset: Dp) {
+    edit: (Entry) -> Unit, bottomInset: Dp, editTransfer: (Transfer) -> Unit) {
     val stats = remember(data, today) { data.stats(Period.MONTH, today, today) }
     val colors = MaterialTheme.colorScheme
     val inset = LedgerPageInset()
@@ -111,10 +112,10 @@ fun LedgerScreen(data: LedgerSnapshot, today: LocalDate, openSettings: () -> Uni
                     }
                 }
             }
-            if (data.entries.isEmpty()) {
+            if (data.entries.isEmpty() && data.transfers.isEmpty()) {
                 item("empty") { GroupCard { EmptyPanel("还没有流水") } }
             } else {
-                ledgerRows(data.entries, data, today, edit)
+                ledgerRows(data.entries, data, today, edit, editTransfer)
             }
         }
     }
@@ -147,10 +148,22 @@ private fun SummaryMetric(kind: Kind, cents: Long, modifier: Modifier = Modifier
     }
 }
 
-fun LazyListScope.ledgerRows(entries: List<Entry>, data: LedgerSnapshot, today: LocalDate, edit: (Entry) -> Unit) {
+private sealed class LedgerListItem(val id: String, val day: String, val occurredAt: Long) {
+    class EntryItem(val entry: Entry) : LedgerListItem("entry:${entry.id}", entry.day, entry.occurredAt)
+    class TransferItem(val transfer: Transfer) : LedgerListItem("transfer:${transfer.id}", transfer.day, transfer.occurredAt)
+}
+
+fun LazyListScope.ledgerRows(
+    entries: List<Entry>, data: LedgerSnapshot, today: LocalDate, edit: (Entry) -> Unit,
+    editTransfer: ((Transfer) -> Unit)? = null,
+) {
     val tagById = data.tags.associateBy { it.id }
     val sceneById = data.scenes.associateBy { it.id }
-    entries.groupBy { it.day }.toSortedMap(reverseOrder()).forEach { (date, records) ->
+    val accountById = data.accounts.associateBy { it.id }
+    val rows = entries.map { LedgerListItem.EntryItem(it) } +
+        if (editTransfer != null) data.transfers.map { LedgerListItem.TransferItem(it) } else emptyList()
+    rows.groupBy { it.day }.toSortedMap(reverseOrder()).forEach { (date, daily) ->
+        val records = daily.sortedWith(compareByDescending<LedgerListItem> { it.occurredAt }.thenBy { it.id })
         item("day:$date") {
             val day = LocalDate.parse(date)
             val label = when (day) {
@@ -161,7 +174,7 @@ fun LazyListScope.ledgerRows(entries: List<Entry>, data: LedgerSnapshot, today: 
             Text(label, Modifier.padding(start = 2.dp, top = 11.dp, bottom = 6.dp), style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        itemsIndexed(records, key = { _, entry -> "entry:${entry.id}" }) { position, entry ->
+        itemsIndexed(records, key = { _, record -> record.id }) { position, record ->
             val first = if (position == 0) 18.dp else 0.dp
             val last = if (position == records.lastIndex) 18.dp else 0.dp
             val colors = MaterialTheme.colorScheme
@@ -170,11 +183,23 @@ fun LazyListScope.ledgerRows(entries: List<Entry>, data: LedgerSnapshot, today: 
             // 流水逐行加载，首尾圆角和组内分隔线组成连续的卡面。
             Surface(color = colors.surface, shape = shape) {
                 Column {
-                    val type = tagById[entry.tagId]
-                    val scene = sceneById[entry.sceneId]?.name
-                    val name = type?.name.orEmpty()
-                    val label = if (scene == null) name else "$scene · $name"
-                    LedgerRow(entry, label, LabelStyle.from(type?.iconKey, type?.iconColor), edit)
+                    when (record) {
+                        is LedgerListItem.EntryItem -> {
+                            val entry = record.entry
+                            val type = tagById[entry.tagId]
+                            val scene = sceneById[entry.sceneId]?.name
+                            val name = type?.name.orEmpty()
+                            val label = if (scene == null) name else "$scene · $name"
+                            LedgerRow(entry, label, LabelStyle.from(type?.iconKey, type?.iconColor), edit)
+                        }
+                        is LedgerListItem.TransferItem -> {
+                            val transfer = record.transfer
+                            val from = accountById[transfer.fromAccountId]?.name.orEmpty()
+                            val to = accountById[transfer.toAccountId]?.name.orEmpty()
+                            LedgerRecordRow("$from → $to", "转账", transfer.note, currency(transfer.cents),
+                                income = false, leading = { IconBadge(Glyph.WALLET) }) { editTransfer?.invoke(transfer) }
+                        }
+                    }
                     if (position < records.lastIndex) {
                         if (refined) HorizontalDivider(Modifier.padding(start = 60.dp, end = 14.dp), color = colors.outlineVariant)
                         else Hairline(14)
@@ -188,29 +213,39 @@ fun LazyListScope.ledgerRows(entries: List<Entry>, data: LedgerSnapshot, today: 
 @Composable
 private fun LedgerRow(entry: Entry, tag: String, icon: LabelStyle?, edit: (Entry) -> Unit) {
     val income = entry.kind == Kind.INCOME.name
+    val refined = LocalLedgerRefinement.current
+    LedgerRecordRow(tag, if (income) "收入" else "支出", entry.note,
+        (if (income) "+" else "−") + currency(entry.cents), income,
+        leading = { LabelBadge(icon, if (refined) 36 else 40) }) { edit(entry) }
+}
+
+@Composable
+private fun LedgerRecordRow(
+    title: String, badge: String, note: String, amount: String, income: Boolean,
+    leading: @Composable () -> Unit, onClick: () -> Unit,
+) {
     val colors = MaterialTheme.colorScheme
     val refined = LocalLedgerRefinement.current
-    Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).clickable(role = Role.Button) { edit(entry) }
+    Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).clickable(role = Role.Button, onClick = onClick)
         .padding(horizontal = 14.dp, vertical = if (refined) 10.dp else 11.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        LabelBadge(icon, if (refined) 36 else 40)
+        leading()
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text(tag, Modifier.weight(1f, fill = false), style = MaterialTheme.typography.titleMedium,
+                Text(title, Modifier.weight(1f, fill = false), style = MaterialTheme.typography.titleMedium,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(if (income) "收入" else "支出",
+                Text(badge,
                     Modifier.background(if (income) colors.primaryContainer else colors.surfaceVariant, CircleShape)
                         .padding(horizontal = 5.dp, vertical = 1.dp),
                     color = if (income) colors.primary else colors.onSurfaceVariant,
                     style = MaterialTheme.typography.labelSmall, maxLines = 1)
             }
-            if (entry.note.isNotBlank()) {
-                Text(entry.note, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
+            if (note.isNotBlank()) {
+                Text(note, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        AmountText((if (income) "+" else "−") + currency(entry.cents),
-            if (income) colors.primary else colors.onSurface, Modifier.weight(.70f),
+        AmountText(amount, if (income) colors.primary else colors.onSurface, Modifier.weight(.70f),
             style = (if (refined) LedgerFlowNumber else RowNumber).copy(textAlign = TextAlign.End))
     }
 }

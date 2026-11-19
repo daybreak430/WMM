@@ -36,6 +36,9 @@ import com.wmm.ledger.data.AccountType
 import com.wmm.ledger.data.LedgerSnapshot
 import com.wmm.ledger.data.MAX_NAME
 import com.wmm.ledger.data.accountBalances
+import com.wmm.ledger.data.balanceDescription
+import com.wmm.ledger.data.balanceInput
+import com.wmm.ledger.data.isCredit
 import com.wmm.ledger.data.currency
 import com.wmm.ledger.data.editableAmount
 import com.wmm.ledger.data.netAssetTotal
@@ -118,7 +121,7 @@ fun AssetsScreen(data: LedgerSnapshot, model: LedgerViewModel, back: () -> Unit)
             .format(DateTimeFormatter.ofPattern("yyyy/M/d HH:mm:ss"))
         LedgerAlertDialog(onDismissRequest = { accountOptions = null }, title = { Text(opening.name) }, text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                AmountText(currency(balances[opening.id] ?: 0), style = HeroNumber)
+                AmountText(opening.balanceDescription(balances[opening.id] ?: 0), style = HeroNumber)
                 Text("上次校准 $calibrated", style = MaterialTheme.typography.bodySmall)
                 if (!opening.archived) {
                     SettingsRow("校准余额", icon = Glyph.WALLET) {
@@ -169,7 +172,8 @@ private fun AccountCard(account: Account, balance: Long, open: () -> Unit) {
                     Text(typeLabel, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                 }
             }
-            AmountText(currency(balance), modifier = Modifier.weight(.68f), style = RowNumber.copy(textAlign = TextAlign.End))
+            AmountText(account.balanceDescription(balance), modifier = Modifier.weight(.9f),
+                style = RowNumber.copy(textAlign = TextAlign.End))
             LucideIcon(Glyph.RIGHT, colors.onSurfaceVariant, size = 16)
         }
     }
@@ -189,7 +193,12 @@ private fun AccountDialog(account: Account?, model: LedgerViewModel, close: () -
             OutlinedTextField(name, { if (it.length <= MAX_NAME) name = it }, Modifier.fillMaxWidth(),
                 label = { Text("账户名称") }, singleLine = true, shape = FieldShape, colors = ledgerFieldColors())
             SettingsRow("账户类型", end = type.title) { chooseType = true }
-            if (account == null) SignedAmountField(amount, { amount = it }, "初始余额")
+            if (account == null) {
+                SignedAmountField(amount, { amount = it }, if (type.isCredit) "当前欠款" else "初始余额")
+                if (type.isCredit) {
+                    Text("欠款填正数，溢缴款填负数。", style = MaterialTheme.typography.bodySmall)
+                }
+            }
         }
     }, confirmButton = {
         TextButton(onClick = {
@@ -213,13 +222,16 @@ private fun AccountDialog(account: Account?, model: LedgerViewModel, close: () -
 
 @Composable
 private fun CalibrationDialog(account: Account, balance: Long, model: LedgerViewModel, close: () -> Unit) {
-    var input by rememberSaveable { mutableStateOf(editableAmount(balance)) }
+    var input by rememberSaveable { mutableStateOf(editableAmount(account.balanceInput(balance))) }
     var saving by remember { mutableStateOf(false) }
     val parsed = parseCents(input, signed = true)
     LedgerAlertDialog(onDismissRequest = close, title = { Text("校准余额") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(account.name, style = MaterialTheme.typography.titleMedium)
-            SignedAmountField(input, { input = it }, "现在的真实余额")
+            SignedAmountField(input, { input = it }, if (account.isCredit) "现在的欠款" else "现在的真实余额")
+            if (account.isCredit) {
+                Text("欠款填正数，溢缴款填负数。", style = MaterialTheme.typography.bodySmall)
+            }
             Text("保存后，只有这次校准之后发生的流水会增减余额。", style = MaterialTheme.typography.bodySmall)
         }
     }, confirmButton = {

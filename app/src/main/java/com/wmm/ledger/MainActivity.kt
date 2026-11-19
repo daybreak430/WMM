@@ -72,6 +72,7 @@ import com.wmm.ledger.ui.ModelSettings
 import com.wmm.ledger.ui.NavigationBottomGap
 import com.wmm.ledger.ui.NavigationTopGap
 import com.wmm.ledger.ui.SettingsScreen
+import com.wmm.ledger.ui.TransferEditor
 import com.wmm.ledger.ui.ScheduledBillsScreen
 import com.wmm.ledger.ui.ScheduledBillEditor
 import com.wmm.ledger.ui.StatsScreen
@@ -184,7 +185,8 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
         else -> 2
     }
     val destination = Destination(route, depth)
-    val refined = route == "new" || route?.startsWith("entry:") == true || (route == null && tab == Tab.LEDGER)
+    val refined = route == "new" || route?.startsWith("entry:") == true ||
+        route?.startsWith("transfer:") == true || (route == null && tab == Tab.LEDGER)
     val tabHeight = ledgerNavigationHeight()
     val tabSpace = tabHeight + NavigationBottomGap + NavigationTopGap
     LedgerScreenFrame(refined, tab.name) {
@@ -251,7 +253,8 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
                                                 followToday = true
                                                 periodName = Period.MONTH.name
                                                 tabName = Tab.STATS.name
-                                            }, { route = "entry:${it.id}" }, bottomInset)
+                                            }, { route = "entry:${it.id}" }, bottomInset,
+                                                editTransfer = { route = "transfer:${it.id}" })
                                             Tab.STATS -> StatsScreen(data, today, period, day, { periodName = it.name }, {
                                                 dayText = it.toString()
                                                 followToday = it == today
@@ -273,7 +276,7 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
                         }
                     } else {
                         Box(Modifier.fillMaxSize().navigationBarsPadding().blockExitingPage(active)) {
-                            LedgerScreenTheme(current == "new" || current.startsWith("entry:")) {
+                            LedgerScreenTheme(current == "new" || current.startsWith("entry:") || current.startsWith("transfer:")) {
                                 when {
                                     current == "settings" -> SettingsScreen(data, model, provider, provider in keys,
                                         fileBusy, appearance, ::back,
@@ -303,6 +306,16 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
                                         route = "model"
                                     }
                                     current == "new" -> EntryEditor(data, null, model) { if (route == current) back() }
+                                    current.startsWith("transfer:") -> {
+                                        val initial = remember(current) {
+                                            data.transfers.firstOrNull { it.id == current.substringAfter(':') }
+                                        }
+                                        if (initial != null) {
+                                            TransferEditor(data, initial, model, back = { if (route == current) back() })
+                                        } else {
+                                            LaunchedEffect(current) { if (route == current) back() }
+                                        }
+                                    }
                                     current.startsWith("entry:") -> {
                                         // 离场动画仍使用打开时的流水，删除记录后画面不会突然变空。
                                         val initial = remember(current) {
@@ -331,7 +344,7 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
     }
 
     pendingRestore?.let { backup ->
-        ConfirmDialog("替换本机账本？", "此备份含 ${backup.entries.size} 笔流水、${backup.accounts.size} 个账户和 " +
+        ConfirmDialog("替换本机账本？", "此备份含 ${backup.entries.size} 笔收支、${backup.transfers.size} 笔转账、${backup.accounts.size} 个账户和 " +
             "${backup.scheduledBills.size} 条定时账单。恢复会替换本机账本和定时账单，无法撤销。", "替换并恢复",
             model::cancelRestore, model::restore)
     }

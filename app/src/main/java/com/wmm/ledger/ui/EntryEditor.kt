@@ -41,6 +41,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -98,7 +99,27 @@ private const val VISIBLE_TAG_LIMIT = 8
 @Composable
 fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, back: () -> Unit) {
     var kindName by rememberSaveable { mutableStateOf(initial?.kind ?: Kind.EXPENSE.name) }
-    val kind = Kind.valueOf(kindName)
+    var transferSelected by rememberSaveable { mutableStateOf(false) }
+    val drafts = rememberSaveableStateHolder()
+    drafts.SaveableStateProvider(if (transferSelected) "transfer" else "entry") {
+        if (transferSelected) {
+            TransferEditor(data, null, model, back, onSelectKind = {
+                kindName = it.name
+                transferSelected = false
+            })
+        } else {
+            IncomeExpenseEditor(data, initial, model, Kind.valueOf(kindName), onKindChange = { kindName = it.name },
+                onTransfer = if (initial == null) ({ transferSelected = true }) else null, back = back)
+        }
+    }
+}
+
+@Composable
+private fun IncomeExpenseEditor(
+    data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, kind: Kind, onKindChange: (Kind) -> Unit,
+    onTransfer: (() -> Unit)?, back: () -> Unit,
+) {
+    val kindName = kind.name
     var amountText by rememberSaveable { mutableStateOf(initial?.let { editableAmount(it.cents) } ?: "") }
     val cents = parseCents(amountText)
     val scenes = remember(data.scenes, data.entries) { data.orderedScenes() }
@@ -129,7 +150,9 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
     val guess = remember(habits, kind, cents, habitTime, note, habitArea, initial == null, tagChosen) {
         if (initial == null && !tagChosen) habits.suggest(kind, cents, habitTime, note, habitArea) else null
     }
-    val tagId = guess?.tag?.id ?: manualTagId
+    val tagId = (guess?.tag?.id ?: manualTagId).takeIf { selected ->
+        data.tags.any { it.id == selected && it.kind == kindName }
+    }
     val sceneId = if (!sceneChosen && guess != null) guess.scene?.id else manualSceneId
     val zone = ZoneId.systemDefault()
     val time = occurredAt.takeIf { hasTime }?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalTime() }
@@ -167,29 +190,21 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
         focus.clearFocus()
         keyboard?.hide()
     }
-    val selectKind: (Kind) -> Unit = { option ->
-        if (option.name != kindName) {
-            kindName = option.name
+    var draftKindName by rememberSaveable { mutableStateOf(kindName) }
+    LaunchedEffect(kindName) {
+        // 从转账切回收支时也重置方向相关标签，避免沿用另一方向的已选标签。
+        if (draftKindName != kindName) {
             manualTagId = null
             tagChosen = false
             showTags = false
+            draftKindName = kindName
         }
     }
+    val selectKind: (Kind) -> Unit = onKindChange
 
     Column(Modifier.fillMaxSize().imePadding()) {
         if (isNew) {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = pageInset, vertical = 5.dp)
-                    .semantics { paneTitle = "记一笔" },
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Spacer(Modifier.width(48.dp))
-                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    Box(Modifier.widthIn(max = 186.dp)) { EntryKindSelector(kind, selectKind) }
-                }
-                PageCloseButton(back)
-            }
+            EntryEditorHeader(kind, selectKind, onTransfer, back)
         } else {
             PageHeader("编辑流水", back, centered = true) {
                 IconButton(onClick = { deleteDialog = true }) {
@@ -449,12 +464,37 @@ private fun EntryTagGroup(
 }
 
 @Composable
+internal fun EntryEditorHeader(kind: Kind?, selectKind: (Kind) -> Unit, onTransfer: (() -> Unit)?, back: () -> Unit) {
+    val modes = if (onTransfer == null) listOf("支出", "收入") else listOf("支出", "收入", "转账")
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = LedgerPageInset(), vertical = 5.dp)
+            .semantics { paneTitle = "记一笔" },
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Spacer(Modifier.width(48.dp))
+        Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+            Box(Modifier.widthIn(max = 234.dp)) {
+                LedgerSegments(modes, kind?.title ?: "转账", { it }) { choice ->
+                    when (choice) {
+                        "支出" -> selectKind(Kind.EXPENSE)
+                        "收入" -> selectKind(Kind.INCOME)
+                        else -> onTransfer?.invoke()
+                    }
+                }
+            }
+        }
+        PageCloseButton(back)
+    }
+}
+
+@Composable
 private fun EntryKindSelector(kind: Kind, select: (Kind) -> Unit) {
     LedgerSegments(Kind.entries, kind, { it.title }, onSelect = select)
 }
 
 @Composable
-private fun EntryAmount(amount: String, error: Boolean, compact: Boolean, onChange: (String) -> Unit) {
+internal fun EntryAmount(amount: String, error: Boolean, compact: Boolean, onChange: (String) -> Unit) {
     val colors = MaterialTheme.colorScheme
     val amountColor = if (error) colors.error else colors.onSurface
     val currencyStyle = LedgerBalanceNumber.copy(
@@ -555,7 +595,7 @@ private fun EntryTagChip(label: String, selected: Boolean? = null, optional: Boo
 }
 
 @Composable
-private fun EntryDetailRow(label: String, value: String, icon: Glyph, onClick: () -> Unit) {
+internal fun EntryDetailRow(label: String, value: String, icon: Glyph, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth().heightIn(min = 50.dp).clickable(role = Role.Button, onClick = onClick)
         .padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically,
@@ -571,7 +611,7 @@ private fun EntryDetailRow(label: String, value: String, icon: Glyph, onClick: (
 }
 
 @Composable
-private fun EntryDateDialog(day: LocalDate, time: LocalTime?, onDismiss: () -> Unit,
+internal fun EntryDateDialog(day: LocalDate, time: LocalTime?, onDismiss: () -> Unit,
     onSave: (LocalDate, LocalTime?) -> Unit) {
     var dateText by rememberSaveable { mutableStateOf(day.toString()) }
     var timeText by rememberSaveable { mutableStateOf(time?.toString()) }
@@ -595,7 +635,7 @@ private fun EntryDateDialog(day: LocalDate, time: LocalTime?, onDismiss: () -> U
 }
 
 @Composable
-private fun EntryNoteDialog(note: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+internal fun EntryNoteDialog(note: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var draft by rememberSaveable { mutableStateOf(note) }
     LedgerAlertDialog(onDismissRequest = onDismiss, shape = CardShape, title = { Text("备注") },
         text = {

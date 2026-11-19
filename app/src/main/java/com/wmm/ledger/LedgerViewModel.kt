@@ -199,6 +199,21 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
         notify("已删除")
     }
 
+    internal fun saveTransfer(
+        id: String?, cents: Long, from: String, to: String, note: String, at: Long,
+        day: LocalDate, hasTime: Boolean, done: () -> Unit,
+    ) = perform("无法保存转账。") {
+        repository.saveTransfer(id, cents, from, to, note, at, day, hasTime)
+        done()
+        notify("已保存")
+    }
+
+    internal fun deleteTransfer(id: String, done: () -> Unit) = perform("无法删除转账。") {
+        repository.deleteTransfer(id)
+        done()
+        notify("已删除")
+    }
+
     fun saveAccount(id: String?, type: AccountType, name: String, amount: Long?, done: () -> Unit) =
         perform("无法保存账户。") { repository.saveAccount(id, type, name, amount); done() }
 
