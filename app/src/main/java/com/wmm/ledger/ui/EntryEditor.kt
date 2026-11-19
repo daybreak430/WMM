@@ -64,7 +64,6 @@ import com.wmm.ledger.data.LedgerHabits
 import com.wmm.ledger.data.readHabitArea
 import com.wmm.ledger.data.LedgerSnapshot
 import com.wmm.ledger.data.MAX_NAME
-import com.wmm.ledger.data.MAX_NOTE
 import com.wmm.ledger.data.editableAmount
 import com.wmm.ledger.data.changedOccurrenceTime
 import com.wmm.ledger.data.Tag
@@ -142,7 +141,6 @@ private fun IncomeExpenseEditor(
     var accountDialog by rememberSaveable { mutableStateOf(false) }
     var defaultAccountDialog by rememberSaveable { mutableStateOf(false) }
     var savingDefault by remember { mutableStateOf(false) }
-    var noteEditor by rememberSaveable { mutableStateOf(false) }
     var deleteDialog by rememberSaveable { mutableStateOf(false) }
     var showScenes by rememberSaveable { mutableStateOf(false) }
     var showTags by rememberSaveable { mutableStateOf(false) }
@@ -180,11 +178,11 @@ private fun IncomeExpenseEditor(
             draftKindName = kindName
         }
     }
-    val selectKind: (Kind) -> Unit = onKindChange
+    val selectKind: (Kind) -> Unit = { dismissKeyboard(); onKindChange(it) }
 
     val accountPicker: @Composable () -> Unit = {
         EntryMetaButton("账户", account?.name ?: "不关联", Glyph.WALLET,
-            Modifier.widthIn(max = 260.dp).testTag("entry-account")) { accountDialog = true }
+            Modifier.widthIn(max = 220.dp).testTag("entry-account")) { dismissKeyboard(); accountDialog = true }
     }
     val chooseDate = CalendarAction(day) { changedDay ->
         if (changedDay != day) {
@@ -203,7 +201,7 @@ private fun IncomeExpenseEditor(
             .invokeOnCompletion { saving = false }
     }
     EntryEditorLayout(header = {
-        if (isNew) EntryEditorHeader(kind, selectKind, onTransfer, back)
+        if (isNew) EntryEditorHeader(kind, selectKind, onTransfer?.let { action -> { dismissKeyboard(); action() } }, back)
         else PageHeader("编辑流水", back, centered = true) {
             IconButton(onClick = { deleteDialog = true }) { LucideIcon(Glyph.DELETE, colors.error, "删除流水") }
         }
@@ -223,6 +221,7 @@ private fun IncomeExpenseEditor(
                     save = { order, failed -> model.reorderTags(kind, order, failed) },
                     select = {
                         if (!sceneChosen && guess != null && guess.tag.id == it) manualSceneId = guess.scene?.id
+                        dismissKeyboard()
                         manualTagId = it
                         tagChosen = true
                     },
@@ -239,7 +238,7 @@ private fun IncomeExpenseEditor(
                     title = "场景", labels = sceneLabels, styles = sceneStyles, selected = sceneId, expanded = showScenes,
                     dragState = sceneDrag, optional = true,
                     save = { order, failed -> model.reorderScenes(order, failed) },
-                    select = { manualSceneId = it.takeUnless { id -> id == sceneId }; sceneChosen = true },
+                    select = { dismissKeyboard(); manualSceneId = it.takeUnless { id -> id == sceneId }; sceneChosen = true },
                 ) {
                     EntryTagChip("新建场景", add = true) { newScene = true }
                     if (scenes.size > VISIBLE_TAG_LIMIT) {
@@ -250,12 +249,10 @@ private fun IncomeExpenseEditor(
         }
     }, composer = { compact ->
         EntryComposer(amountText, { amountText = amountKey(amountText, it) }, "保存流水", cents != null && tagId != null && !saving,
-            saving, compact, save, account = if (compact) null else accountPicker) {
+            saving, compact, save, note, { note = it }, account = if (compact) null else accountPicker) {
             val dateLabel = (if (day.year == LocalDate.now().year) "" else "${day.year}/") +
                 "${day.monthValue}/${day.dayOfMonth}"
-            EntryMetaButton("日期", dateLabel, Glyph.CALENDAR, Modifier.testTag("entry-date"), chooseDate)
-            EntryMetaButton("备注", note.ifBlank { "添加备注" }, Glyph.EDIT,
-                Modifier.weight(1f).testTag("entry-note")) { noteEditor = true }
+            EntryMetaButton("日期", dateLabel, Glyph.CALENDAR, Modifier.testTag("entry-date")) { dismissKeyboard(); chooseDate() }
         }
     })
     if (tagDialog) {
@@ -335,12 +332,6 @@ private fun IncomeExpenseEditor(
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }, confirmButton = { TextButton(onClick = { accountDialog = false }) { Text("关闭") } })
-    }
-    if (noteEditor) {
-        EntryNoteDialog(note, onDismiss = { noteEditor = false }) {
-            note = it
-            noteEditor = false
-        }
     }
     if (deleteDialog && initial != null) {
         ConfirmDialog("删除这笔流水？", "删除后会更新收支统计和关联账户余额。", "删除", { deleteDialog = false }) {
@@ -486,18 +477,6 @@ internal fun EntryDetailRow(label: String, value: String, icon: Glyph, onClick: 
         }
         LucideIcon(Glyph.RIGHT, colors.onSurfaceVariant, size = 16)
     }
-}
-
-@Composable
-internal fun EntryNoteDialog(note: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
-    var draft by rememberSaveable { mutableStateOf(note) }
-    LedgerAlertDialog(onDismissRequest = onDismiss, shape = CardShape, title = { Text("备注") },
-        text = {
-            OutlinedTextField(draft, { if (it.length <= MAX_NOTE) draft = it }, Modifier.fillMaxWidth(),
-                label = { Text("备注内容") }, minLines = 2, maxLines = 4, shape = FieldShape, colors = ledgerFieldColors())
-        },
-        confirmButton = { TextButton(onClick = { onSave(draft) }) { Text("确认") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } })
 }
 
 @Composable

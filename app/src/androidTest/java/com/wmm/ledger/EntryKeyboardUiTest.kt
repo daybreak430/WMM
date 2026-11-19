@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.geometry.Offset
@@ -33,6 +34,23 @@ import org.junit.Test
 
 class EntryKeyboardUiTest {
     @get:Rule val ui = createEmptyComposeRule()
+
+    @Test fun defaultSceneRemainsVisibleAboveCompactPanel() {
+        val tags = listOf("早餐", "午餐", "晚餐", "宵夜", "地铁", "打车", "便利店", "百货").mapIndexed { index, name ->
+            Tag("tag-$index", Kind.EXPENSE.name, name, sortOrder = index, iconKey = "MEAL", iconColor = "AMBER")
+        }
+        val scenes = listOf(Scene("home", "日常", 0), Scene("trip", "出差", 1), Scene("tour", "旅游", 2))
+        withLedger(LedgerSnapshot(tags = tags, scenes = scenes)) { _, _ ->
+            ui.waitUntil(10_000) { ui.onNodeWithContentDescription("记一笔").isDisplayed() }
+            ui.onNodeWithContentDescription("记一笔").performClick()
+            ui.onNodeWithText("日常").assertIsDisplayed()
+            val scene = ui.onNodeWithText("日常").fetchSemanticsNode().boundsInRoot
+            val account = ui.onNodeWithTag("entry-account").fetchSemanticsNode().boundsInRoot
+            assertTrue(scene.bottom <= account.top)
+            ui.onNodeWithTag("entry-account").assertIsDisplayed()
+            ui.onNodeWithTag("entry-note").assertIsDisplayed()
+        }
+    }
 
     @Test fun dateOnlyEditorPreservesLegacyTimestampAndCalibratedBalanceWhenSaved() {
         val day = java.time.LocalDate.now().minusDays(1)
@@ -112,11 +130,14 @@ class EntryKeyboardUiTest {
             assertEquals(keypadTop, ui.onNodeWithTag("amount-keypad").fetchSemanticsNode().boundsInRoot.top, 1f)
             assertFalse(imeVisible(activity))
             ui.onNodeWithText("保存流水").assertIsEnabled()
-            ui.onNodeWithTag("entry-note").performClick()
-            ui.onNodeWithText("备注内容").performClick().performTextInput("午饭备注")
+            ui.onNodeWithTag("entry-note").performClick().performTextInput("午饭备注")
             ui.waitUntil(5_000) { imeVisible(activity) }
-            ui.onNodeWithText("确认").performClick()
-            ui.waitUntil(5_000) { !imeVisible(activity) }
+            ui.onNodeWithTag("amount-keypad").assertDoesNotExist()
+            InstrumentationRegistry.getInstrumentation().uiAutomation
+                .executeShellCommand("input keyevent KEYCODE_BACK").close()
+            ui.waitUntil(5_000) { !imeVisible(activity) && ui.onNodeWithTag("amount-keypad").isDisplayed() }
+            ui.onNodeWithTag("entry-note").performClick().performImeAction()
+            ui.waitUntil(5_000) { !imeVisible(activity) && ui.onNodeWithTag("amount-keypad").isDisplayed() }
             ui.onNodeWithTag("amount-keypad").assertIsDisplayed()
             activity.recreate()
             ui.onNodeWithTag("amount-keypad").assertIsDisplayed()

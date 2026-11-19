@@ -57,7 +57,6 @@ internal fun TransferEditor(
     var dayText by rememberSaveable { mutableStateOf(initial?.day ?: LedgerRepository.bookingDay(at).toString()) }
     var hasTime by rememberSaveable { mutableStateOf(initial?.hasTime ?: false) }
     var choosingFrom by rememberSaveable { mutableStateOf<Boolean?>(null) }
-    var noteEditor by rememberSaveable { mutableStateOf(false) }
     var deleteDialog by rememberSaveable { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     val focus = LocalFocusManager.current
@@ -134,12 +133,10 @@ internal fun TransferEditor(
         }
     }, composer = { compact ->
         EntryComposer(amount, { amount = amountKey(amount, it) }, "保存转账", cents != null && fromAvailable && toAvailable &&
-            fromId != toId && !saving, saving, compact, save) {
+            fromId != toId && !saving, saving, compact, save, note, { note = it }) {
             val dateLabel = (if (day.year == LocalDate.now().year) "" else "${day.year}/") +
                 "${day.monthValue}/${day.dayOfMonth}"
-            EntryMetaButton("日期", dateLabel, Glyph.CALENDAR, Modifier.testTag("entry-date"), chooseDate)
-            EntryMetaButton("备注", note.ifBlank { "添加备注" }, Glyph.EDIT,
-                Modifier.weight(1f).testTag("entry-note")) { noteEditor = true }
+            EntryMetaButton("日期", dateLabel, Glyph.CALENDAR, Modifier.testTag("entry-date")) { dismissKeyboard(); chooseDate() }
         }
     })
     choosingFrom?.let { outgoing ->
@@ -158,12 +155,6 @@ internal fun TransferEditor(
                     if (options.isEmpty()) item { Text("暂无其他可用账户", Modifier.padding(14.dp)) }
                 }
             }, confirmButton = { TextButton(onClick = { choosingFrom = null }) { Text("关闭") } })
-    }
-    if (noteEditor) {
-        EntryNoteDialog(note, onDismiss = { noteEditor = false }) {
-            note = it
-            noteEditor = false
-        }
     }
     if (deleteDialog && initial != null) {
         ConfirmDialog("删除转账？", "删除后，转出和转入账户的余额都会重新计算。", "删除",

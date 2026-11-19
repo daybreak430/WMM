@@ -19,6 +19,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
@@ -60,9 +61,9 @@ class RecordUiTest {
         InstrumentationRegistry.getInstrumentation().uiAutomation
             .executeShellCommand("input keyevent KEYCODE_BACK").close()
 
-        ui.onNodeWithTag("entry-note").performClick()
-        ui.onNodeWithText("备注内容").performTextInput("首笔账单")
-        ui.onNodeWithText("确认").performClick()
+        ui.onNodeWithTag("entry-note").performClick().performTextInput("首笔账单")
+        ui.onNodeWithTag("entry-note").performImeAction()
+        ui.waitUntil(5_000) { ui.onAllNodesWithTag("amount-keypad").fetchSemanticsNodes().isNotEmpty() }
         ui.onNodeWithText("首笔账单").assertIsDisplayed()
         ui.onNodeWithText("保存流水").assertIsEnabled().performClick()
         ui.waitUntil(10_000) { ui.onAllNodesWithText("最近流水").fetchSemanticsNodes().isNotEmpty() }
