@@ -12,6 +12,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performImeAction
 import com.wmm.ledger.data.Account
 import com.wmm.ledger.data.AccountType
 import com.wmm.ledger.data.Kind
@@ -60,6 +61,9 @@ class CreditTransferUiTest {
             ui.onNodeWithText(credit.name).performClick()
             ui.onNodeWithContentDescription("交换转出和转入账户").performClick()
             ui.onNodeWithContentDescription("交换转出和转入账户").performClick()
+            ui.onNodeWithTag("entry-note").performClick().performTextInput("信用账户还款")
+            ui.onNodeWithTag("entry-note").performImeAction()
+            ui.waitUntil(5_000) { ui.onNodeWithTag("amount-keypad").isDisplayed() }
             activity.recreate()
             ui.onNodeWithText("转账").assertIsSelected()
             ui.onNodeWithText("¥ 500").assertIsDisplayed()
@@ -68,6 +72,7 @@ class CreditTransferUiTest {
             ui.waitUntil(10_000) { ui.onNodeWithText(direction).isDisplayed() }
             val paid = runBlocking { repository.snapshot() }
             assertEquals(50_000L, paid.transfers.single().cents)
+            assertEquals("信用账户还款", paid.transfers.single().note)
             assertEquals(mapOf(bank.id to 950_000L, credit.id to -60_000L), paid.accountBalances())
             val today = LocalDate.now()
             assertEquals(10_000L, paid.stats(Period.MONTH, today, today).expense)

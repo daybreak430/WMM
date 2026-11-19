@@ -391,6 +391,18 @@ class LedgerRepository(context: Context) {
         }
     }
 
+    internal suspend fun askQuestion(question: String, history: List<QuestionContext>, provider: Provider): LedgerAnswer =
+        withContext(Dispatchers.IO) {
+            if (!secrets.hasQuestionConsent(provider)) throw LedgerError("请先确认问答的数据发送范围。")
+            val key = secrets.modelKey(provider) ?: throw LedgerError("请先在设置中保存 ${provider.title} 的 API Key。")
+            val restoreVersion = restoreCount.get()
+            val result = LedgerQuestions.answer(snapshot(), question, history, LocalDate.now(), provider) { request ->
+                modelClient.send(provider, key, request, readTimeout = 45_000)
+            }
+            if (restoreVersion != restoreCount.get()) throw LedgerError("账本已恢复，请重新提问。")
+            result
+        }
+
     private fun newId() = UUID.randomUUID().toString()
 
     companion object {

@@ -64,6 +64,9 @@ import com.wmm.ledger.ui.EntryEditor
 import com.wmm.ledger.ui.Glyph
 import com.wmm.ledger.ui.LedgerNavigation
 import com.wmm.ledger.ui.LedgerScreen
+import com.wmm.ledger.ui.LedgerSearchScreen
+import com.wmm.ledger.ui.LedgerQuestionScreen
+import com.wmm.ledger.ui.QuestionEvidenceScreen
 import com.wmm.ledger.ui.LedgerScreenFrame
 import com.wmm.ledger.ui.LedgerScreenTheme
 import com.wmm.ledger.ui.LedgerTheme
@@ -114,6 +117,8 @@ private data class Destination(val route: String?, val depth: Int)
 
 @Composable
 private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
+    val assistant: LedgerAssistantViewModel = viewModel()
+    val questionTurns by assistant.questions.collectAsStateWithLifecycle()
     val snapshot by model.data.collectAsStateWithLifecycle()
     val openError by model.unableToOpen.collectAsStateWithLifecycle()
     val provider by model.provider.collectAsStateWithLifecycle()
@@ -170,7 +175,11 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
             keyboard?.hide()
             val returnTo = parent
             route = returnTo
-            parent = if (returnTo == "bill-import" || returnTo == "scheduled-bills") "settings" else null
+            parent = when {
+                returnTo == "bill-import" || returnTo == "scheduled-bills" -> "settings"
+                returnTo?.startsWith("ask-evidence:") == true -> "ask"
+                else -> null
+            }
         } else {
             tabName = Tab.LEDGER.name
         }
@@ -250,7 +259,9 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
                                                 periodName = Period.MONTH.name
                                                 tabName = Tab.STATS.name
                                             }, { route = "entry:${it.id}" }, bottomInset,
-                                                editTransfer = { route = "transfer:${it.id}" })
+                                                editTransfer = { route = "transfer:${it.id}" },
+                                                search = { parent = null; route = "search" },
+                                                ask = { parent = null; route = "ask" })
                                             Tab.STATS -> StatsScreen(data, today, period, day, { periodName = it.name }, {
                                                 dayText = it.toString()
                                                 followToday = it == today
@@ -293,6 +304,27 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
                                         } else {
                                             LaunchedEffect(current) { if (route == current) back() }
                                         }
+                                    }
+                                    current == "search" -> navState.SaveableStateProvider("search") {
+                                        val term by assistant.searchTerm.collectAsStateWithLifecycle()
+                                        val result by assistant.searchResults.collectAsStateWithLifecycle()
+                                        LedgerSearchScreen(data, term, result, today, assistant::search, ::back,
+                                            edit = { parent = current; route = "entry:${it.id}" },
+                                            editTransfer = { parent = current; route = "transfer:${it.id}" })
+                                    }
+                                    current == "ask" -> navState.SaveableStateProvider("ask") {
+                                        val question by assistant.questionDraft.collectAsStateWithLifecycle()
+                                        LedgerQuestionScreen(questionTurns, question, assistant::editQuestion,
+                                            provider, provider in keys, assistant.hasConsent(provider),
+                                            ::back, openModel = { parent = current; route = "model" },
+                                            submit = { question, consent -> assistant.ask(question, provider, consent) },
+                                            evidence = { parent = current; route = "ask-evidence:$it" })
+                                    }
+                                    current.startsWith("ask-evidence:") -> {
+                                        val turn = questionTurns.firstOrNull { it.id == current.substringAfter(':').toLongOrNull() }
+                                        QuestionEvidenceScreen(data, turn, today, ::back,
+                                            edit = { parent = current; route = "entry:${it.id}" },
+                                            editTransfer = { parent = current; route = "transfer:${it.id}" })
                                     }
                                     current == "assets" -> AssetsScreen(data, model, ::back)
                                     current == "tags" -> TagsScreen(data, model, ::back)
@@ -349,7 +381,7 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
     pendingRestore?.let { backup ->
         ConfirmDialog("替换本机账本？", "此备份含 ${backup.entries.size} 笔收支、${backup.transfers.size} 笔转账、${backup.accounts.size} 个账户和 " +
             "${backup.scheduledBills.size} 条定时账单。恢复会替换本机账本和定时账单，无法撤销。", "替换并恢复",
-            model::cancelRestore, model::restore)
+            model::cancelRestore, { assistant.clearQuestions(); model.restore() })
     }
 }
 

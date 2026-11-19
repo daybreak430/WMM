@@ -165,7 +165,7 @@ object Reports {
         val message = choice?.optJSONObject("message")
         val content = (message?.opt("content") as? String)?.trim()
         if (content.isNullOrEmpty() || choice.optString("finish_reason") == "length") {
-            throw LedgerError("模型没有返回完整报告，请重试。")
+            throw LedgerError("模型没有返回完整内容，请重试。")
         }
         return content
     }

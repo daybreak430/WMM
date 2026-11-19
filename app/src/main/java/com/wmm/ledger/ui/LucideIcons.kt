@@ -18,6 +18,7 @@ import com.wmm.ledger.R
 // 使用 Lucide 官方 SVG 转成的 Android 矢量资源，保留原始笔画宽度、端点和转角。
 enum class Glyph(@param:DrawableRes @get:DrawableRes val drawable: Int) {
     BOOK(R.drawable.lucide_notebook_pen),
+    SEARCH(R.drawable.lucide_search),
     CHART(R.drawable.lucide_chart_no_axes_column_increasing),
     WALLET(R.drawable.lucide_wallet),
     PERSON(R.drawable.lucide_user_round),

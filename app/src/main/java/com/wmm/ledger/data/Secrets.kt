@@ -40,6 +40,9 @@ class Secrets(context: Context) {
     fun hasReportConsent(): Boolean = preferences.getBoolean("report_consent_v2", false)
     fun setReportConsent() { preferences.edit().putBoolean("report_consent_v2", true).apply() }
 
+    internal fun hasQuestionConsent(provider: Provider): Boolean = preferences.getBoolean("question_consent_v1_${provider.name}", false)
+    internal fun setQuestionConsent(provider: Provider) { preferences.edit().putBoolean("question_consent_v1_${provider.name}", true).apply() }
+
     @Synchronized
     private fun write(slot: String, data: ByteArray) {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")

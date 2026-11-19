@@ -45,8 +45,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.res.stringResource
-import com.wmm.ledger.R
 import com.wmm.ledger.data.Cashflow
 import com.wmm.ledger.data.Entry
 import com.wmm.ledger.data.FIRST_DAY
@@ -72,12 +70,24 @@ import java.util.Locale
 
 @Composable
 fun LedgerScreen(data: LedgerSnapshot, today: LocalDate, openSettings: () -> Unit, openStats: () -> Unit,
-    edit: (Entry) -> Unit, bottomInset: Dp, editTransfer: (Transfer) -> Unit) {
+    edit: (Entry) -> Unit, bottomInset: Dp, editTransfer: (Transfer) -> Unit,
+    search: () -> Unit, ask: () -> Unit) {
     val stats = remember(data, today) { data.stats(Period.MONTH, today, today) }
     val colors = MaterialTheme.colorScheme
     val inset = LedgerPageInset()
     Column(Modifier.fillMaxSize()) {
-        PageHeader(stringResource(R.string.app_name), mark = Glyph.BOOK) { UserAvatar(data.profile, openSettings) }
+        Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = inset, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            listOf(Triple(Glyph.SEARCH, "搜索流水", search), Triple(Glyph.SPARK, "问 AI", ask)).forEach { (icon, label, action) ->
+                IconButton(onClick = action, modifier = Modifier.size(44.dp)) {
+                    Surface(shape = CircleShape, color = colors.surface, modifier = Modifier.size(38.dp)) {
+                        Box(contentAlignment = Alignment.Center) { LucideIcon(icon, colors.primary, label, size = 20) }
+                    }
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            UserAvatar(data.profile, openSettings)
+        }
         // 流水绘制到悬浮底栏背后，末尾留出悬浮控件的高度，便于滑出并点中最后一笔。
         LazyColumn(
             Modifier.fillMaxSize(),
