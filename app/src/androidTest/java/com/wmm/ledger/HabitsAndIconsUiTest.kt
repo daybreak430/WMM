@@ -13,7 +13,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performScrollTo
-import androidx.compose.ui.test.performTextInput
 import com.wmm.ledger.data.Entry
 import com.wmm.ledger.data.Kind
 import com.wmm.ledger.data.LedgerSnapshot
@@ -47,7 +46,7 @@ class HabitsAndIconsUiTest {
         withLedger(LedgerSnapshot(entries = entries, tags = listOf(meal, drink), scenes = listOf(office, leisure))) { repository, _ ->
             ui.waitUntil(10_000) { ui.onNodeWithContentDescription("记一笔").isDisplayed() }
             ui.onNodeWithContentDescription("记一笔").performClick()
-            ui.onNodeWithTag("entry-amount").performTextInput("18.50")
+            ui.enterAmount("18.50")
             ui.onNodeWithText("按记账习惯选中").assertIsDisplayed()
             ui.onNodeWithText("午餐").assertIsSelected()
             ui.onNodeWithText("工作日").assertIsOn()

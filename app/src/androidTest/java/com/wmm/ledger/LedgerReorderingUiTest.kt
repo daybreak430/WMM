@@ -10,10 +10,8 @@ import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
-import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
@@ -54,7 +52,7 @@ class LedgerReorderingUiTest {
             ui.onNodeWithText("必选").assertDoesNotExist()
             ui.onNodeWithText(sceneNames[0]).assertIsOn()
             ui.onNodeWithText(names[1]).assertIsNotSelected()
-            ui.onNodeWithTag("entry-amount").performTextInput("2.00")
+            ui.enterAmount("2.00")
             ui.onNodeWithText("保存流水").assertIsNotEnabled()
             ui.onNodeWithText(names[1]).performClick().assertIsSelected()
             assertTrue(position(names[0]).y < position(names[4]).y)

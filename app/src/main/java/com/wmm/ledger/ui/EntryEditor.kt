@@ -6,7 +6,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -15,7 +14,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -23,10 +21,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -36,38 +32,28 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.LookaheadScope
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.wmm.ledger.LedgerViewModel
 import com.wmm.ledger.data.Entry
 import com.wmm.ledger.data.Kind
@@ -83,7 +69,6 @@ import com.wmm.ledger.data.changedOccurrenceTime
 import com.wmm.ledger.data.Tag
 import com.wmm.ledger.data.orderedScenes
 import com.wmm.ledger.data.orderedTags
-import com.wmm.ledger.data.parseCents
 import com.wmm.ledger.data.validName
 import com.mohamedrejeb.compose.dnd.DragAndDropContainer
 import com.mohamedrejeb.compose.dnd.DragAndDropState
@@ -93,7 +78,6 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.delay
 
 private const val VISIBLE_TAG_LIMIT = 8
 
@@ -122,7 +106,7 @@ private fun IncomeExpenseEditor(
 ) {
     val kindName = kind.name
     var amountText by rememberSaveable { mutableStateOf(initial?.let { editableAmount(it.cents) } ?: "") }
-    val cents = parseCents(amountText)
+    val cents = amountResult(amountText)?.takeIf { it in 1..com.wmm.ledger.data.MAX_CENTS }
     val scenes = remember(data.scenes, data.entries) { data.orderedScenes() }
     val activeAccounts = remember(data.accounts) { data.accounts.filterNot { it.archived } }
     val defaultAccount = activeAccounts.firstOrNull { it.isDefault }
@@ -203,112 +187,70 @@ private fun IncomeExpenseEditor(
     }
     val selectKind: (Kind) -> Unit = onKindChange
 
-    Column(Modifier.fillMaxSize().imePadding()) {
-        if (isNew) {
-            EntryEditorHeader(kind, selectKind, onTransfer, back)
-        } else {
-            PageHeader("编辑流水", back, centered = true) {
-                IconButton(onClick = { deleteDialog = true }) {
-                    LucideIcon(Glyph.DELETE, colors.error, "删除流水")
-                }
-            }
+    val save: () -> Unit = save@{
+        val saveCents = amountResult(amountText)?.takeIf { it in 1..com.wmm.ledger.data.MAX_CENTS } ?: return@save
+        val selected = tagId ?: return@save
+        saving = true
+        dismissKeyboard()
+        model.saveEntry(initial?.id, kind, saveCents, selected, accountId, note, occurredAt, day,
+            sceneId.takeIf { kind == Kind.EXPENSE }, habitArea, hasTime, back)
+            .invokeOnCompletion { saving = false }
+    }
+    EntryEditorLayout(header = {
+        if (isNew) EntryEditorHeader(kind, selectKind, onTransfer, back)
+        else PageHeader("编辑流水", back, centered = true) {
+            IconButton(onClick = { deleteDialog = true }) { LucideIcon(Glyph.DELETE, colors.error, "删除流水") }
         }
-        Column(Modifier.weight(1f)
+    }, content = {
+        Column(Modifier.fillMaxSize()
             .dragAutoScroll(tagDrag, scroll, Orientation.Vertical)
             .dragAutoScroll(sceneDrag, scroll, Orientation.Vertical)
-            .verticalScroll(scroll)
-            .padding(horizontal = pageInset, vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(if (isNew) 12.dp else 16.dp)) {
+            .verticalScroll(scroll).padding(horizontal = pageInset, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (!isNew) EntryKindSelector(kind, selectKind)
-            Column(Modifier.fillMaxWidth().padding(top = if (isNew) 2.dp else 7.dp),
-                verticalArrangement = Arrangement.spacedBy(if (isNew) 2.dp else 3.dp),
-                horizontalAlignment = Alignment.CenterHorizontally) {
-                val amountError = amountText.isNotBlank() && cents == null
-                Text("金额", color = if (amountError) colors.error else colors.onSurfaceVariant,
-                    style = if (isNew) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge)
-                EntryAmount(amountText, amountError, compact = isNew) { amountText = it }
+            if (guess != null) Text("按记账习惯选中", color = colors.primary, style = MaterialTheme.typography.labelSmall)
+            key(kind) {
+                EntryTagGroup(
+                    title = "类型", labels = tagLabels, styles = tagStyles, selected = tagId, expanded = showTags,
+                    dragState = tagDrag, archivedTag = archivedTag,
+                    save = { order, failed -> model.reorderTags(kind, order, failed) },
+                    select = {
+                        if (!sceneChosen && guess != null && guess.tag.id == it) manualSceneId = guess.scene?.id
+                        manualTagId = it
+                        tagChosen = true
+                    },
+                ) {
+                    EntryTagChip("新建标签", add = true) { tagDialog = true }
+                    if (tags.size > VISIBLE_TAG_LIMIT) {
+                        EntryTagChip(if (showTags) "收起类型" else "全部类型") { showTags = !showTags }
+                    }
+                }
+            }
+            if (kind == Kind.EXPENSE) {
                 Hairline()
-                if (amountError) Text("请输入有效金额，最多两位小数。", color = colors.error,
-                    style = MaterialTheme.typography.bodySmall)
-            }
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (guess != null) Text("按记账习惯选中", color = colors.primary, style = MaterialTheme.typography.labelSmall)
-                if (kind == Kind.EXPENSE) {
-                    EntryTagGroup(
-                        title = "场景", labels = sceneLabels, styles = sceneStyles, selected = sceneId, expanded = showScenes,
-                        dragState = sceneDrag, optional = true,
-                        save = { order, failed -> model.reorderScenes(order, failed) },
-                        select = { manualSceneId = it.takeUnless { id -> id == sceneId }; sceneChosen = true; dismissKeyboard() },
-                    ) {
-                        EntryTagChip("新建场景", add = true) {
-                            dismissKeyboard()
-                            newScene = true
-                        }
-                        if (scenes.size > VISIBLE_TAG_LIMIT) {
-                            EntryTagChip(if (showScenes) "收起场景" else "全部场景") { showScenes = !showScenes }
-                        }
-                    }
-                    HorizontalDivider(Modifier.padding(vertical = 2.dp), color = colors.outlineVariant.copy(alpha = .54f))
-                }
-                key(kind) {
-                    EntryTagGroup(
-                        title = "类型", labels = tagLabels, styles = tagStyles, selected = tagId, expanded = showTags,
-                        dragState = tagDrag, archivedTag = archivedTag,
-                        save = { order, failed -> model.reorderTags(kind, order, failed) },
-                        select = {
-                            if (!sceneChosen && guess != null && guess.tag.id == it) manualSceneId = guess.scene?.id
-                            manualTagId = it
-                            tagChosen = true
-                            dismissKeyboard()
-                        },
-                    ) {
-                        EntryTagChip("新建标签", add = true) {
-                            dismissKeyboard()
-                            tagDialog = true
-                        }
-                        if (tags.size > VISIBLE_TAG_LIMIT) {
-                            EntryTagChip(if (showTags) "收起类型" else "全部类型") { showTags = !showTags }
-                        }
+                EntryTagGroup(
+                    title = "场景", labels = sceneLabels, styles = sceneStyles, selected = sceneId, expanded = showScenes,
+                    dragState = sceneDrag, optional = true,
+                    save = { order, failed -> model.reorderScenes(order, failed) },
+                    select = { manualSceneId = it.takeUnless { id -> id == sceneId }; sceneChosen = true },
+                ) {
+                    EntryTagChip("新建场景", add = true) { newScene = true }
+                    if (scenes.size > VISIBLE_TAG_LIMIT) {
+                        EntryTagChip(if (showScenes) "收起场景" else "全部场景") { showScenes = !showScenes }
                     }
                 }
             }
-            GroupCard {
-                EntryDetailRow("账户", account?.name ?: "不关联", Glyph.WALLET) {
-                    dismissKeyboard()
-                    accountDialog = true
-                }
-                Hairline(14)
-                val dateLabel = "${day.year}/${day.monthValue}/${day.dayOfMonth}"
-                val dateTimeLabel = listOfNotNull(dateLabel, time?.format(TimeLabel)).joinToString(" ")
-                EntryDetailRow("日期时间", dateTimeLabel, Glyph.CALENDAR) {
-                    dismissKeyboard()
-                    dateEditor = true
-                }
-                Hairline(14)
-                EntryDetailRow("备注", note.ifBlank { "选填" }, Glyph.EDIT) {
-                    dismissKeyboard()
-                    noteEditor = true
-                }
-            }
         }
-        Surface(color = colors.background) {
-            PrimaryAction(
-                text = if (saving) "正在保存" else "保存流水",
-                onClick = save@{
-                    val saveCents = cents ?: return@save
-                    val selected = tagId ?: return@save
-                    saving = true
-                    focus.clearFocus()
-                    keyboard?.hide()
-                    model.saveEntry(initial?.id, kind, saveCents, selected, accountId, note, occurredAt, day,
-                        sceneId.takeIf { kind == Kind.EXPENSE }, habitArea, hasTime, back)
-                        .invokeOnCompletion { saving = false }
-                },
-                enabled = cents != null && tagId != null && !saving,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = pageInset, vertical = 10.dp),
-            )
+    }, composer = { compact ->
+        EntryComposer(amountText, { amountText = amountKey(amountText, it) }, "保存流水", cents != null && tagId != null && !saving,
+            saving, compact, save) {
+            EntryMetaButton("账户", account?.name ?: "不关联", Glyph.WALLET) { accountDialog = true }
+            val dateLabel = (if (day.year == LocalDate.now().year) "" else "${day.year}/") +
+                "${day.monthValue}/${day.dayOfMonth}" + (time?.format(TimeLabel)?.let { " $it" } ?: "")
+            EntryMetaButton("日期时间", dateLabel, Glyph.CALENDAR) { dateEditor = true }
+            EntryMetaButton("备注", note.ifBlank { "选填" }, Glyph.EDIT) { noteEditor = true }
         }
-    }
+    })
     if (tagDialog) {
         NewLabelDialog(
             model = model,
@@ -486,62 +428,6 @@ internal fun EntryEditorHeader(kind: Kind?, selectKind: (Kind) -> Unit, onTransf
 @Composable
 private fun EntryKindSelector(kind: Kind, select: (Kind) -> Unit) {
     LedgerSegments(Kind.entries, kind, { it.title }, onSelect = select)
-}
-
-@Composable
-internal fun EntryAmount(amount: String, error: Boolean, compact: Boolean, onChange: (String) -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    val amountColor = if (error) colors.error else colors.onSurface
-    val currencyStyle = LedgerBalanceNumber.copy(
-        fontSize = if (compact) 24.sp else 28.sp, lineHeight = if (compact) 29.sp else 34.sp,
-        fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp,
-    )
-    val baseStyle = LedgerBalanceNumber.copy(fontSize = if (compact) 40.sp else 46.sp,
-        lineHeight = if (compact) 46.sp else 54.sp)
-    val measurer = rememberTextMeasurer()
-    val density = LocalDensity.current
-    val keyboard = LocalSoftwareKeyboardController.current
-    val focusRequester = remember { FocusRequester() }
-    var requested by rememberSaveable { mutableStateOf(false) }
-    BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        val shown = AnnotatedString(amount.ifEmpty { "0.00" })
-        val symbolWidth = measurer.measure(AnnotatedString("¥"), currencyStyle).size.width
-        val available = with(density) { (maxWidth - 12.dp - symbolWidth.toDp()).coerceAtLeast(1.dp).toPx() }
-        // 根据实际字宽适配窄屏和字号缩放，金额过长时保留输入框的横向滚动。
-        val fullWidth = measurer.measure(shown, baseStyle, maxLines = 1).size.width.coerceAtLeast(1)
-        val maxFontSize = baseStyle.fontSize.value
-        val inputStyle = baseStyle.copy(fontSize = (maxFontSize * (available / fullWidth)).coerceIn(30f, maxFontSize).sp)
-        val measured = measurer.measure(shown, inputStyle, maxLines = 1).size.width
-        val textWidth = with(density) { (minOf(measured.toFloat(), available).toDp() + 6.dp) }
-        LaunchedEffect(Unit) {
-            if (compact && !requested) {
-                requested = true
-                focusRequester.requestFocus()
-                delay(150)
-                keyboard?.show()
-            }
-        }
-        BasicTextField(
-            value = amount,
-            onValueChange = { if (it.length <= 17) onChange(it) },
-            modifier = Modifier.fillMaxWidth().heightIn(min = if (compact) 50.dp else 60.dp).focusRequester(focusRequester)
-                .testTag("entry-amount").semantics { contentDescription = "金额" },
-            textStyle = inputStyle.copy(color = amountColor),
-            singleLine = true,
-            cursorBrush = SolidColor(colors.primary),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
-            decorationBox = { inner ->
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
-                    Text("¥", color = if (amount.isEmpty()) colors.outline else amountColor, style = currencyStyle)
-                    Box(Modifier.width(textWidth), contentAlignment = Alignment.CenterStart) {
-                        if (amount.isEmpty()) Text("0.00", color = colors.outline, style = inputStyle)
-                        inner()
-                    }
-                }
-            },
-        )
-    }
 }
 
 @Composable

@@ -4,9 +4,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
-import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsOn
-import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
@@ -36,7 +34,7 @@ class RecordUiTest {
         val tag = "验收${System.nanoTime().toString().takeLast(8)}"
         ui.waitUntil(10_000) { ui.onAllNodesWithContentDescription("记一笔").fetchSemanticsNodes().isNotEmpty() }
         ui.onNodeWithContentDescription("记一笔").performClick()
-        ui.onNodeWithTag("entry-amount").assertIsFocused().performTextInput("12.35")
+        ui.enterAmount("12.35")
         ui.onNodeWithText("保存流水").assertIsNotEnabled()
         ui.onNodeWithText("新建标签").performScrollTo().performClick()
         ui.onNodeWithText("标签名称").performTextInput(tag)
@@ -218,7 +216,7 @@ class RecordUiTest {
         ui.onNodeWithText("本月收支看板").assertIsDisplayed()
 
         record.performClick()
-        ui.onNodeWithTag("entry-amount").assertIsFocused()
+        ui.onNodeWithTag("entry-amount").assertIsDisplayed()
         ui.onNodeWithContentDescription("返回").assertDoesNotExist()
         ui.onNodeWithContentDescription("关闭").performClick()
         ui.onNodeWithText("本月收支看板").assertIsDisplayed()

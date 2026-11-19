@@ -185,8 +185,12 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
         else -> 2
     }
     val destination = Destination(route, depth)
-    val refined = route == "new" || route?.startsWith("entry:") == true ||
-        route?.startsWith("transfer:") == true || (route == null && tab == Tab.LEDGER)
+    val entryEditor = route == "new" || route?.startsWith("entry:") == true || route?.startsWith("transfer:") == true
+    val refined = entryEditor || (route == null && tab == Tab.LEDGER)
+    LaunchedEffect(route) {
+        // 连续记账时移除上一页的提示，避免成功提示挡住新一笔的操作。
+        if (entryEditor) snackbar.currentSnackbarData?.dismiss()
+    }
     val tabHeight = ledgerNavigationHeight()
     val tabSpace = tabHeight + NavigationBottomGap + NavigationTopGap
     LedgerScreenFrame(refined, tab.name) {
@@ -195,16 +199,8 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
             contentColor = MaterialTheme.colorScheme.onBackground,
             contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
             snackbarHost = {
-                SnackbarHost(snackbar, Modifier.navigationBarsPadding().padding(bottom = if (route == null) tabSpace else 0.dp)) { data ->
-                    Snackbar(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        dismissAction = {
-                            IconButton(onClick = data::dismiss) {
-                                LucideIcon(Glyph.CLOSE, MaterialTheme.colorScheme.inverseOnSurface, "关闭提示", size = 19)
-                            }
-                        },
-                    ) { Text(data.visuals.message) }
-                }
+                if (!entryEditor) LedgerFeedback(snackbar,
+                    Modifier.navigationBarsPadding().padding(bottom = if (route == null) tabSpace else 0.dp))
             },
         ) { padding ->
             val modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).clipToBounds()
@@ -341,11 +337,29 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
                 }
             }
         }
+        if (entryEditor) {
+            // 记账页的新提示放在顶部，数字区与保存键始终保留完整触控区域。
+            Box(Modifier.fillMaxSize().padding(WindowInsets.safeDrawing.asPaddingValues()),
+                contentAlignment = Alignment.TopCenter) {
+                LedgerFeedback(snackbar)
+            }
+        }
     }
 
     pendingRestore?.let { backup ->
         ConfirmDialog("替换本机账本？", "此备份含 ${backup.entries.size} 笔收支、${backup.transfers.size} 笔转账、${backup.accounts.size} 个账户和 " +
             "${backup.scheduledBills.size} 条定时账单。恢复会替换本机账本和定时账单，无法撤销。", "替换并恢复",
             model::cancelRestore, model::restore)
+    }
+}
+
+@Composable
+private fun LedgerFeedback(state: SnackbarHostState, modifier: Modifier = Modifier) {
+    SnackbarHost(state, modifier) { data ->
+        Snackbar(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), dismissAction = {
+            IconButton(onClick = data::dismiss) {
+                LucideIcon(Glyph.CLOSE, MaterialTheme.colorScheme.inverseOnSurface, "关闭提示", size = 19)
+            }
+        }) { Text(data.visuals.message) }
     }
 }
