@@ -331,7 +331,7 @@ class LedgerRepository(context: Context) {
     }
 
     suspend fun testModel(provider: Provider, key: String) = withContext(Dispatchers.IO) {
-        modelClient.complete(provider, key, null)
+        modelClient.testConnection(provider, key)
     }
 
     internal suspend fun recognizeBill(uri: Uri, provider: Provider): RecognizedBill = withContext(Dispatchers.IO) {
@@ -374,23 +374,6 @@ class LedgerRepository(context: Context) {
             count++
         }
         count
-    }
-
-    suspend fun generate(period: Period, day: LocalDate) = withContext(Dispatchers.IO) {
-        if (!secrets.hasReportConsent()) throw LedgerError("请先确认报告的数据发送范围。")
-        val restoreVersion = restoreCount.get()
-        val analysis = snapshot().reportAnalysis(period, day, LocalDate.now())
-        val summary = analysis.current
-        if (summary.entries.isEmpty()) throw LedgerError("这个期间没有流水。")
-        val provider = secrets.provider
-        val key = secrets.modelKey(provider) ?: throw LedgerError("请先在设置中保存 ${provider.title} 的 API Key。")
-        val reply = modelClient.complete(provider, key, analysis)
-        val story = ReportStory.parse(reply) ?: throw LedgerError("模型返回的报告格式不完整，请重新生成。")
-        database.withTransaction {
-            if (restoreVersion != restoreCount.get()) throw LedgerError("账本已恢复，请重新生成报告。")
-            dao.save(Report(period.name, summary.start.toString(), Reports.signature(analysis), System.currentTimeMillis(), provider.name,
-                story.encode()))
-        }
     }
 
     internal suspend fun askQuestion(question: String, history: List<QuestionContext>, provider: Provider): LedgerAnswer =

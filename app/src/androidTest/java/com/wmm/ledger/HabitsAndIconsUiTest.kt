@@ -17,11 +17,6 @@ import com.wmm.ledger.data.Entry
 import com.wmm.ledger.data.Kind
 import com.wmm.ledger.data.LedgerSnapshot
 import com.wmm.ledger.data.LabelIcon
-import com.wmm.ledger.data.Period
-import com.wmm.ledger.data.Provider
-import com.wmm.ledger.data.Report
-import com.wmm.ledger.data.ReportFinding
-import com.wmm.ledger.data.ReportStory
 import com.wmm.ledger.data.Scene
 import com.wmm.ledger.data.Tag
 import kotlinx.coroutines.runBlocking
@@ -76,21 +71,4 @@ class HabitsAndIconsUiTest {
         }
     }
 
-    @Test fun structuredReportDisplaysFindingAndActionSeparately() {
-        val today = ZonedDateTime.now().toLocalDate()
-        val story = ReportStory("三笔差旅撑起这一周", listOf(ReportFinding("路费是主要开销", "高铁占了已记支出的一半。")),
-            "下次先估高铁和住宿。")
-        val report = Report(Period.WEEK.name, Period.WEEK.start(today).toString(), "old",
-            System.currentTimeMillis(), Provider.DEEPSEEK.name, story.encode())
-        withLedger(LedgerSnapshot(reports = listOf(report))) { _, _ ->
-            ui.waitUntil(10_000) { ui.onNodeWithText("统计").isDisplayed() }
-            ui.onNodeWithText("统计").performClick()
-            ui.onNodeWithText("周").performClick()
-            val list = ui.onNode(hasScrollAction())
-            list.performScrollToNode(hasText(story.headline))
-            ui.onNodeWithText(story.headline).assertIsDisplayed()
-            ui.onNodeWithText("路费是主要开销").performScrollTo().assertIsDisplayed()
-            ui.onNodeWithText("下次先估高铁和住宿。").performScrollTo().assertIsDisplayed()
-        }
-    }
 }

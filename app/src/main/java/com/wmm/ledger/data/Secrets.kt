@@ -37,8 +37,6 @@ class Secrets(context: Context) {
         check(preferences.edit().remove("key_${provider.name}").commit())
     }
 
-    fun hasReportConsent(): Boolean = preferences.getBoolean("report_consent_v2", false)
-    fun setReportConsent() { preferences.edit().putBoolean("report_consent_v2", true).apply() }
 
     internal fun hasQuestionConsent(provider: Provider): Boolean = preferences.getBoolean("question_consent_v1_${provider.name}", false)
     internal fun setQuestionConsent(provider: Provider) { preferences.edit().putBoolean("question_consent_v1_${provider.name}", true).apply() }

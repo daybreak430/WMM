@@ -42,29 +42,6 @@ class LedgerRulesTest {
         assertEquals(emptyList<Tag>(), snapshot.orderedTags(Kind.EXPENSE))
     }
 
-    @Test fun reportGroupsYearByMonthAndOnlyComparesCompletePeriods() {
-        val today = LocalDate.of(2026, 11, 15)
-        val base = entry("base", 500, 1, null).copy(day = "2025-01-01", sceneId = "trip")
-        val old = base.copy(id = "old", day = "2024-12-31", cents = 900)
-        val later = base.copy(id = "later", day = "2025-12-01", cents = 300, sceneId = null)
-        val current = base.copy(id = "current", day = "2026-11-01", cents = 200)
-        val data = LedgerSnapshot(
-            entries = listOf(old, base, later, current),
-            tags = listOf(Tag("tag", Kind.EXPENSE.name, "晚餐")),
-            scenes = listOf(Scene("trip", "出差")),
-        )
-        val completed = data.reportAnalysis(Period.YEAR, LocalDate.of(2025, 12, 31), today)
-        assertEquals(listOf("2025-01", "2025-12"), completed.buckets.map { it.label })
-        assertEquals(listOf(500L, 300L), completed.buckets.map { it.expense })
-        assertEquals(900L, completed.previous?.expense)
-        assertEquals(800L, completed.current.expense)
-        assertEquals(500L, completed.current.sceneTypeTotals.single().cents)
-        assertEquals("晚餐", completed.current.sceneTypeTotals.single().tag.name)
-        assertNull(data.reportAnalysis(Period.YEAR, today, today).previous)
-        assertNull(data.reportAnalysis(Period.MONTH, today.minusMonths(1), today).previous)
-        assertEquals("1–7日", data.reportAnalysis(Period.MONTH, today, today).buckets.single().label)
-    }
-
     @Test fun trendAndStatsUseMondayToSundayAcrossYearBoundary() {
         val end = LocalDate.of(2026, 1, 3)
         val base = entry("base", 125, 1, null)
@@ -82,11 +59,9 @@ class LedgerRulesTest {
         assertEquals(Cashflow(0, 0), trend[1].amount)
         assertEquals(Cashflow(900, 200), trend[5].amount)
         assertEquals(LocalDate.of(2026, 1, 4), trend.last().date)
-        val summary = data.reportAnalysis(Period.WEEK, end, LocalDate.of(2026, 1, 5))
-        assertEquals(325L, summary.current.expense)
-        assertEquals(900L, summary.current.income)
-        assertEquals(listOf("2025-12-29", "2026-01-03"), summary.buckets.map { it.label })
-        assertEquals(125L, summary.previous?.expense)
+        val summary = data.stats(Period.WEEK, end, LocalDate.of(2026, 1, 5))
+        assertEquals(325L, summary.expense)
+        assertEquals(900L, summary.income)
     }
 
     private fun entry(id: String, amount: Long, time: Long, account: String?) =

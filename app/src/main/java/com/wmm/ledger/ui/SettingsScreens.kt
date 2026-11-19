@@ -288,7 +288,7 @@ fun ModelSettings(model: LedgerViewModel, provider: Provider, providersWithKeys:
         }, dismissButton = { TextButton(onClick = { editKey = false }) { Text("取消") } })
     }
     if (removeKey) {
-        ConfirmDialog("移除 API Key？", "此设备将无法通过 ${provider.title} 生成报告，已保存的报告会保留。",
+        ConfirmDialog("移除 API Key？", "此设备将无法使用 ${provider.title} 的联网 AI 功能，账本数据会保留。",
             "移除", { removeKey = false }) {
             removeKey = false
             result = null

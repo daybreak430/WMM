@@ -95,8 +95,7 @@ class RecordUiTest {
         ui.runOnUiThread { ui.activity.onBackPressedDispatcher.onBackPressed() }
         ui.onNode(hasScrollAction()).performScrollToNode(hasText("年"))
         ui.onNodeWithText("年").performClick()
-        ui.onNode(hasScrollAction()).performScrollToNode(hasText("AI 年报"))
-        ui.onNodeWithText("AI 年报").assertIsDisplayed()
+        ui.onNodeWithText("AI 年报").assertDoesNotExist()
     }
 
     @Test fun statsFiltersAndBottomTabsShowOnlyTheSelectedContentOnTheNextFrame() {

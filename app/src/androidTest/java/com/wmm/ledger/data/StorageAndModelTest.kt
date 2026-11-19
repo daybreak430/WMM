@@ -39,9 +39,8 @@ class StorageAndModelTest {
                 sortOrder = 0, isDefault = true)),
             profile = Profile(nickname = "仅本地"),
         )
-        val analysis = originalData.reportAnalysis(Period.YEAR, today, today)
         val complete = originalData.copy(reports = listOf(
-            Report(Period.YEAR.name, today.withDayOfYear(1).toString(), Reports.signature(analysis),
+            Report(Period.YEAR.name, today.withDayOfYear(1).toString(), "0".repeat(64),
                 now, Provider.DEEPSEEK.name, "已有年报"),
         ))
         original.replace(complete)
@@ -120,63 +119,26 @@ class StorageAndModelTest {
         assertEquals(1, store.snapshot().entries.size)
     }
 
-    @Test fun bothProvidersOnlyReceivePeriodSummaryAndHandleFailures() {
-        val today = LocalDate.now()
-        val data = LedgerSnapshot(
-            entries = listOf(Entry("raw-entry-id", "EXPENSE", 2123, "tag", "private-card-id",
-                "private-note", 1000, today.toString(), "private-scene-id")),
-            tags = listOf(Tag("tag", "EXPENSE", "晚餐")),
-            scenes = listOf(Scene("private-scene-id", "出差")),
-            accounts = listOf(Account("private-card-id", "SAVINGS", "private-account-name", 123_456, 0)),
-            profile = Profile(nickname = "private-profile"),
-        )
-        val analysis = data.reportAnalysis(Period.YEAR, today, today)
-        val noteEdit = data.copy(entries = data.entries.map { it.copy(note = "变动", accountId = null) })
-        val sceneEdit = data.copy(entries = data.entries.map { it.copy(sceneId = null) })
-        assertEquals(Reports.signature(analysis), Reports.signature(noteEdit.reportAnalysis(Period.YEAR, today, today)))
-        assertNotEquals(Reports.signature(analysis), Reports.signature(sceneEdit.reportAnalysis(Period.YEAR, today, today)))
+    @Test fun bothProvidersConnectionRequestsContainNoLedgerDataAndHandleFailures() {
         for (provider in Provider.entries) {
-            val request = Reports.request(provider, analysis)
-            assertFalse(request.has("max_tokens") || request.has("max_completion_tokens"))
+            val request = ModelProtocol.connectionRequest(provider)
             assertEquals(provider.model, request.getString("model"))
-            val payload = request.getJSONArray("messages").getJSONObject(1).getString("content")
-            val fields = JSONObject(payload)
-            assertEquals("21.23", fields.getString("支出_元"))
-            val group = fields.getJSONArray("场景与类型组合排行").getJSONObject(0)
-            assertEquals("晚餐", group.getString("类型标签"))
-            assertEquals("出差", group.getString("场景"))
-            assertEquals("100.0", group.getString("占对应总额_%"))
-            assertEquals(1, fields.getJSONArray("期间分段").length())
-            assertFalse(fields.has("上一完整期间"))
-            listOf("raw-entry-id", "private-scene-id", "private-card-id", "private-note", "private-account-name",
-                "private-profile", "1234.56", "occurredAt")
-                .forEach { assertFalse(payload.contains(it)) }
-            assertEquals("测试连接", Reports.request(provider, null).getJSONArray("messages")
-                .getJSONObject(1).getString("content"))
-            val daily = Reports.request(provider, data.reportAnalysis(Period.DAY, today, today)).getJSONArray("messages")
-            val dailyPrompt = daily.getJSONObject(0).getString("content")
-            assertTrue(dailyPrompt.contains("「场景与类型组合排行」"))
-            assertTrue(dailyPrompt.contains("一句话也完全够用"))
-            val dailyData = JSONObject(daily.getJSONObject(1).getString("content"))
-            assertEquals(1, dailyData.getInt("笔数"))
-            assertEquals("出差", dailyData.getJSONArray("场景与类型组合排行").getJSONObject(0).getString("场景"))
+            assertEquals(2, request.getJSONArray("messages").length())
+            assertEquals("测试连接", request.getJSONArray("messages").getJSONObject(1).getString("content"))
+            assertFalse(request.has("账本") || request.has("流水"))
         }
-        assertTrue(Reports.request(Provider.DEEPSEEK, analysis).has("thinking"))
-        assertFalse(Reports.request(Provider.MINIMAX, analysis).has("thinking"))
-        val prompt = Reports.request(Provider.DEEPSEEK, analysis)
-            .getJSONArray("messages").getJSONObject(0).getString("content")
-        assertTrue(prompt.contains("完整七天与刚开始的两天不能直接比较"))
-        assertTrue(prompt.contains("\"nextStep\":null"))
+        assertTrue(ModelProtocol.connectionRequest(Provider.DEEPSEEK).has("thinking"))
+        assertFalse(ModelProtocol.connectionRequest(Provider.MINIMAX).has("thinking"))
         val longReport = "先说一件有意思的事。".repeat(900)
         val longResponse = JSONObject().put("choices", org.json.JSONArray().put(JSONObject()
             .put("finish_reason", "stop").put("message", JSONObject().put("content", longReport))))
-        assertEquals(longReport, Reports.readReply(200, longResponse.toString()))
-        assertEquals("观察", Reports.readReply(200,
+        assertEquals(longReport, ModelProtocol.readReply(200, longResponse.toString()))
+        assertEquals("观察", ModelProtocol.readReply(200,
             """{"choices":[{"message":{"content":"观察","reasoning_content":"不展示"},"finish_reason":"stop"}]}"""))
-        assertTrue((runCatching { Reports.readReply(401, "") }.exceptionOrNull() as LedgerError).display.contains("Key"))
-        assertTrue((runCatching { Reports.readReply(200, """{"base_resp":{"status_code":1008}}""") }
+        assertTrue((runCatching { ModelProtocol.readReply(401, "") }.exceptionOrNull() as LedgerError).display.contains("Key"))
+        assertTrue((runCatching { ModelProtocol.readReply(200, """{"base_resp":{"status_code":1008}}""") }
             .exceptionOrNull() as LedgerError).display.contains("余额"))
-        assertTrue(runCatching { Reports.readReply(200, """{"choices":[{"message":{"content":"片段"},"finish_reason":"length"}]}""") }
+        assertTrue(runCatching { ModelProtocol.readReply(200, """{"choices":[{"message":{"content":"片段"},"finish_reason":"length"}]}""") }
             .exceptionOrNull() is LedgerError)
     }
 

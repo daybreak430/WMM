@@ -27,7 +27,7 @@ class CreditTransferRulesTest {
         assertEquals(3_000L, stats.tagTotals.single().cents)
         val onlyRepayment = data.copy(entries = emptyList())
         assertEquals(80_000L, onlyRepayment.netAssetTotal())
-        assertEquals(0L, onlyRepayment.reportAnalysis(Period.MONTH, day, day).current.expense)
+        assertEquals(0L, onlyRepayment.stats(Period.MONTH, day, day).expense)
         assertEquals(0L, onlyRepayment.weekCashflow(day).sumOf { it.amount.expense })
     }
 

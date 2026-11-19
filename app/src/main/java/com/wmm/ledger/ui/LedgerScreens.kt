@@ -20,23 +20,15 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -52,19 +44,11 @@ import com.wmm.ledger.data.Kind
 import com.wmm.ledger.data.LabelStyle
 import com.wmm.ledger.data.LedgerSnapshot
 import com.wmm.ledger.data.Period
-import com.wmm.ledger.data.PeriodStats
-import com.wmm.ledger.data.Provider
-import com.wmm.ledger.data.Report
 import com.wmm.ledger.data.Transfer
-import com.wmm.ledger.data.ReportStory
-import com.wmm.ledger.data.Reports
-import com.wmm.ledger.data.reportAnalysis
 import com.wmm.ledger.data.weekCashflow
 import com.wmm.ledger.data.currency
 import com.wmm.ledger.data.stats
-import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -263,11 +247,9 @@ private fun LedgerRecordRow(
 @Composable
 fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: LocalDate, choosePeriod: (Period) -> Unit,
     chooseDay: (LocalDate) -> Unit, drill: (String) -> Unit, drillScene: (String) -> Unit,
-    busy: Boolean, hasKey: Boolean, consent: Boolean,
-    generate: (Boolean) -> Unit, openModel: () -> Unit, bottomInset: Dp) {
+    bottomInset: Dp) {
     val summary = remember(data, period, day, today) { data.stats(period, day, today) }
     val calendar = CalendarAction(day, today, onSelect = chooseDay)
-    var consentDialog by rememberSaveable { mutableStateOf(false) }
     val colors = MaterialTheme.colorScheme
     val trend = remember(data.entries, summary.start, period) {
         if (period == Period.WEEK) data.weekCashflow(summary.start) else emptyList()
@@ -325,98 +307,6 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
             shareSection("支出场景占比", Glyph.BOX, "scene", "支出合计", summary.expense, sceneRanks, drillScene)
             shareSection("收入类型占比", Glyph.INCOME, "income", "收入合计", summary.income,
                 income.map { RankedAmount(it.tag.id, it.tag.name, it.cents) }, drill)
-            item("report") {
-                PeriodReport(data, today, summary, busy, hasKey, openModel) {
-                    if (consent) generate(false) else consentDialog = true
-                }
-            }
-        }
-    }
-    if (consentDialog) {
-        ConfirmDialog("允许发送汇总？",
-            "仅向所选模型发送收支汇总、分段和上期对比，以及含名称的类型标签、场景和组合排行。不会发送流水明细、备注、账户余额或个人资料。",
-            "同意并生成", { consentDialog = false }) {
-            consentDialog = false
-            generate(true)
-        }
-    }
-}
-
-@Composable
-private fun PeriodReport(data: LedgerSnapshot, today: LocalDate, summary: PeriodStats, busy: Boolean, hasKey: Boolean,
-    openModel: () -> Unit, generate: () -> Unit) {
-    val report = data.reports.firstOrNull { it.period == summary.period.name && it.startDay == summary.start.toString() }
-    val stale = report != null && remember(data, summary.period, summary.start, today) {
-        Reports.signature(data.reportAnalysis(summary.period, summary.start, today))
-    } != report.snapshotId
-    Box(Modifier.padding(top = 18.dp)) {
-        ReportPanel(summary, report, stale, busy, hasKey, openModel, generate)
-    }
-}
-
-@Composable
-private fun ReportPanel(summary: PeriodStats, report: Report?, stale: Boolean, busy: Boolean,
-    hasKey: Boolean, openModel: () -> Unit,
-    generate: () -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    GroupCard {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                IconBadge(Glyph.SPARK, emphasis = true)
-                Text("AI ${summary.period.title}报", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                if (stale) {
-                    Text("可重新生成", color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                }
-            }
-            if (report != null) {
-                val generated = Instant.ofEpochMilli(report.createdAt).atZone(ZoneId.systemDefault())
-                    .format(DateTimeFormatter.ofPattern("M月d日 HH:mm", Locale.SIMPLIFIED_CHINESE))
-                ReportBody(report.content)
-                Text("${Provider.valueOf(report.provider).title} · $generated", style = MaterialTheme.typography.bodySmall,
-                    color = colors.onSurfaceVariant)
-            }
-            if (!hasKey) {
-                FilledTonalButton(onClick = openModel, shape = FieldShape,
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = colors.surfaceVariant, contentColor = colors.primary),
-                ) { Text("设置模型") }
-            } else {
-                Button(onClick = generate, enabled = !busy && summary.entries.isNotEmpty(), shape = FieldShape) {
-                    if (busy) {
-                        CircularProgressIndicator(Modifier.size(15.dp), strokeWidth = 2.dp)
-                        Spacer(Modifier.size(8.dp))
-                    }
-                    Text(when { busy -> "正在生成"; report == null -> "生成报告"; else -> "重新生成" })
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ReportBody(content: String) {
-    val story = remember(content) { ReportStory.parse(content) }
-    if (story == null) {
-        Text(content.replace("**", ""), style = MaterialTheme.typography.bodyLarge)
-        return
-    }
-    val colors = MaterialTheme.colorScheme
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text(story.headline, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-        story.findings.forEach { finding ->
-            Hairline()
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(finding.title, style = MaterialTheme.typography.titleSmall, color = colors.onSurface)
-                Text(finding.body, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
-            }
-        }
-        story.nextStep?.let { next ->
-            Surface(color = colors.primaryContainer.copy(alpha = .54f), shape = FieldShape) {
-                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("下次可以试试", color = colors.primary, style = MaterialTheme.typography.labelLarge)
-                    Text(next, color = colors.onSurface, style = MaterialTheme.typography.bodyMedium)
-                }
-            }
         }
     }
 }

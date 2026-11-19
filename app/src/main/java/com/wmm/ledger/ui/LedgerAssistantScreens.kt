@@ -157,7 +157,7 @@ internal fun LedgerQuestionScreen(turns: List<QuestionTurn>, question: String, c
     }
     pendingConsent?.let { pending ->
         LedgerAlertDialog(onDismissRequest = { pendingConsent = null }, title = { Text("向 ${provider.title} 提问？") },
-            text = { Text("将发送问题、分类与账户名称，以及回答所需的记录、备注、已有报告或汇总。API Key 仅用于鉴权，头像和昵称不发送。") },
+            text = { Text("将发送问题、分类与账户名称，以及回答所需的记录、备注或汇总。API Key 仅用于鉴权，头像和昵称不发送。") },
             confirmButton = { TextButton(onClick = { pendingConsent = null; send(pending, true) }) { Text("同意并提问") } },
             dismissButton = { TextButton(onClick = { pendingConsent = null }) { Text("取消") } })
     }

@@ -75,8 +75,6 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
     val provider = selectedProvider.asStateFlow()
     private val configuredProviders = MutableStateFlow(configured())
     val providersWithKeys = configuredProviders.asStateFlow()
-    private val generatingReport = MutableStateFlow(false)
-    val generating = generatingReport.asStateFlow()
     private val restoringFile = MutableStateFlow(false)
     val fileBusy = restoringFile.asStateFlow()
     private val restorePreview = MutableStateFlow<LedgerSnapshot?>(null)
@@ -274,8 +272,6 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
         (error as? LedgerError)?.display ?: "无法验证 API Key，请检查设置。"
     }
 
-    fun hasReportConsent() = repository.secrets.hasReportConsent()
-
     internal fun scanBill(uri: Uri, provider: Provider) {
         val current = billState.value
         if (current.scanning || current.saving) return
@@ -331,19 +327,6 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun generate(period: Period, day: LocalDate, consent: Boolean = false) {
-        if (generatingReport.value) return
-        if (consent) repository.secrets.setReportConsent()
-        generatingReport.value = true
-        perform("报告未生成，请检查模型设置后重试。") {
-            try {
-                repository.generate(period, day)
-                notify("报告已生成")
-            } finally {
-                generatingReport.value = false
-            }
-        }
-    }
 
     fun exportForSharing() = fileOperation("无法准备备份，请检查存储空间后重试。") {
         val snapshot = repository.snapshot()

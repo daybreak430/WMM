@@ -123,7 +123,6 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
     val openError by model.unableToOpen.collectAsStateWithLifecycle()
     val provider by model.provider.collectAsStateWithLifecycle()
     val keys by model.providersWithKeys.collectAsStateWithLifecycle()
-    val generating by model.generating.collectAsStateWithLifecycle()
     val pendingRestore by model.pendingRestore.collectAsStateWithLifecycle()
     val fileBusy by model.fileBusy.collectAsStateWithLifecycle()
     var tabName by rememberSaveable { mutableStateOf(Tab.LEDGER.name) }
@@ -265,10 +264,7 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
                                             Tab.STATS -> StatsScreen(data, today, period, day, { periodName = it.name }, {
                                                 dayText = it.toString()
                                                 followToday = it == today
-                                            }, { route = "tag:$it" }, { route = "scene:$it" }, generating,
-                                                provider in keys, model.hasReportConsent(),
-                                                { agreed -> model.generate(period, day, agreed) },
-                                                { route = "model" }, bottomInset)
+                                            }, { route = "tag:$it" }, { route = "scene:$it" }, bottomInset)
                                         }
                                     }
                                 }

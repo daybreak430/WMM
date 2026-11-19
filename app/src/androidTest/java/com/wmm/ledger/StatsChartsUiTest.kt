@@ -11,19 +11,50 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import com.wmm.ledger.data.Entry
 import com.wmm.ledger.data.Kind
 import com.wmm.ledger.data.LedgerSnapshot
 import com.wmm.ledger.data.Scene
 import com.wmm.ledger.data.Tag
+import com.wmm.ledger.data.Report
+import com.wmm.ledger.data.Period
+import kotlinx.coroutines.runBlocking
 import java.time.LocalDate
 import java.time.ZoneId
-import org.junit.Assert.assertThrows
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
 class StatsChartsUiTest {
     @get:Rule val ui = createEmptyComposeRule()
+
+    @Test fun allPeriodsKeepChartsAndHideLegacyReportActions() {
+        val today = LocalDate.now()
+        val tags = listOf(Tag("expense", "EXPENSE", "餐饮"), Tag("income", "INCOME", "工资"))
+        val entries = tags.mapIndexed { index, tag -> Entry("record-$index", tag.kind, 1200, tag.id, null, "", 1, today.toString()) }
+        val reports = listOf(Period.WEEK, Period.MONTH, Period.YEAR).map { period ->
+            Report(period.name, period.start(today).toString(), "0".repeat(64), 1, "DEEPSEEK", "旧报告-${period.title}")
+        }
+        withLedger(LedgerSnapshot(tags = tags, entries = entries, reports = reports)) { repository, _ ->
+            ui.waitUntil(10_000) { ui.onNodeWithText("收支统计").isDisplayed() }
+            ui.onNodeWithText("收支统计").performClick()
+            val list = ui.onNode(hasScrollAction())
+            listOf("周", "月", "年").forEach { period ->
+                list.performScrollToIndex(0)
+                ui.onNodeWithText(period).performClick()
+                list.performScrollToNode(hasContentDescription("收入类型占比环形图"))
+                ui.onNodeWithContentDescription("收入类型占比环形图").assertIsDisplayed()
+                repeat(3) { list.performTouchInput { swipeUp() } }
+                ui.onNodeWithText("AI ${period}报").assertDoesNotExist()
+                ui.onNodeWithText("旧报告-$period").assertDoesNotExist()
+                ui.onNodeWithText("生成报告").assertDoesNotExist()
+                ui.onNodeWithText("设置模型").assertDoesNotExist()
+            }
+            assertEquals(reports, runBlocking { repository.snapshot() }.reports)
+        }
+    }
 
     @Test fun chartsFollowThePeriodAndAccountForUnassignedScenes() {
         val today = LocalDate.now()
@@ -57,9 +88,6 @@ class StatsChartsUiTest {
 
             list.performScrollToIndex(0)
             ui.onNodeWithText("周").performClick()
-            list.performScrollToNode(hasText("AI 周报"))
-            ui.onNodeWithText("AI 周报").assertIsDisplayed()
-            assertThrows(AssertionError::class.java) { list.performScrollToNode(hasText("AI 日报")) }
             list.performScrollToNode(unassigned)
             ui.onNode(unassigned and hasText("25%") and hasText("¥20.00")).assertIsDisplayed()
             list.performScrollToNode(hasText(travel.name))

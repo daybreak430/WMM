@@ -66,6 +66,7 @@ data class Entry(
     @ColumnInfo(defaultValue = "1") val hasTime: Boolean = true,
 )
 
+// 旧版报告仅用于加密库与备份兼容，不再生成、展示或作为 AI 查询来源。
 @Entity(tableName = "reports", primaryKeys = ["period", "startDay"])
 data class Report(
     val period: String,
@@ -117,7 +118,6 @@ interface LedgerDao {
     """)
     suspend fun setDefaultAccount(id: String?)
     @Upsert suspend fun save(entry: Entry)
-    @Upsert suspend fun save(report: Report)
     @Upsert suspend fun save(profile: Profile)
     @Insert suspend fun restoreTags(tags: List<Tag>)
     @Insert suspend fun restoreScenes(scenes: List<Scene>)

@@ -7,7 +7,7 @@ import java.time.LocalDate
 import java.util.Locale
 import kotlin.math.abs
 
-internal enum class QuerySource { ENTRIES, TRANSFERS, ACCOUNTS, SCHEDULES, REPORTS }
+internal enum class QuerySource { ENTRIES, TRANSFERS, ACCOUNTS, SCHEDULES }
 internal enum class QueryMode { RECORDS, SUMMARY, GROUPS }
 internal enum class QuerySort { AMOUNT, COUNT, DATE }
 internal enum class QueryGroupBy { TYPE, SCENE, ACCOUNT, YEAR, MONTH, DAY, WEEKDAY, KIND }
@@ -89,11 +89,7 @@ internal class LedgerQueryEngine(private val data: LedgerSnapshot) {
                     details = mapOf("周期" to bill.period, "首次日期" to bill.startDay,
                         "状态" to (bill.unavailableReason(data) ?: "可用")))
             }
-            QuerySource.REPORTS -> data.reports.map { report ->
-                QueryRow("${report.period}:${report.startDay}", source, 0, report.startDay, "", Period.valueOf(report.period).title + "报",
-                    "", "", report.content.take(2_000), details = mapOf("内容完整性" to
-                        if (report.content.length > 2_000) "仅含前两千字" else "完整"))
-            }
+
         }
     }
 
