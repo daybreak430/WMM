@@ -12,9 +12,6 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.captureToImage
-import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.geometry.Offset
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -22,6 +19,8 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import com.wmm.ledger.data.Kind
 import com.wmm.ledger.data.Account
+import com.wmm.ledger.data.Entry
+import com.wmm.ledger.data.accountBalances
 import com.wmm.ledger.data.LedgerSnapshot
 import com.wmm.ledger.data.Scene
 import com.wmm.ledger.data.Tag
@@ -34,6 +33,27 @@ import org.junit.Test
 
 class EntryKeyboardUiTest {
     @get:Rule val ui = createEmptyComposeRule()
+
+    @Test fun dateOnlyEditorPreservesLegacyTimestampAndCalibratedBalanceWhenSaved() {
+        val day = java.time.LocalDate.now().minusDays(1)
+        val at = day.atTime(8, 17).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val tag = Tag("meal", Kind.EXPENSE.name, "餐饮")
+        val account = Account("bank", "SAVINGS", "光大银行", 100_000, at - 1)
+        val entry = Entry("timed", Kind.EXPENSE.name, 800, tag.id, account.id, "", at, day.toString())
+        withLedger(LedgerSnapshot(tags = listOf(tag), accounts = listOf(account), entries = listOf(entry))) { repository, _ ->
+            ui.waitUntil(10_000) { ui.onNodeWithText(tag.name).isDisplayed() }
+            ui.onNodeWithText(tag.name).performClick()
+            ui.onNodeWithText("08:17").assertDoesNotExist()
+            ui.onNodeWithTag("entry-date").performClick()
+            InstrumentationRegistry.getInstrumentation().uiAutomation
+                .executeShellCommand("input keyevent KEYCODE_BACK").close()
+            ui.onNodeWithText("保存流水").performClick()
+            ui.waitUntil(10_000) { ui.onNodeWithContentDescription("记一笔").isDisplayed() }
+            val saved = runBlocking { repository.snapshot() }
+            assertEquals(entry, saved.entries.single())
+            assertEquals(99_200L, saved.accountBalances()[account.id])
+        }
+    }
 
     @Test fun rapidKeyTapsUseTheLatestAmountAndKeyEdgesRemainTappable() {
         val tag = Tag("meal", Kind.EXPENSE.name, "餐饮")
@@ -98,11 +118,6 @@ class EntryKeyboardUiTest {
             ui.onNodeWithText("确认").performClick()
             ui.waitUntil(5_000) { !imeVisible(activity) }
             ui.onNodeWithTag("amount-keypad").assertIsDisplayed()
-            val preview = ui.onRoot().captureToImage().asAndroidBitmap()
-            val context = InstrumentationRegistry.getInstrumentation().targetContext
-            java.io.File(context.cacheDir, "entry-layout-preview.png").outputStream().use {
-                preview.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
-            }
             activity.recreate()
             ui.onNodeWithTag("amount-keypad").assertIsDisplayed()
             ui.onNodeWithText("¥ 25.00").assertIsDisplayed()

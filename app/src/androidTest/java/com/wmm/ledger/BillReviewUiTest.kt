@@ -25,7 +25,7 @@ class BillReviewUiTest {
     @get:Rule val ui = createEmptyComposeRule()
 
     @Test fun existingTypeCanReplaceTheSuggestionAndSceneCanBeCleared() {
-        val row = BillRow("draft", Kind.EXPENSE, "18.50", "2026-01-02", "", "午餐", "出差", "")
+        val row = BillRow("draft", Kind.EXPENSE, "18.50", "2026-01-02", "12:40", "午餐", "出差", "")
         val labels = BillLabels(LedgerSnapshot(tags = listOf(Tag("meal", Kind.EXPENSE.name, "工作餐")),
             scenes = listOf(Scene("trip", "出差"))))
         val reviewed = mutableStateOf<BillRow?>(null)
@@ -39,6 +39,7 @@ class BillReviewUiTest {
             }
             ui.onNodeWithText("AI 建议 · 出差 · 午餐").assertIsDisplayed()
             ui.onNodeWithText("时间 HH:mm（选填）").assertDoesNotExist()
+            ui.onNodeWithText("12:40").assertDoesNotExist()
             ui.onNodeWithText("场景").performScrollTo().performClick()
             ui.onNodeWithText("无场景").performClick()
             ui.onNodeWithText("类型").performScrollTo().performClick()

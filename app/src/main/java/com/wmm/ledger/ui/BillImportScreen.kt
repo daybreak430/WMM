@@ -212,7 +212,7 @@ internal fun BillRowDialog(row: BillRow, labels: BillLabels, dismiss: () -> Unit
     var amount by rememberSaveable { mutableStateOf(row.amount) }
     var date by rememberSaveable { mutableStateOf(row.date) }
     // 时分不再开放编辑；有效来源时间仅用于内部排序，无效值在核对时降为日期精度。
-    val time = row.time.takeIf { it.isBlank() || runCatching { java.time.LocalTime.parse(it.trim()) }.isSuccess }.orEmpty()
+    val time = row.time.takeIf { row.stamp(System.currentTimeMillis(), java.time.ZoneId.systemDefault()) != null }.orEmpty()
     var type by rememberSaveable { mutableStateOf(row.type) }
     var scene by rememberSaveable { mutableStateOf(row.scene) }
     var note by rememberSaveable { mutableStateOf(row.note) }

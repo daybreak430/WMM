@@ -46,9 +46,7 @@ class ScheduledBillsUiTest {
             ui.onNodeWithText("时间").assertDoesNotExist()
             InstrumentationRegistry.getInstrumentation().uiAutomation
                 .executeShellCommand("input keyevent KEYCODE_BACK").close()
-            ui.onNodeWithText("保存流水").performClick()
-            ui.waitUntil(10_000) { ui.onNodeWithContentDescription("记一笔").isDisplayed() }
-            assertEquals(at, runBlocking { repository.snapshot() }.entries.single().occurredAt)
+            ui.onNodeWithContentDescription("返回").performClick()
 
             ui.onNodeWithContentDescription("个人设置").performClick()
             ui.onNodeWithText("定时账单").performScrollTo().performClick()
@@ -60,7 +58,9 @@ class ScheduledBillsUiTest {
             ui.onNodeWithText("每年").performClick().assertIsSelected()
             ui.onNodeWithText("每天").performClick().assertIsSelected()
             ui.onNodeWithText("保存定时账单").performClick()
-            ui.waitUntil(10_000) { ui.onNodeWithText(tag.name).isDisplayed() }
+            ui.waitUntil(10_000) {
+                runBlocking { repository.snapshot().let { it.scheduledBills.size == 1 && it.entries.size == 2 } }
+            }
             val saved = runBlocking { repository.snapshot() }
             assertEquals(2, saved.entries.size)
             assertFalse(saved.entries.first().hasTime)
@@ -68,7 +68,7 @@ class ScheduledBillsUiTest {
             ui.onNodeWithText(tag.name).performClick()
             ui.onNodeWithText("金额").performTextReplacement("14.00")
             ui.onNodeWithText("保存定时账单").performClick()
-            ui.waitUntil(10_000) { ui.onNodeWithText(tag.name).isDisplayed() }
+            ui.waitUntil(10_000) { runBlocking { repository.snapshot().scheduledBills.singleOrNull()?.cents == 1_400L } }
             val edited = runBlocking { repository.snapshot() }
             assertEquals(1400L, edited.scheduledBills.single().cents)
             assertEquals(saved.entries, edited.entries)
