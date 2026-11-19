@@ -6,10 +6,12 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
@@ -113,7 +115,7 @@ class LedgerReorderingUiTest {
 
             ui.onNodeWithContentDescription("记一笔").performClick()
             openAccountPicker()
-            ui.onNode(hasText("不关联") and !hasText("账户")).performClick()
+            ui.onNode(hasText("不关联") and !hasTestTag("entry-account")).performClick()
             openAccountPicker()
             ui.onNodeWithText("默认关联账户").performClick()
             assertTrue(position(secondary.name).y < position(primary.name).y)
@@ -137,10 +139,16 @@ class LedgerReorderingUiTest {
         }
     }
 
-    private fun openAccountPicker() = ui.onNodeWithText("账户").performScrollTo().performClick()
+    private fun openAccountPicker() {
+        val account = ui.onNodeWithTag("entry-account")
+        if (!account.isDisplayed()) account.performScrollTo()
+        account.performClick()
+    }
 
-    private fun assertAccount(name: String) =
-        ui.onNode(hasText("账户") and hasText(name)).performScrollTo().assertIsDisplayed()
+    private fun assertAccount(name: String) {
+        ui.onNodeWithTag("entry-account").assertIsDisplayed()
+        ui.onNodeWithText(name).assertIsDisplayed()
+    }
 
     private fun waitForTagOrder(repository: LedgerRepository, prefix: List<String>) {
         ui.waitUntil(8_000) {

@@ -48,6 +48,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
@@ -73,10 +74,7 @@ import com.wmm.ledger.data.validName
 import com.mohamedrejeb.compose.dnd.DragAndDropContainer
 import com.mohamedrejeb.compose.dnd.DragAndDropState
 import com.mohamedrejeb.compose.dnd.scroll.dragAutoScroll
-import java.time.Instant
 import java.time.LocalDate
-import java.time.LocalTime
-import java.time.ZoneId
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 private const val VISIBLE_TAG_LIMIT = 8
@@ -139,15 +137,12 @@ private fun IncomeExpenseEditor(
         data.tags.any { it.id == selected && it.kind == kindName }
     }
     val sceneId = if (!sceneChosen && guess != null) guess.scene?.id else manualSceneId
-    val zone = ZoneId.systemDefault()
-    val time = occurredAt.takeIf { hasTime }?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalTime() }
     var tagDialog by rememberSaveable { mutableStateOf(false) }
     var newScene by rememberSaveable { mutableStateOf(false) }
     var accountDialog by rememberSaveable { mutableStateOf(false) }
     var defaultAccountDialog by rememberSaveable { mutableStateOf(false) }
     var savingDefault by remember { mutableStateOf(false) }
     var noteEditor by rememberSaveable { mutableStateOf(false) }
-    var dateEditor by rememberSaveable { mutableStateOf(false) }
     var deleteDialog by rememberSaveable { mutableStateOf(false) }
     var showScenes by rememberSaveable { mutableStateOf(false) }
     var showTags by rememberSaveable { mutableStateOf(false) }
@@ -187,6 +182,17 @@ private fun IncomeExpenseEditor(
     }
     val selectKind: (Kind) -> Unit = onKindChange
 
+    val accountPicker: @Composable () -> Unit = {
+        EntryMetaButton("账户", account?.name ?: "不关联", Glyph.WALLET,
+            Modifier.widthIn(max = 260.dp).testTag("entry-account")) { accountDialog = true }
+    }
+    val chooseDate = CalendarAction(day) { changedDay ->
+        if (changedDay != day) {
+            occurredAt = changedOccurrenceTime(occurredAt, day, changedDay, null)
+            bookedDay = changedDay.toString()
+            hasTime = false
+        }
+    }
     val save: () -> Unit = save@{
         val saveCents = amountResult(amountText)?.takeIf { it in 1..com.wmm.ledger.data.MAX_CENTS } ?: return@save
         val selected = tagId ?: return@save
@@ -201,12 +207,13 @@ private fun IncomeExpenseEditor(
         else PageHeader("编辑流水", back, centered = true) {
             IconButton(onClick = { deleteDialog = true }) { LucideIcon(Glyph.DELETE, colors.error, "删除流水") }
         }
-    }, content = {
+    }, content = { compact ->
         Column(Modifier.fillMaxSize()
             .dragAutoScroll(tagDrag, scroll, Orientation.Vertical)
             .dragAutoScroll(sceneDrag, scroll, Orientation.Vertical)
             .verticalScroll(scroll).padding(horizontal = pageInset, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (compact) accountPicker()
             if (!isNew) EntryKindSelector(kind, selectKind)
             if (guess != null) Text("按记账习惯选中", color = colors.primary, style = MaterialTheme.typography.labelSmall)
             key(kind) {
@@ -243,12 +250,12 @@ private fun IncomeExpenseEditor(
         }
     }, composer = { compact ->
         EntryComposer(amountText, { amountText = amountKey(amountText, it) }, "保存流水", cents != null && tagId != null && !saving,
-            saving, compact, save) {
-            EntryMetaButton("账户", account?.name ?: "不关联", Glyph.WALLET) { accountDialog = true }
+            saving, compact, save, account = if (compact) null else accountPicker) {
             val dateLabel = (if (day.year == LocalDate.now().year) "" else "${day.year}/") +
-                "${day.monthValue}/${day.dayOfMonth}" + (time?.format(TimeLabel)?.let { " $it" } ?: "")
-            EntryMetaButton("日期时间", dateLabel, Glyph.CALENDAR) { dateEditor = true }
-            EntryMetaButton("备注", note.ifBlank { "选填" }, Glyph.EDIT) { noteEditor = true }
+                "${day.monthValue}/${day.dayOfMonth}"
+            EntryMetaButton("日期", dateLabel, Glyph.CALENDAR, Modifier.testTag("entry-date"), chooseDate)
+            EntryMetaButton("备注", note.ifBlank { "添加备注" }, Glyph.EDIT,
+                Modifier.weight(1f).testTag("entry-note")) { noteEditor = true }
         }
     })
     if (tagDialog) {
@@ -328,16 +335,6 @@ private fun IncomeExpenseEditor(
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }, confirmButton = { TextButton(onClick = { accountDialog = false }) { Text("关闭") } })
-    }
-    if (dateEditor) {
-        EntryDateDialog(day, time, onDismiss = { dateEditor = false }) { changedDay, changedTime ->
-            if (changedDay != day || changedTime != time) {
-                bookedDay = changedDay.toString()
-                hasTime = changedTime != null
-                occurredAt = changedOccurrenceTime(occurredAt, day, changedDay, changedTime, zone)
-            }
-            dateEditor = false
-        }
     }
     if (noteEditor) {
         EntryNoteDialog(note, onDismiss = { noteEditor = false }) {
@@ -489,30 +486,6 @@ internal fun EntryDetailRow(label: String, value: String, icon: Glyph, onClick: 
         }
         LucideIcon(Glyph.RIGHT, colors.onSurfaceVariant, size = 16)
     }
-}
-
-@Composable
-internal fun EntryDateDialog(day: LocalDate, time: LocalTime?, onDismiss: () -> Unit,
-    onSave: (LocalDate, LocalTime?) -> Unit) {
-    var dateText by rememberSaveable { mutableStateOf(day.toString()) }
-    var timeText by rememberSaveable { mutableStateOf(time?.toString()) }
-    val pendingDay = LocalDate.parse(dateText)
-    val pendingTime = timeText?.let(LocalTime::parse)
-    val chooseDate = CalendarAction(pendingDay) { dateText = it.toString() }
-    val chooseTime = TimeAction(pendingTime ?: LocalTime.now()) { timeText = it.toString() }
-    LedgerAlertDialog(onDismissRequest = onDismiss, shape = CardShape, title = { Text("日期时间") },
-        text = {
-            GroupCard {
-                EntryDetailRow("日期", pendingDay.toString(), Glyph.CALENDAR, chooseDate)
-                Hairline(14)
-                EntryDetailRow("时间", pendingTime?.format(TimeLabel) ?: "选填", Glyph.EDIT, chooseTime)
-                if (pendingTime != null) {
-                    TextButton(onClick = { timeText = null }) { Text("清除时间") }
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = { onSave(pendingDay, pendingTime) }) { Text("确认") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } })
 }
 
 @Composable

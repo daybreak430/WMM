@@ -12,18 +12,23 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.geometry.Offset
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import com.wmm.ledger.data.Kind
+import com.wmm.ledger.data.Account
 import com.wmm.ledger.data.LedgerSnapshot
 import com.wmm.ledger.data.Scene
 import com.wmm.ledger.data.Tag
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -59,12 +64,23 @@ class EntryKeyboardUiTest {
         val scenes = listOf(Scene("home", "日常", 0), Scene("trip", "出差", 1), Scene("tour", "旅游", 2))
         val tags = listOf(Tag("lunch", Kind.EXPENSE.name, "午餐", sortOrder = 0),
             Tag("metro", Kind.EXPENSE.name, "地铁", sortOrder = 1), Tag("salary", Kind.INCOME.name, "工资"))
-        withLedger(LedgerSnapshot(tags = tags, scenes = scenes)) { repository, activity ->
+        val account = Account("bank", "SAVINGS", "光大银行储蓄卡账户名称较长的验收场景", 100_000,
+            System.currentTimeMillis() - 10_000, isDefault = true)
+        withLedger(LedgerSnapshot(tags = tags, scenes = scenes, accounts = listOf(account))) { repository, activity ->
             ui.waitUntil(10_000) { ui.onNodeWithContentDescription("记一笔").isDisplayed() }
             ui.onNodeWithContentDescription("记一笔").performClick()
             ui.onNodeWithTag("amount-keypad").assertIsDisplayed()
             assertFalse(imeVisible(activity))
             val keypadTop = ui.onNodeWithTag("amount-keypad").fetchSemanticsNode().boundsInRoot.top
+            val amountBounds = ui.onNodeWithTag("entry-amount").fetchSemanticsNode().boundsInRoot
+            val accountBounds = ui.onNodeWithTag("entry-account").fetchSemanticsNode().boundsInRoot
+            val dateBounds = ui.onNodeWithTag("entry-date").fetchSemanticsNode().boundsInRoot
+            val noteBounds = ui.onNodeWithTag("entry-note").fetchSemanticsNode().boundsInRoot
+            assertTrue(accountBounds.bottom <= amountBounds.top || accountBounds.right <= amountBounds.left)
+            assertTrue(dateBounds.right <= noteBounds.left)
+            assertTrue(noteBounds.width > dateBounds.width)
+            assertTrue(noteBounds.bottom < keypadTop)
+            assertEquals(dateBounds.center.y, noteBounds.center.y, 1f)
             ui.onNodeWithText("午餐").performClick().assertIsSelected()
             ui.enterAmount("24.80")
             ui.onNodeWithText("收入").performClick().assertIsSelected()
@@ -76,12 +92,17 @@ class EntryKeyboardUiTest {
             assertEquals(keypadTop, ui.onNodeWithTag("amount-keypad").fetchSemanticsNode().boundsInRoot.top, 1f)
             assertFalse(imeVisible(activity))
             ui.onNodeWithText("保存流水").assertIsEnabled()
-            ui.onNodeWithText("备注").performScrollTo().performClick()
+            ui.onNodeWithTag("entry-note").performClick()
             ui.onNodeWithText("备注内容").performClick().performTextInput("午饭备注")
             ui.waitUntil(5_000) { imeVisible(activity) }
             ui.onNodeWithText("确认").performClick()
             ui.waitUntil(5_000) { !imeVisible(activity) }
             ui.onNodeWithTag("amount-keypad").assertIsDisplayed()
+            val preview = ui.onRoot().captureToImage().asAndroidBitmap()
+            val context = InstrumentationRegistry.getInstrumentation().targetContext
+            java.io.File(context.cacheDir, "entry-layout-preview.png").outputStream().use {
+                preview.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
             activity.recreate()
             ui.onNodeWithTag("amount-keypad").assertIsDisplayed()
             ui.onNodeWithText("¥ 25.00").assertIsDisplayed()

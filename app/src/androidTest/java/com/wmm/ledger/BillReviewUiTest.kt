@@ -38,6 +38,7 @@ class BillReviewUiTest {
                 }
             }
             ui.onNodeWithText("AI 建议 · 出差 · 午餐").assertIsDisplayed()
+            ui.onNodeWithText("时间 HH:mm（选填）").assertDoesNotExist()
             ui.onNodeWithText("场景").performScrollTo().performClick()
             ui.onNodeWithText("无场景").performClick()
             ui.onNodeWithText("类型").performScrollTo().performClick()

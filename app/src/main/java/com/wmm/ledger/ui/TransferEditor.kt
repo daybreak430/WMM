@@ -24,6 +24,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -38,9 +39,7 @@ import com.wmm.ledger.data.accountBalances
 import com.wmm.ledger.data.editableAmount
 import com.wmm.ledger.data.isCredit
 import com.wmm.ledger.data.changedOccurrenceTime
-import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneId
 
 @Composable
 internal fun TransferEditor(
@@ -58,15 +57,12 @@ internal fun TransferEditor(
     var dayText by rememberSaveable { mutableStateOf(initial?.day ?: LedgerRepository.bookingDay(at).toString()) }
     var hasTime by rememberSaveable { mutableStateOf(initial?.hasTime ?: false) }
     var choosingFrom by rememberSaveable { mutableStateOf<Boolean?>(null) }
-    var dateEditor by rememberSaveable { mutableStateOf(false) }
     var noteEditor by rememberSaveable { mutableStateOf(false) }
     var deleteDialog by rememberSaveable { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
-    val zone = ZoneId.systemDefault()
     val day = LocalDate.parse(dayText)
-    val time = at.takeIf { hasTime }?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalTime() }
     val cents = amountResult(amount)?.takeIf { it in 1..com.wmm.ledger.data.MAX_CENTS }
     val accountsById = data.accounts.associateBy { it.id }
     val from = accountsById[fromId]
@@ -82,6 +78,13 @@ internal fun TransferEditor(
     val fromAvailable = from != null && (!from.archived || initial?.fromAccountId == from.id)
     val toAvailable = to != null && (!to.archived || initial?.toAccountId == to.id)
 
+    val chooseDate = CalendarAction(day) { changedDay ->
+        if (changedDay != day) {
+            at = changedOccurrenceTime(at, day, changedDay, null)
+            dayText = changedDay.toString()
+            hasTime = false
+        }
+    }
     val save: () -> Unit = save@{
         val saveCents = amountResult(amount)?.takeIf { it in 1..com.wmm.ledger.data.MAX_CENTS } ?: return@save
         val fromAccount = from ?: return@save
@@ -96,7 +99,7 @@ internal fun TransferEditor(
         else PageHeader("编辑转账", back, centered = true) {
             IconButton(onClick = { deleteDialog = true }) { LucideIcon(Glyph.DELETE, colors.error, "删除转账") }
         }
-    }, content = {
+    }, content = { _ ->
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .padding(horizontal = inset, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             GroupCard {
@@ -133,9 +136,10 @@ internal fun TransferEditor(
         EntryComposer(amount, { amount = amountKey(amount, it) }, "保存转账", cents != null && fromAvailable && toAvailable &&
             fromId != toId && !saving, saving, compact, save) {
             val dateLabel = (if (day.year == LocalDate.now().year) "" else "${day.year}/") +
-                "${day.monthValue}/${day.dayOfMonth}" + (time?.format(TimeLabel)?.let { " $it" } ?: "")
-            EntryMetaButton("日期时间", dateLabel, Glyph.CALENDAR) { dateEditor = true }
-            EntryMetaButton("备注", note.ifBlank { "选填" }, Glyph.EDIT) { noteEditor = true }
+                "${day.monthValue}/${day.dayOfMonth}"
+            EntryMetaButton("日期", dateLabel, Glyph.CALENDAR, Modifier.testTag("entry-date"), chooseDate)
+            EntryMetaButton("备注", note.ifBlank { "添加备注" }, Glyph.EDIT,
+                Modifier.weight(1f).testTag("entry-note")) { noteEditor = true }
         }
     })
     choosingFrom?.let { outgoing ->
@@ -154,16 +158,6 @@ internal fun TransferEditor(
                     if (options.isEmpty()) item { Text("暂无其他可用账户", Modifier.padding(14.dp)) }
                 }
             }, confirmButton = { TextButton(onClick = { choosingFrom = null }) { Text("关闭") } })
-    }
-    if (dateEditor) {
-        EntryDateDialog(day, time, onDismiss = { dateEditor = false }) { changedDay, changedTime ->
-            if (changedDay != day || changedTime != time) {
-                dayText = changedDay.toString()
-                hasTime = changedTime != null
-                at = changedOccurrenceTime(at, day, changedDay, changedTime, zone)
-            }
-            dateEditor = false
-        }
     }
     if (noteEditor) {
         EntryNoteDialog(note, onDismiss = { noteEditor = false }) {

@@ -137,7 +137,7 @@ internal fun BillImportScreen(data: LedgerSnapshot, model: LedgerViewModel, prov
     }
     if (confirmSave) {
         ConfirmDialog("导入 ${selected.size} 笔流水？",
-            "所选流水将追加到账本，账户留空。缺少时间的流水按当天 00:00 记账。",
+            "所选流水将追加到账本，账户留空。",
             "确认导入", { confirmSave = false }) {
             confirmSave = false
             model.saveBill()
@@ -161,7 +161,7 @@ private fun BillBatchDialog(batch: BillBatch, rows: List<BillRow>, resolve: (Lis
                         Column(Modifier.weight(1f).padding(vertical = 5.dp)) {
                             Text(row.note.ifBlank { billLabel(row.type, row.scene).ifBlank { "待分类流水" } },
                                 style = MaterialTheme.typography.titleSmall)
-                            Text(listOf(row.date, row.time, parseCents(row.amount)?.let(::currency).orEmpty())
+                            Text(listOf(row.date, parseCents(row.amount)?.let(::currency).orEmpty())
                                 .filter(String::isNotBlank).joinToString(" · "), style = MaterialTheme.typography.bodySmall,
                                 color = colors.onSurfaceVariant)
                         }
@@ -192,7 +192,7 @@ private fun BillReviewRow(row: BillRow, archivedType: Boolean, enabled: Boolean,
                 val label = billLabel(row.type.ifBlank { "类型待填写" }, row.scene.takeIf { row.kind != Kind.INCOME }.orEmpty())
                 Text(label, style = MaterialTheme.typography.titleSmall)
                 val amount = parseCents(row.amount)?.let(::currency) ?: "金额待核对"
-                val occurred = listOf(row.date, row.time).filter { it.isNotBlank() }.joinToString(" ")
+                val occurred = row.date
                 Text(listOfNotNull(row.kind?.title, amount, occurred.ifBlank { "日期待核对" })
                     .joinToString(" · "), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 if (row.note.isNotBlank()) Text(row.note, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
@@ -211,7 +211,8 @@ internal fun BillRowDialog(row: BillRow, labels: BillLabels, dismiss: () -> Unit
     var kindName by rememberSaveable { mutableStateOf(row.kind?.name) }
     var amount by rememberSaveable { mutableStateOf(row.amount) }
     var date by rememberSaveable { mutableStateOf(row.date) }
-    var time by rememberSaveable { mutableStateOf(row.time) }
+    // 时分不再开放编辑；有效来源时间仅用于内部排序，无效值在核对时降为日期精度。
+    val time = row.time.takeIf { it.isBlank() || runCatching { java.time.LocalTime.parse(it.trim()) }.isSuccess }.orEmpty()
     var type by rememberSaveable { mutableStateOf(row.type) }
     var scene by rememberSaveable { mutableStateOf(row.scene) }
     var note by rememberSaveable { mutableStateOf(row.note) }
@@ -240,7 +241,6 @@ internal fun BillRowDialog(row: BillRow, labels: BillLabels, dismiss: () -> Unit
                 style = MaterialTheme.typography.bodySmall)
             BillField("金额", amount, 18, KeyboardType.Decimal) { amount = it }
             BillField("日期 YYYY-MM-DD", date, 10) { date = it }
-            BillField("时间 HH:mm（选填）", time, 8) { time = it }
             BillField("备注", note, MAX_NOTE) { note = it }
         }
     }, confirmButton = {

@@ -1,7 +1,6 @@
 package com.wmm.ledger.ui
 
 import android.app.DatePickerDialog
-import android.app.TimePickerDialog
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -41,13 +40,11 @@ import com.wmm.ledger.R
 import com.wmm.ledger.data.FIRST_DAY
 import com.wmm.ledger.data.Profile
 import java.time.LocalDate
-import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 val DateLabel: DateTimeFormatter = DateTimeFormatter.ofPattern("M月d日 EEE", Locale.SIMPLIFIED_CHINESE)
-val TimeLabel: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
 @Composable
 fun PageHeader(title: String, back: (() -> Unit)? = null, mark: Glyph? = null, centered: Boolean = false,
@@ -210,15 +207,5 @@ fun CalendarAction(day: LocalDate, limit: LocalDate = LocalDate.now(), earliest:
             datePicker.maxDate = limit.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli() - 1
             datePicker.minDate = earliest.atStartOfDay(zone).toInstant().toEpochMilli()
         }.show()
-    }
-}
-
-@Composable
-fun TimeAction(time: LocalTime, onSelect: (LocalTime) -> Unit): () -> Unit {
-    val context = LocalContext.current
-    val theme = if (LocalLedgerDark.current) R.style.LedgerPickerDark else R.style.LedgerPickerLight
-    return {
-        TimePickerDialog(context, theme, { _, hour, minute -> onSelect(LocalTime.of(hour, minute)) },
-            time.hour, time.minute, true).show()
     }
 }

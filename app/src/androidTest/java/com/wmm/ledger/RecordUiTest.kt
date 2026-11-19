@@ -23,6 +23,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import java.time.LocalDate
+import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -54,15 +55,15 @@ class RecordUiTest {
         ui.waitUntil(10_000) { ui.onAllNodesWithText(scene).fetchSemanticsNodes().isNotEmpty() }
         ui.onNodeWithText(scene).assertIsOn()
 
-        ui.onNodeWithText("日期时间").performScrollTo().performClick()
-        ui.onNodeWithText("日期").assertIsDisplayed()
-        ui.onNodeWithText("时间").assertIsDisplayed()
-        ui.onNodeWithText("取消").performClick()
+        ui.onNodeWithTag("entry-date").performClick()
+        ui.onNodeWithText("时间").assertDoesNotExist()
+        InstrumentationRegistry.getInstrumentation().uiAutomation
+            .executeShellCommand("input keyevent KEYCODE_BACK").close()
 
-        ui.onNodeWithText("备注").performScrollTo().performClick()
+        ui.onNodeWithTag("entry-note").performClick()
         ui.onNodeWithText("备注内容").performTextInput("首笔账单")
         ui.onNodeWithText("确认").performClick()
-        ui.onNodeWithText("首笔账单").performScrollTo().assertIsDisplayed()
+        ui.onNodeWithText("首笔账单").assertIsDisplayed()
         ui.onNodeWithText("保存流水").assertIsEnabled().performClick()
         ui.waitUntil(10_000) { ui.onAllNodesWithText("最近流水").fetchSemanticsNodes().isNotEmpty() }
         ui.onNodeWithText(combined).assertIsDisplayed()
@@ -81,7 +82,7 @@ class RecordUiTest {
         ui.onNodeWithText(tag).performClick()
         ui.onNodeWithText("1 笔").assertIsDisplayed()
         ui.onNode(hasText(combined) and hasText("−¥12.35")).performClick()
-        ui.onNodeWithText("首笔账单").performScrollTo().assertIsDisplayed()
+        ui.onNodeWithText("首笔账单").assertIsDisplayed()
         ui.onNodeWithText(scene).performScrollTo().assertIsDisplayed()
         ui.onNodeWithText("收入").performScrollTo().performClick()
         ui.onNodeWithText("场景").assertDoesNotExist()

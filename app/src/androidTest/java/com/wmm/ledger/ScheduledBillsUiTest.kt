@@ -6,6 +6,7 @@ import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
@@ -18,6 +19,7 @@ import com.wmm.ledger.data.Tag
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.runBlocking
+import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -38,11 +40,15 @@ class ScheduledBillsUiTest {
             ui.onNodeWithText("08:17").assertDoesNotExist()
             ui.onNodeWithText(account.name).assertDoesNotExist()
             ui.onNodeWithText(tag.name).performClick()
-            ui.onNodeWithText(account.name).performScrollTo().assertIsDisplayed()
-            ui.onNodeWithText("日期时间").performScrollTo().performClick()
-            ui.onNodeWithText("08:17").assertIsDisplayed()
-            ui.onNodeWithText("取消").performClick()
-            ui.onNodeWithContentDescription("返回").performClick()
+            ui.onNodeWithText(account.name).assertIsDisplayed()
+            ui.onNodeWithTag("entry-date").performClick()
+            ui.onNodeWithText("08:17").assertDoesNotExist()
+            ui.onNodeWithText("时间").assertDoesNotExist()
+            InstrumentationRegistry.getInstrumentation().uiAutomation
+                .executeShellCommand("input keyevent KEYCODE_BACK").close()
+            ui.onNodeWithText("保存流水").performClick()
+            ui.waitUntil(10_000) { ui.onNodeWithContentDescription("记一笔").isDisplayed() }
+            assertEquals(at, runBlocking { repository.snapshot() }.entries.single().occurredAt)
 
             ui.onNodeWithContentDescription("个人设置").performClick()
             ui.onNodeWithText("定时账单").performScrollTo().performClick()
