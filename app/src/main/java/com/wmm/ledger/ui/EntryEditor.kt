@@ -57,6 +57,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.wmm.ledger.LedgerViewModel
 import com.wmm.ledger.data.Entry
+import com.wmm.ledger.data.PaymentCapture
+import com.wmm.ledger.data.PaymentSource
+import com.wmm.ledger.data.similarEntries
 import com.wmm.ledger.data.Kind
 import com.wmm.ledger.data.LabelStyle
 import com.wmm.ledger.data.LedgerRepository
@@ -79,7 +82,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 private const val VISIBLE_TAG_LIMIT = 8
 
 @Composable
-fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, back: () -> Unit) {
+fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, capture: PaymentCapture? = null,
+    captureAccountId: String? = null, back: () -> Unit) {
     var kindName by rememberSaveable { mutableStateOf(initial?.kind ?: Kind.EXPENSE.name) }
     var transferSelected by rememberSaveable { mutableStateOf(false) }
     val drafts = rememberSaveableStateHolder()
@@ -91,7 +95,8 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
             })
         } else {
             IncomeExpenseEditor(data, initial, model, Kind.valueOf(kindName), onKindChange = { kindName = it.name },
-                onTransfer = if (initial == null) ({ transferSelected = true }) else null, back = back)
+                onTransfer = if (initial == null && capture == null) ({ transferSelected = true }) else null,
+                capture = capture, captureAccountId = captureAccountId, back = back)
         }
     }
 }
@@ -99,10 +104,10 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, b
 @Composable
 private fun IncomeExpenseEditor(
     data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, kind: Kind, onKindChange: (Kind) -> Unit,
-    onTransfer: (() -> Unit)?, back: () -> Unit,
+    onTransfer: (() -> Unit)?, capture: PaymentCapture?, captureAccountId: String?, back: () -> Unit,
 ) {
     val kindName = kind.name
-    var amountText by rememberSaveable { mutableStateOf(initial?.let { editableAmount(it.cents) } ?: "") }
+    var amountText by rememberSaveable { mutableStateOf(initial?.let { editableAmount(it.cents) } ?: capture?.let { editableAmount(it.cents) } ?: "") }
     val cents = amountResult(amountText)?.takeIf { it in 1..com.wmm.ledger.data.MAX_CENTS }
     val scenes = remember(data.scenes, data.entries) { data.orderedScenes() }
     val activeAccounts = remember(data.accounts) { data.accounts.filterNot { it.archived } }
@@ -115,16 +120,20 @@ private fun IncomeExpenseEditor(
     var sceneChosen by rememberSaveable { mutableStateOf(false) }
     var chosenAccountId by rememberSaveable { mutableStateOf(initial?.accountId) }
     var accountChosen by rememberSaveable { mutableStateOf(false) }
-    val accountId = if (initial == null && !accountChosen) defaultAccount?.id else chosenAccountId
-    var note by rememberSaveable { mutableStateOf(initial?.note.orEmpty()) }
-    var occurredAt by rememberSaveable { mutableStateOf(initial?.occurredAt ?: System.currentTimeMillis()) }
+    val accountId = when {
+        capture != null && !accountChosen -> captureAccountId.takeIf { selected -> activeAccounts.any { it.id == selected } }
+        initial == null && !accountChosen -> defaultAccount?.id
+        else -> chosenAccountId
+    }
+    var note by rememberSaveable { mutableStateOf(initial?.note ?: capture?.merchant.orEmpty()) }
+    var occurredAt by rememberSaveable { mutableStateOf(initial?.occurredAt ?: capture?.observedAt ?: System.currentTimeMillis()) }
     var hasTime by rememberSaveable { mutableStateOf(initial?.hasTime ?: false) }
     var bookedDay by rememberSaveable { mutableStateOf(initial?.day ?: LedgerRepository.bookingDay(occurredAt).toString()) }
     val day = LocalDate.parse(bookedDay)
     val useLocation by model.habitLocation.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val area by produceState<String?>(null, useLocation, initial == null) {
-        value = if (useLocation && initial == null) readHabitArea(context) else null
+        value = if (useLocation && initial == null && capture == null) readHabitArea(context) else null
     }
     val habitArea = area.takeIf { useLocation && System.currentTimeMillis() - occurredAt in 0..900_000 }
     val habits = remember(data.entries, data.tags, data.scenes) { LedgerHabits(data) }
@@ -145,6 +154,8 @@ private fun IncomeExpenseEditor(
     var showScenes by rememberSaveable { mutableStateOf(false) }
     var showTags by rememberSaveable { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
+    var allowSimilar by remember { mutableStateOf(false) }
+    var similarWarning by remember { mutableStateOf(false) }
     val tags = remember(data.tags, data.entries, kind) { data.orderedTags(kind) }
     val sceneLabels = remember(scenes) { scenes.associate { it.id to it.name } }
     val tagLabels = remember(tags) { tags.associate { it.id to it.name } }
@@ -194,14 +205,19 @@ private fun IncomeExpenseEditor(
     val save: () -> Unit = save@{
         val saveCents = amountResult(amountText)?.takeIf { it in 1..com.wmm.ledger.data.MAX_CENTS } ?: return@save
         val selected = tagId ?: return@save
+        if (capture != null && !allowSimilar && capture.similarEntries(data.entries, saveCents).isNotEmpty()) {
+            similarWarning = true
+            return@save
+        }
         saving = true
         dismissKeyboard()
         model.saveEntry(initial?.id, kind, saveCents, selected, accountId, note, occurredAt, day,
-            sceneId.takeIf { kind == Kind.EXPENSE }, habitArea, hasTime, back)
-            .invokeOnCompletion { saving = false }
+            sceneId.takeIf { kind == Kind.EXPENSE }, habitArea, hasTime, back, captureId = capture?.id, allowSimilar = allowSimilar)
+            .invokeOnCompletion { saving = false; allowSimilar = false }
     }
     EntryEditorLayout(header = {
-        if (isNew) EntryEditorHeader(kind, selectKind, onTransfer?.let { action -> { dismissKeyboard(); action() } }, back)
+        if (capture != null) PageHeader("核对${PaymentSource.valueOf(capture.source).title}支出", back)
+        else if (isNew) EntryEditorHeader(kind, selectKind, onTransfer?.let { action -> { dismissKeyboard(); action() } }, back)
         else PageHeader("编辑流水", back, centered = true) {
             IconButton(onClick = { deleteDialog = true }) { LucideIcon(Glyph.DELETE, colors.error, "删除流水") }
         }
@@ -211,6 +227,8 @@ private fun IncomeExpenseEditor(
             .dragAutoScroll(sceneDrag, scroll, Orientation.Vertical)
             .verticalScroll(scroll).padding(horizontal = pageInset, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (capture != null && capture.method.isNotBlank()) Text("付款方式：${capture.method}",
+                style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
             if (compact) accountPicker()
             if (!isNew) EntryKindSelector(kind, selectKind)
             if (guess != null) Text("按记账习惯选中", color = colors.primary, style = MaterialTheme.typography.labelSmall)
@@ -255,6 +273,8 @@ private fun IncomeExpenseEditor(
             EntryMetaButton("日期", dateLabel, Glyph.CALENDAR, Modifier.testTag("entry-date")) { dismissKeyboard(); chooseDate() }
         }
     })
+    if (similarWarning) ConfirmDialog("发现相似流水", "近两分钟内已有同商户、同金额的支出。确认这次是另一笔消费后再保存。", "仍然保存",
+        { similarWarning = false }) { similarWarning = false; allowSimilar = true; save() }
     if (tagDialog) {
         NewLabelDialog(
             model = model,

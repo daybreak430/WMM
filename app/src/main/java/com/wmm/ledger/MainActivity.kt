@@ -91,8 +91,23 @@ import java.time.LocalDate
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
+    private val captureRequest = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    private fun readCaptureRequest(intent: Intent?) {
+        captureRequest.value = intent?.takeIf { it.action == com.wmm.ledger.capture.REVIEW_PAYMENT_ACTION }
+            ?.getStringExtra(com.wmm.ledger.capture.PAYMENT_CAPTURE_ID)?.takeIf {
+                it.length == 36 && runCatching { java.util.UUID.fromString(it) }.isSuccess
+            }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        readCaptureRequest(intent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        readCaptureRequest(intent)
         enableEdgeToEdge()
         setContent {
             val model: LedgerViewModel = viewModel()
@@ -108,7 +123,11 @@ class MainActivity : ComponentActivity() {
                     navigationBarStyle = SystemBarStyle.auto(0xE6FFFFFF.toInt(), 0x801B273A.toInt()) { dark },
                 )
             }
-            LedgerTheme(dark) { LedgerApp(model, appearance) }
+            val request by captureRequest.collectAsStateWithLifecycle()
+            LedgerTheme(dark) { LedgerApp(model, appearance, request) {
+                captureRequest.value = null
+                intent?.removeExtra(com.wmm.ledger.capture.PAYMENT_CAPTURE_ID)
+            } }
         }
     }
 }
@@ -116,7 +135,10 @@ class MainActivity : ComponentActivity() {
 private data class Destination(val route: String?, val depth: Int)
 
 @Composable
-private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
+private fun LedgerApp(model: LedgerViewModel, appearance: Appearance, incomingCapture: String?, consumeCapture: () -> Unit) {
+    val paymentModel: PaymentCaptureViewModel = viewModel()
+    val paymentState by paymentModel.captures.collectAsStateWithLifecycle()
+    val paymentAccounts by paymentModel.accounts.collectAsStateWithLifecycle()
     val assistant: LedgerAssistantViewModel = viewModel()
     val questionTurns by assistant.questions.collectAsStateWithLifecycle()
     val snapshot by model.data.collectAsStateWithLifecycle()
@@ -175,7 +197,7 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
             val returnTo = parent
             route = returnTo
             parent = when {
-                returnTo == "bill-import" || returnTo == "scheduled-bills" -> "settings"
+                returnTo == "bill-import" || returnTo == "scheduled-bills" || returnTo == "auto-capture" -> "settings"
                 returnTo?.startsWith("ask-evidence:") == true -> "ask"
                 else -> null
             }
@@ -184,16 +206,26 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
         }
     }
 
+    LaunchedEffect(incomingCapture, paymentState.loaded, snapshot != null) {
+        if (incomingCapture != null && paymentState.loaded && snapshot != null) {
+            consumeCapture()
+            if (paymentState.pending.any { it.id == incomingCapture }) {
+                parent = "auto-capture"
+                route = "capture:$incomingCapture"
+            } else snackbar.showSnackbar("识别记录已处理或过期。")
+        }
+    }
+
     BackHandler(enabled = route != null || tab != Tab.LEDGER, onBack = ::back)
 
     val depth = when {
         route == null -> 0
         parent == null -> 1
-        parent == "scheduled-bills" -> 3
+        parent == "scheduled-bills" || parent == "auto-capture" -> 3
         else -> 2
     }
     val destination = Destination(route, depth)
-    val entryEditor = route == "new" || route?.startsWith("entry:") == true || route?.startsWith("transfer:") == true
+    val entryEditor = route == "new" || route?.startsWith("capture:") == true || route?.startsWith("entry:") == true || route?.startsWith("transfer:") == true
     val refined = entryEditor || (route == null && tab == Tab.LEDGER)
     LaunchedEffect(route) {
         // 连续记账时移除上一页的提示，避免成功提示挡住新一笔的操作。
@@ -287,7 +319,18 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance) {
                                         tags = { parent = current; route = "tags" },
                                         openModel = { parent = current; route = "model" },
                                         importBill = { parent = current; route = "bill-import" },
-                                        scheduledBills = { parent = current; route = "scheduled-bills" })
+                                        scheduledBills = { parent = current; route = "scheduled-bills" },
+                                        autoCapture = { parent = current; route = "auto-capture" })
+                                    current == "auto-capture" -> com.wmm.ledger.ui.PaymentCaptureScreen(data, paymentModel, ::back) {
+                                        parent = current; route = "capture:$it"
+                                    }
+                                    current.startsWith("capture:") -> {
+                                        val capture = remember(current) { paymentState.pending.firstOrNull { it.id == current.substringAfter(':') } }
+                                        if (capture != null) EntryEditor(data, null, model, capture,
+                                            paymentAccounts[com.wmm.ledger.data.PaymentSource.valueOf(capture.source)]) {
+                                            if (route == current) back()
+                                        } else LaunchedEffect(current) { if (route == current) back() }
+                                    }
                                     current == "scheduled-bills" -> ScheduledBillsScreen(data, ::back) { id ->
                                         parent = current
                                         route = "scheduled-bill:${id.orEmpty()}"

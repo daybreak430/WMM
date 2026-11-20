@@ -41,6 +41,12 @@ class Secrets(context: Context) {
     internal fun hasQuestionConsent(provider: Provider): Boolean = preferences.getBoolean("question_consent_v1_${provider.name}", false)
     internal fun setQuestionConsent(provider: Provider) { preferences.edit().putBoolean("question_consent_v1_${provider.name}", true).apply() }
 
+    internal fun captureAccount(source: PaymentSource): String? = read("capture_account_${source.name}")?.decodeToString()
+    internal fun setCaptureAccount(source: PaymentSource, accountId: String?) {
+        if (accountId == null) preferences.edit().remove("capture_account_${source.name}").apply()
+        else write("capture_account_${source.name}", accountId.toByteArray())
+    }
+
     @Synchronized
     private fun write(slot: String, data: ByteArray) {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")

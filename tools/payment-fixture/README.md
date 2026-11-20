@@ -1,0 +1,16 @@
+# 付款识别测试页
+
+仅用于隔离 Android 模拟器。使用支付应用包名产生真实系统事件，不联网，不执行支付；不会进入产品 APK。安装脚本拒绝真机，也拒绝覆盖模拟器中已有的真实同包名应用。
+
+```bash
+./tools/payment-fixture/build.sh wechat --install emulator-5554
+./tools/payment-fixture/build.sh alipay --install emulator-5554
+```
+
+依赖项目已有的 JDK、SDK 37 与 Build Tools 36.0.0，使用本机调试签名。APK 输出至 `/tmp/wmm-payment-fixture-<来源>.apk`。测试结束后仅卸载版本为 `0.0-test` 的测试包，并关闭调试应用的付款识别服务。
+
+先在调试版的「自动记账」同意披露并授权系统服务，再打开测试页。付款 A 应产生一条候选；重复刷新不增加候选；付款 B 为另一笔同额消费，应保留并在保存时提示相似流水。失败、转账及未标实付的多金额页面不应产生候选。浮层上的核对操作应能打开记个账编辑页，稍后保留候选，忽略不入账。关闭识别或关闭来源后不再识别。
+
+使用 UIAutomator 时须注意它默认可能抑制其他无障碍服务。验证真实识别链路应保留服务运行，必要时通过截图与 ADB 触控检查；使用 UiAutomation 的自动化测试需显式开启 `FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES`。
+
+这里只验证自有测试布局。微信、支付宝的页面变动、可读节点和厂商后台限制仍需用真实设备及真实版本验证。

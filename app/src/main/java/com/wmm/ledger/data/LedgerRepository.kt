@@ -31,10 +31,12 @@ class LedgerRepository(context: Context) {
         val key = secrets.databaseKey(!app.getDatabasePath(DATABASE_NAME).exists())
         Room.databaseBuilder(app, LedgerDatabase::class.java, DATABASE_NAME)
             .openHelperFactory(SupportOpenHelperFactory(key))
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
             .build()
     }
     private val dao get() = database.ledger()
+    internal val captures by lazy { PaymentCaptureRepository(database, this) }
+    internal val dataGeneration get() = restoreCount.get()
 
     suspend fun observe() = withContext(Dispatchers.IO) {
         database.invalidationTracker.createFlow("entries", "tags", "accounts", "reports", "profile", "scenes", "scheduled_bills",
@@ -126,8 +128,8 @@ class LedgerRepository(context: Context) {
                 throw LedgerError("请选择一个有效的支出场景。")
             }
             val area = if (old == null) habitArea else old.habitArea.takeIf { occurredAt == old.occurredAt }
-            dao.save(Entry(id ?: newId(), kind.name, cents, tagId, accountId, note.trim().take(MAX_NOTE),
-                occurredAt, day.toString(), sceneId, area, hasTime))
+            Entry(id ?: newId(), kind.name, cents, tagId, accountId, note.trim().take(MAX_NOTE),
+                occurredAt, day.toString(), sceneId, area, hasTime).also { dao.save(it) }
         }
     }
 
@@ -312,6 +314,7 @@ class LedgerRepository(context: Context) {
     suspend fun replace(snapshot: LedgerSnapshot) = withContext(Dispatchers.IO) {
         database.withTransaction {
             dao.clearEntries()
+            database.paymentCaptures().clear()
             dao.clearTransfers()
             dao.clearScheduledBills()
             dao.clearTags()

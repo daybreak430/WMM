@@ -15,6 +15,7 @@ import com.wmm.ledger.data.LabelIconPreview
 import com.wmm.ledger.data.LabelIconSuggestion
 import com.wmm.ledger.data.LabelStyle
 import com.wmm.ledger.data.StyleLabel
+import com.wmm.ledger.data.Entry
 import com.wmm.ledger.data.Kind
 import com.wmm.ledger.data.LedgerError
 import com.wmm.ledger.data.LedgerRepository
@@ -112,9 +113,12 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
         perform("无法保存场景顺序。", onFailure) { repository.reorderScenes(order) }
 
     fun saveEntry(id: String?, kind: Kind, amount: Long, tag: String, account: String?, note: String, at: Long,
-        day: LocalDate, sceneId: String?, habitArea: String?, hasTime: Boolean, done: () -> Unit) = perform("无法保存流水。") {
-        repository.saveEntry(id, kind, amount, tag, account, note, at, day, sceneId,
+        day: LocalDate, sceneId: String?, habitArea: String?, hasTime: Boolean, done: () -> Unit,
+        captureId: String? = null, allowSimilar: Boolean = false) = perform("无法保存流水。") {
+        if (captureId == null) repository.saveEntry(id, kind, amount, tag, account, note, at, day, sceneId,
             habitArea.takeIf { locateHabits.value }, hasTime)
+        else repository.captures.confirm(captureId, Entry("", kind.name, amount, tag, account, note, at, day.toString(), sceneId,
+            hasTime = hasTime), allowSimilar)
         done()
         notify("已保存")
     }
