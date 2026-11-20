@@ -126,7 +126,7 @@ private fun IncomeExpenseEditor(
         else -> chosenAccountId
     }
     var note by rememberSaveable { mutableStateOf(initial?.note ?: capture?.merchant.orEmpty()) }
-    var occurredAt by rememberSaveable { mutableStateOf(initial?.occurredAt ?: capture?.observedAt ?: System.currentTimeMillis()) }
+    var occurredAt by rememberSaveable { mutableStateOf(initial?.occurredAt ?: capture?.bookingAt ?: System.currentTimeMillis()) }
     var hasTime by rememberSaveable { mutableStateOf(initial?.hasTime ?: false) }
     var bookedDay by rememberSaveable { mutableStateOf(initial?.day ?: LedgerRepository.bookingDay(occurredAt).toString()) }
     val day = LocalDate.parse(bookedDay)
@@ -273,7 +273,7 @@ private fun IncomeExpenseEditor(
             EntryMetaButton("日期", dateLabel, Glyph.CALENDAR, Modifier.testTag("entry-date")) { dismissKeyboard(); chooseDate() }
         }
     })
-    if (similarWarning) ConfirmDialog("发现相似流水", "近两分钟内已有同商户、同金额的支出。确认这次是另一笔消费后再保存。", "仍然保存",
+    if (similarWarning) ConfirmDialog("发现相似流水", "已有同商户、同金额的相似支出。确认是另一笔消费后再保存。", "仍然保存",
         { similarWarning = false }) { similarWarning = false; allowSimilar = true; save() }
     if (tagDialog) {
         NewLabelDialog(

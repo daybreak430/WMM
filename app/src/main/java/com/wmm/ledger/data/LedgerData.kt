@@ -136,7 +136,7 @@ interface LedgerDao {
 @Database(
     entities = [Tag::class, Account::class, Entry::class, Report::class, Profile::class, Scene::class, ScheduledBill::class,
         Transfer::class, PaymentCapture::class],
-    version = 9,
+    version = 10,
 )
 abstract class LedgerDatabase : RoomDatabase() {
     abstract fun ledger(): LedgerDao
@@ -219,5 +219,11 @@ internal val MIGRATION_8_9 = object : Migration(8, 9) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("CREATE TABLE payment_captures (id TEXT NOT NULL PRIMARY KEY, source TEXT NOT NULL, cents INTEGER NOT NULL, merchant TEXT NOT NULL, method TEXT NOT NULL, observedAt INTEGER NOT NULL, fingerprint TEXT NOT NULL, status TEXT NOT NULL, entryId TEXT)")
         db.execSQL("CREATE UNIQUE INDEX index_payment_captures_fingerprint ON payment_captures (fingerprint)")
+    }
+}
+
+internal val MIGRATION_9_10 = object : Migration(9, 10) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE payment_captures ADD COLUMN paidAt INTEGER")
     }
 }

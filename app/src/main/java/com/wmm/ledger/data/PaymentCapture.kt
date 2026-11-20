@@ -28,7 +28,10 @@ data class PaymentCapture(
     val fingerprint: String,
     val status: String = "PENDING",
     val entryId: String? = null,
-)
+    val paidAt: Long? = null,
+) {
+    val bookingAt: Long get() = paidAt ?: observedAt
+}
 
 @Dao
 interface PaymentCaptureDao {
@@ -44,9 +47,15 @@ interface PaymentCaptureDao {
 }
 
 internal data class RecognizedPayment(val source: PaymentSource, val cents: Long, val merchant: String,
-    val method: String, val orderHash: String?) {
-    fun fingerprint(session: String): String = sha256((source.name + "|" +
-        (orderHash?.let { "order:$it" } ?: "session:$session|$cents|${paymentMerchantKey(merchant)}")).toByteArray())
+    val method: String, val orderHash: String?, val paidAt: Long? = null) {
+    fun fingerprint(session: String): String {
+        val key = when {
+            orderHash != null -> "order:$orderHash"
+            paidAt != null -> "detail:$paidAt|$cents|${paymentMerchantKey(merchant)}"
+            else -> "session:$session|$cents|${paymentMerchantKey(merchant)}"
+        }
+        return sha256("${source.name}|$key".toByteArray())
+    }
 }
 
 internal fun paymentMerchantKey(value: String): String = Normalizer.normalize(value, Normalizer.Form.NFKC)
@@ -54,39 +63,51 @@ internal fun paymentMerchantKey(value: String): String = Normalizer.normalize(va
 
 internal fun PaymentCapture.similarEntries(entries: List<Entry>, amount: Long = cents): List<Entry> {
     val merchantKey = paymentMerchantKey(merchant)
+    val paidDay = paidAt?.let { LedgerRepository.bookingDay(it).toString() }
     return entries.filter { entry -> entry.kind == Kind.EXPENSE.name && entry.cents == amount && merchantKey.length >= 2 &&
-        abs(entry.occurredAt - observedAt) <= 120_000 && paymentMerchantKey(entry.note).startsWith(merchantKey) }
+        (entry.day == paidDay || abs(entry.occurredAt - bookingAt) <= 120_000) &&
+        paymentMerchantKey(entry.note).startsWith(merchantKey) }
 }
 
-// 宁可漏识别也不从多个金额中猜测；历史详情、还款、转账和退款不按普通消费捕获。
+// 付款成功页与历史详情分别确认交易依据，避免从账单列表或非消费交易推测支出。
 internal object PaymentScreenParser {
     private val excluded = Regex("转账|还款|退款|退回|收款成功|收钱成功|交易关闭|支付失败|付款失败|支付中|处理中")
     private const val NUMBER = "(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\\.[0-9]{1,2})?"
     private val money = Regex("(?:[¥￥]\\s*($NUMBER)(?![0-9.,])|(?<![0-9.,])($NUMBER)\\s*元)")
     private val amountLabels = listOf("实付金额", "实付款", "实际支付", "付款金额", "支付金额", "实付")
-    private val merchantLabels = listOf("收款商户", "商户全称", "收款方", "商户名称", "商家名称", "商品说明", "商品")
-    private val methodLabels = listOf("支付方式", "付款方式")
-    private val orderLabels = listOf("交易单号", "交易号", "订单号", "商户单号", "订单编号")
+    private val merchantLabels = listOf("商户全称", "收款方全称", "收款商户", "收款方", "商户名称", "商家名称", "交易对方")
+    private val productLabels = listOf("商品说明", "商品名称", "商品")
+    private val methodLabels = listOf("支付方式", "付款方式", "支付渠道", "付款渠道")
+    private val orderLabels = listOf("微信支付交易单号", "微信支付单号", "支付宝交易号", "交易单号", "交易号", "订单号", "商户单号", "订单编号")
+    private val timeLabels = listOf("支付时间", "付款时间", "交易时间", "成交时间", "付款日期")
+    private val statusLabels = listOf("当前状态", "交易状态", "支付状态")
+    private val kindLabels = listOf("交易类型", "收支类型", "资金流向", "收/支")
+    private val detailTitles = setOf("账单详情", "交易详情", "账单明细")
+    private val paidStatuses = setOf("支付成功", "付款成功", "交易成功", "交易完成")
+    private val expenseKinds = setOf("支出", "消费", "支付", "付款", "商户消费", "商户支付", "商家消费", "扫码付款")
+    private val nonExpense = Regex("转账|还款|退款|退回|红包|提现|充值|理财|收款成功|收钱成功|收入|交易关闭|支付失败|付款失败|支付中|处理中|待付款|已取消|交易失败|已关闭")
+    private val refundStatus = Regex("(?:已|部分)?退款(?:成功|中|金额.*)?|已全额退款|已部分退款")
+    private val stamp = Regex("(20\\d{2})[-/年](\\d{1,2})[-/月](\\d{1,2})日?\\s+(\\d{1,2}):(\\d{2})(?::(\\d{2}))?")
+    private val allLabels = amountLabels + merchantLabels + productLabels + methodLabels + orderLabels + timeLabels + statusLabels + kindLabels +
+        listOf("订单金额", "优惠金额", "优惠", "原价", "账户余额", "余额", "退款金额")
 
-    fun parse(source: PaymentSource, texts: List<String>, now: Long): RecognizedPayment? {
+    fun parse(source: PaymentSource, texts: List<String>, now: Long, includeDetails: Boolean = false): RecognizedPayment? {
         val lines = texts.flatMap { it.lines() }.take(160).map { Normalizer.normalize(it, Normalizer.Form.NFKC).trim() }
             .filter(String::isNotEmpty)
         val joined = lines.joinToString("\n").take(8_000)
-        if (lines.take(3).any { it in listOf("账单详情", "交易详情", "账单明细") }) return null
+        val detailIndex = lines.take(4).indexOfFirst { it in detailTitles }
+        val successIndex = lines.indexOfFirst { it == "支付成功" || it == "付款成功" }
+        if (detailIndex >= 0 && (successIndex < 0 || detailIndex < successIndex)) {
+            return if (includeDetails) parseDetail(source, lines, detailIndex, now) else null
+        }
         if (excluded.containsMatchIn(joined) || lines.none { it in listOf("支付成功", "付款成功") }) return null
-        val stamp = Regex("20\\d{2}[-/]\\d{1,2}[-/]\\d{1,2}\\s+\\d{1,2}:\\d{2}(?::\\d{2})?").find(joined)?.value
-        if (stamp != null) {
-            val parsed = runCatching {
-                val values = Regex("\\d+").findAll(stamp).map { it.value.toInt() }.toList()
-                LocalDateTime.of(values[0], values[1], values[2], values[3], values[4], values.getOrElse(5) { 0 })
-                    .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-            }.getOrNull() ?: return null
+        stamp.find(joined)?.let { match ->
+            val parsed = transactionTime(match) ?: return null
             if (now - parsed !in -60_000..900_000) return null
         }
         val labeledAmounts = amountLabels.mapNotNull { labelValue(lines, listOf(it)) }.mapNotNull(::amount).distinct()
         val allAmounts = money.findAll(joined).mapNotNull { match -> parseCents(
             (match.groups[1]?.value ?: match.groups[2]?.value).orEmpty().replace(",", "")) }.toMutableList()
-        val successIndex = lines.indexOfFirst { it == "支付成功" || it == "付款成功" }
         lines.drop(successIndex + 1).take(2).filter { it.matches(Regex("[0-9]+\\.[0-9]{2}")) }
             .mapNotNull(::amount).forEach(allAmounts::add)
         lines.forEachIndexed { index, line ->
@@ -100,10 +121,59 @@ internal object PaymentScreenParser {
         val cents = if (labeledAmounts.isNotEmpty()) labeledAmounts.singleOrNull()
             else headerAmount?.takeIf { allAmounts.distinct() == listOf(it) }
         if (cents == null) return null
-        val merchant = labelValue(lines, merchantLabels)?.take(80)?.takeIf { it.length >= 2 && !money.containsMatchIn(it) && amount(it) == null } ?: return null
+        val merchant = validMerchant(labelValue(lines, merchantLabels + productLabels)) ?: return null
+        return recognized(source, cents, merchant, lines)
+    }
+
+    private fun parseDetail(source: PaymentSource, lines: List<String>, titleIndex: Int, now: Long): RecognizedPayment? {
+        val header = lines.drop(titleIndex + 1).take(5).takeWhile { field -> allLabels.none { matchesLabel(field, it) } }
+        val status = labelValue(lines, statusLabels) ?: header.firstOrNull { it in paidStatuses } ?: return null
+        if (status !in paidStatuses) return null
+        val kind = labelValue(lines, kindLabels)
+        if (kind != null && kind !in expenseKinds) return null
+        val merchant = validMerchant(labelValue(lines, merchantLabels))
+            ?: header.firstNotNullOfOrNull(::validMerchant) ?: validMerchant(labelValue(lines, productLabels)) ?: return null
+        val product = labelValue(lines, productLabels).orEmpty()
+        if (nonExpense.containsMatchIn(merchant) || nonExpense.containsMatchIn(product) ||
+            header.any(nonExpense::containsMatchIn) || lines.any(refundStatus::matches)) return null
+
+        val time = labelValue(lines, timeLabels)?.let(stamp::matchEntire) ?: return null
+        val paidAt = transactionTime(time)?.takeIf { it <= now } ?: return null
+        val displayAmount = header.mapNotNull(::detailAmount).distinct().singleOrNull()
+        val labeled = amountLabels.mapNotNull { labelValue(lines, listOf(it)) }.mapNotNull(::detailAmount).distinct()
+        val cents = when {
+            labeled.isNotEmpty() -> labeled.map(::abs).distinct().singleOrNull()
+            else -> displayAmount?.let(::abs)
+        } ?: return null
+        if (header.any { it.startsWith('+') && detailAmount(it.drop(1)) != null }) return null
+        if (displayAmount?.let { it < 0 } != true && labeled.none { it < 0 } && kind !in expenseKinds &&
+            (status == "交易成功" || status == "交易完成" || labelValue(lines, methodLabels) == null)) return null
+
+        val payment = recognized(source, cents, merchant, lines, paidAt)
+        // 分钟精度不足以稳定区分同店同额订单，无单号时只接受带秒的交易时间。
+        return payment.takeIf { it.orderHash != null || time.groupValues[6].isNotEmpty() }
+    }
+
+    private fun transactionTime(match: MatchResult): Long? = runCatching {
+        val (year, month, day, hour, minute, second) = match.destructured
+        LocalDateTime.of(year.toInt(), month.toInt(), day.toInt(), hour.toInt(), minute.toInt(), second.toIntOrNull() ?: 0)
+            .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+    }.getOrNull()
+
+    private fun validMerchant(value: String?): String? = value?.take(80)?.takeIf {
+        it.length >= 2 && it.any(Char::isLetter) && !money.containsMatchIn(it) && it !in paidStatuses &&
+            it !in detailTitles && it !in expenseKinds && it !in setOf("返回", "关闭", "更多", "完成")
+    }
+
+    private fun recognized(source: PaymentSource, cents: Long, merchant: String, lines: List<String>, paidAt: Long? = null): RecognizedPayment {
         val method = labelValue(lines, methodLabels).orEmpty().replace(Regex("\\d{5,}"), "••••").take(48)
         val order = labelValue(lines, orderLabels)?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{8,80}")) }
-        return RecognizedPayment(source, cents, merchant, method, order?.let { sha256(it.toByteArray()) })
+        return RecognizedPayment(source, cents, merchant, method, order?.let { sha256(it.toByteArray()) }, paidAt)
+    }
+
+    private fun detailAmount(text: String): Long? {
+        val normalized = text.replace('−', '-').replace(Regex("^([¥￥])\\s*-\\s*"), "-¥")
+        return if (normalized.startsWith('-')) amount(normalized.drop(1))?.let { -it } else amount(normalized)
     }
 
     private fun amount(text: String): Long? {
@@ -112,11 +182,13 @@ internal object PaymentScreenParser {
         return parseCents(raw.replace(",", ""))
     }
 
+    private fun matchesLabel(line: String, label: String) = line == label || line.startsWith("$label:") || line.startsWith("$label ")
+
     private fun labelValue(lines: List<String>, labels: List<String>): String? {
-        lines.forEachIndexed { index, line -> labels.forEach { label ->
+        labels.forEach { label -> lines.forEachIndexed { index, line ->
             if (line == label || line == "$label:" || line == "$label：") {
-                lines.getOrNull(index + 1)?.takeIf { it.length <= 120 && it !in
-                    amountLabels + merchantLabels + methodLabels + orderLabels + listOf("完成", "返回商家", "支付成功", "付款成功") }
+                lines.getOrNull(index + 1)?.takeIf { next -> next.length <= 120 && allLabels.none { matchesLabel(next, it) } &&
+                    next !in listOf("完成", "返回商家") }
                     ?.let { return if (it == "¥" || it == "￥") it + lines.getOrNull(index + 2).orEmpty() else it }
             } else if (line.startsWith("$label:") || line.startsWith("$label：") || line.startsWith("$label ")) {
                 line.substring(label.length + 1).trim().takeIf(String::isNotEmpty)?.let { return it }

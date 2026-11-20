@@ -6,7 +6,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.callbackFlow
 
 internal data class PaymentCaptureOptions(val enabled: Boolean = false, val sources: Set<String> = PaymentSource.entries.map { it.name }.toSet(),
-    val consent: Boolean = false) {
+    val consent: Boolean = false, val includeDetails: Boolean = false) {
     fun allows(source: PaymentSource) = enabled && consent && source.name in sources
 }
 
@@ -14,7 +14,9 @@ internal class PaymentCaptureSettings(context: Context) {
     private val preferences = context.getSharedPreferences("payment_capture_settings", Context.MODE_PRIVATE)
     fun snapshot() = PaymentCaptureOptions(preferences.getBoolean("enabled", false),
         preferences.getStringSet("sources", PaymentSource.entries.map { it.name }.toSet()).orEmpty().toSet(),
-        preferences.getBoolean("consent_v1", false))
+        preferences.getBoolean("consent_v1", false), preferences.getBoolean("include_details", false))
+
+    fun setIncludeDetails(enabled: Boolean) = preferences.edit().putBoolean("include_details", enabled).apply()
 
     fun setEnabled(enabled: Boolean, consent: Boolean = false) {
         val editor = preferences.edit().putBoolean("enabled", enabled && snapshot().sources.isNotEmpty())

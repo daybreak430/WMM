@@ -30,11 +30,19 @@ class PaymentCaptureUiTest {
             withLedger(LedgerSnapshot(tags = listOf(tag), accounts = listOf(credit))) { _, scenario ->
                 ui.waitUntil(10_000) { ui.onNodeWithContentDescription("个人设置").isDisplayed() }
                 ui.onNodeWithContentDescription("个人设置").performClick()
-                ui.onNodeWithText("自动记账").performScrollTo().performClick()
-                ui.onNodeWithText("自动识别付款").performClick()
+                ui.onNodeWithContentDescription("自动记账开关").performScrollTo().assertIsOff().performClick()
                 ui.onNodeWithText("开启付款识别？").assertIsDisplayed()
                 ui.onNodeWithText("取消").performClick()
-                ui.onNodeWithText("自动识别付款").assertIsOff()
+                ui.onNodeWithContentDescription("自动记账开关").assertIsOff()
+                ui.onNodeWithText("自动记账").performScrollTo().performClick()
+                ui.onNodeWithText("使用指引").performClick()
+                ui.onNodeWithText("自动记账使用指引").assertIsDisplayed()
+                InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand("input keyevent KEYCODE_BACK").close()
+                ui.waitUntil(5_000) { !ui.onNodeWithText("自动记账使用指引").isDisplayed() }
+                ui.onNodeWithText("识别账单详情").assertIsOff().performClick()
+                ui.onNodeWithText("识别账单详情？").assertIsDisplayed()
+                ui.onNodeWithText("开启").performClick()
+                ui.onNodeWithText("识别账单详情").assertIsOn()
                 ui.onAllNodesWithText("核对时关联账户")[0].performClick()
                 ui.onNodeWithText(credit.name).performClick()
                 ui.waitUntil(5_000) { shared.secrets.captureAccount(PaymentSource.WECHAT) == credit.id }
@@ -69,7 +77,12 @@ class PaymentCaptureUiTest {
                 // 停止页面订阅后模拟服务写入，再通过浮层 Intent 唤回，不能依赖缓存列表。
                 scenario.moveToState(Lifecycle.State.CREATED)
                 android.os.SystemClock.sleep(6_000)
-                val backgroundCapture = capture("c".repeat(64))!!
+                val historicalAt = java.time.LocalDate.of(2024, 2, 29).atTime(11, 30)
+                    .atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+                val backgroundCapture = runBlocking {
+                    shared.captures.enqueue(payment.copy(orderHash = "c".repeat(64), paidAt = historicalAt), "ui", now,
+                        shared.dataGeneration)
+                }!!
                 val reviewIntent = Intent(context, MainActivity::class.java)
                     .setAction(com.wmm.ledger.capture.REVIEW_PAYMENT_ACTION)
                     .putExtra(com.wmm.ledger.capture.PAYMENT_CAPTURE_ID, backgroundCapture.id)
@@ -85,6 +98,11 @@ class PaymentCaptureUiTest {
                 ui.waitUntil(10_000) { ui.onNodeWithText("核对微信支出").isDisplayed() }
                 ui.onNodeWithTag("entry-note").assertTextEquals("验收便利店")
                 assertEquals(2, runBlocking { shared.snapshot() }.entries.size)
+                ui.onNodeWithText(tag.name).performClick()
+                ui.onNodeWithText("保存流水").performClick()
+                ui.waitUntil(10_000) { runBlocking { shared.snapshot() }.entries.any { it.day == "2024-02-29" } }
+                assertEquals(historicalAt, runBlocking { shared.snapshot() }.entries.single { it.day == "2024-02-29" }.occurredAt)
+                assertEquals(-13_700L, runBlocking { shared.snapshot() }.accountBalances()[credit.id])
             }
         } finally {
             shared.secrets.setCaptureAccount(PaymentSource.WECHAT, originalBinding)

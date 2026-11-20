@@ -5,6 +5,7 @@ import android.content.ClipData
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
@@ -87,6 +88,9 @@ import com.wmm.ledger.ui.entryDrawerEnterMotion
 import com.wmm.ledger.ui.entryDrawerExitMotion
 import com.wmm.ledger.ui.ledgerNavigationHeight
 import com.wmm.ledger.ui.pageMotion
+import com.wmm.ledger.ui.PaymentCaptureConsentDialog
+import com.wmm.ledger.ui.openPaymentPermission
+import com.wmm.ledger.ui.paymentServiceEnabled
 import java.time.LocalDate
 import kotlinx.coroutines.delay
 
@@ -137,6 +141,7 @@ private data class Destination(val route: String?, val depth: Int)
 @Composable
 private fun LedgerApp(model: LedgerViewModel, appearance: Appearance, incomingCapture: String?, consumeCapture: () -> Unit) {
     val paymentModel: PaymentCaptureViewModel = viewModel()
+    val paymentOptions by paymentModel.options.collectAsStateWithLifecycle()
     val paymentAccounts by paymentModel.accounts.collectAsStateWithLifecycle()
     val assistant: LedgerAssistantViewModel = viewModel()
     val questionTurns by assistant.questions.collectAsStateWithLifecycle()
@@ -165,6 +170,26 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance, incomingCa
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    var paymentConsent by rememberSaveable { mutableStateOf(false) }
+    fun enablePaymentCapture(accepted: Boolean = false) {
+        if (paymentOptions.sources.isEmpty()) {
+            parent = "settings"
+            route = "auto-capture"
+            Toast.makeText(context, "请先选择微信或支付宝。", Toast.LENGTH_SHORT).show()
+        } else if (!paymentOptions.consent && !accepted) {
+            paymentConsent = true
+        } else {
+            paymentModel.enable(true, accepted)
+            if (!paymentServiceEnabled(context)) openPaymentPermission(context)
+        }
+    }
+    val setCaptureEnabled: (Boolean) -> Unit = { enabled ->
+        if (enabled) enablePaymentCapture() else paymentModel.enable(false)
+    }
+    if (paymentConsent) PaymentCaptureConsentDialog(onDismiss = { paymentConsent = false }) {
+        paymentConsent = false
+        enablePaymentCapture(accepted = true)
+    }
     LaunchedEffect(model, context, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             model.sharedBackups.collect { uri ->
@@ -317,8 +342,9 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance, incomingCa
                                         openModel = { parent = current; route = "model" },
                                         importBill = { parent = current; route = "bill-import" },
                                         scheduledBills = { parent = current; route = "scheduled-bills" },
-                                        autoCapture = { parent = current; route = "auto-capture" })
-                                    current == "auto-capture" -> com.wmm.ledger.ui.PaymentCaptureScreen(data, paymentModel, ::back) {
+                                        autoCapture = { parent = current; route = "auto-capture" },
+                                        captureEnabled = paymentOptions.enabled, setCaptureEnabled = setCaptureEnabled)
+                                    current == "auto-capture" -> com.wmm.ledger.ui.PaymentCaptureScreen(data, paymentModel, ::back, setCaptureEnabled) {
                                         parent = current; route = "capture:$it"
                                     }
                                     current.startsWith("capture:") -> {

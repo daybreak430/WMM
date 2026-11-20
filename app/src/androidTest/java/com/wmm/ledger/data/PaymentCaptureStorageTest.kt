@@ -21,6 +21,11 @@ class PaymentCaptureStorageTest {
         val payment = RecognizedPayment(PaymentSource.WECHAT, 1850, "验收便利店", "信用卡", "0".repeat(64))
         val capture = ledger.captures.enqueue(payment, "page-a", now, ledger.dataGeneration)!!
         assertEquals(capture.id, ledger.captures.enqueue(payment, "page-b", now, ledger.dataGeneration)!!.id)
+        val detail = payment.copy(paidAt = now - 1_000)
+        val enriched = ledger.captures.enqueue(detail, "detail", now, ledger.dataGeneration)!!
+        assertEquals(capture.id, enriched.id)
+        assertEquals(detail.paidAt, ledger.captures.pending(capture.id)?.paidAt)
+        assertEquals(1, ledger.captures.observe().first().pending.size)
         assertEquals(-10_000L, ledger.snapshot().accountBalances()[credit.id])
         val draft = Entry("", "EXPENSE", capture.cents, tag.id, credit.id, capture.merchant, now,
             LedgerRepository.bookingDay(now).toString())
@@ -30,6 +35,7 @@ class PaymentCaptureStorageTest {
         assertEquals(-11_850L, ledger.snapshot().accountBalances()[credit.id])
         assertTrue(ledger.captures.observe().first().pending.isEmpty())
         assertNull(ledger.captures.enqueue(payment, "page-c", now, ledger.dataGeneration))
+        assertNull(ledger.captures.enqueue(detail, "detail-reopened", now, ledger.dataGeneration))
         assertFalse(Backup.encode(ledger.snapshot()).decodeToString().contains("payment_captures"))
 
         val other = ledger.captures.enqueue(payment.copy(orderHash = "1".repeat(64)), "page", now, ledger.dataGeneration)!!

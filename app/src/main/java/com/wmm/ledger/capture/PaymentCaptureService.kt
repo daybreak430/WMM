@@ -73,10 +73,11 @@ class PaymentCaptureService : AccessibilityService() {
         pendingRead = scope.launch {
             delay(350)
             val root = rootInActiveWindow ?: return@launch
-            if (root.packageName?.toString() != source.packageName || !settings.snapshot().allows(source)) return@launch
+            val options = settings.snapshot()
+            if (root.packageName?.toString() != source.packageName || !options.allows(source)) return@launch
             val texts = runCatching { readText(root) }.getOrNull() ?: return@launch
             val now = System.currentTimeMillis()
-            val payment = PaymentScreenParser.parse(source, texts, now)
+            val payment = PaymentScreenParser.parse(source, texts, now, includeDetails = options.includeDetails)
             if (payment == null) {
                 if (texts.size >= 3) { session = UUID.randomUUID().toString(); lastFingerprint = null }
                 return@launch
@@ -84,12 +85,17 @@ class PaymentCaptureService : AccessibilityService() {
             if (source != activeSource) { session = UUID.randomUUID().toString(); lastFingerprint = null }
             activeSource = source
             val fingerprint = payment.fingerprint(session)
-            if (lastFingerprint == fingerprint) return@launch
-            lastFingerprint = fingerprint
+            val screenKey = "$fingerprint|${payment.paidAt ?: "success"}"
+            if (lastFingerprint == screenKey) return@launch
+            lastFingerprint = screenKey
             val generation = ledger.dataGeneration
             scope.launch { try {
+                val currentOptions = settings.snapshot()
+                if (!currentOptions.allows(source) || (payment.paidAt != null && !currentOptions.includeDetails)) return@launch
                 val capture = ledger.captures.enqueue(payment, session, now, generation) ?: return@launch
-                if (settings.snapshot().allows(source) && !getSystemService(KeyguardManager::class.java).isKeyguardLocked &&
+                val displayOptions = settings.snapshot()
+                if (displayOptions.allows(source) && (payment.paidAt == null || displayOptions.includeDetails) &&
+                    !getSystemService(KeyguardManager::class.java).isKeyguardLocked &&
                     getSystemService(PowerManager::class.java).isInteractive &&
                     rootInActiveWindow?.packageName?.toString() == source.packageName) overlay?.show(capture)
             } catch (_: kotlinx.coroutines.CancellationException) {

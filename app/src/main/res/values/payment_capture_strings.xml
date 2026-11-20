@@ -1,4 +1,4 @@
 <resources>
     <string name="payment_capture_service">记个账付款识别</string>
-    <string name="payment_capture_description">读取所选微信、支付宝的可访问页面文本，识别付款成功信息并提示核对记账。只在本机加密保存必要的账单字段，不上传页面内容，不执行支付或点击其他应用。可随时关闭。</string>
+    <string name="payment_capture_description">读取所选微信和支付宝的可访问文本，识别付款成功信息。开启账单详情识别后，也可核对打开的历史消费。识别结果在本机加密保存，核对保存才入账。可随时关闭。</string>
 </resources>

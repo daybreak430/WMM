@@ -25,6 +25,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -39,6 +40,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -67,7 +70,8 @@ internal class OpenLocal : ActivityResultContracts.OpenDocument() {
 @Composable
 internal fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, activeProvider: Provider, hasKey: Boolean,
     fileBusy: Boolean, appearance: Appearance, back: () -> Unit, assets: () -> Unit, tags: () -> Unit, openModel: () -> Unit,
-    importBill: () -> Unit, scheduledBills: () -> Unit, autoCapture: () -> Unit) {
+    importBill: () -> Unit, scheduledBills: () -> Unit, autoCapture: () -> Unit,
+    captureEnabled: Boolean, setCaptureEnabled: (Boolean) -> Unit) {
     var editNickname by rememberSaveable { mutableStateOf(false) }
     var avatarOptions by rememberSaveable { mutableStateOf(false) }
     var exportWarning by rememberSaveable { mutableStateOf(false) }
@@ -131,7 +135,10 @@ internal fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, active
                     Hairline(14)
                     SettingsRow("定时账单", icon = Glyph.CALENDAR, onClick = scheduledBills)
                     Hairline(14)
-                    SettingsRow("自动记账", icon = Glyph.SPARK, onClick = autoCapture)
+                    SettingsRow("自动记账", icon = Glyph.SPARK, endContent = {
+                        Switch(captureEnabled, onCheckedChange = setCaptureEnabled,
+                            modifier = Modifier.semantics { contentDescription = "自动记账开关" })
+                    }, onClick = autoCapture)
                 }
             }
             item("preferences") {

@@ -32,10 +32,17 @@ internal class PaymentCaptureRepository(private val database: LedgerDatabase, pr
             if (generation != ledger.dataGeneration) return@withTransaction null
             dao.prune(now - RETENTION)
             val fingerprint = payment.fingerprint(session)
-            dao.byFingerprint(fingerprint)?.let { return@withTransaction it.takeIf { row -> row.status == "PENDING" } }
+            dao.byFingerprint(fingerprint)?.let { existing ->
+                if (existing.status != "PENDING") return@withTransaction null
+                // 付款成功页已有待核对记录时，用详情页补全原交易时间，保留同一条候选。
+                if (existing.paidAt == null && payment.paidAt != null) {
+                    return@withTransaction existing.copy(paidAt = payment.paidAt).also { dao.update(it) }
+                }
+                return@withTransaction existing
+            }
             if (dao.pending().size >= 200) throw LedgerError("待核对账单已达 200 条，请先处理。")
             PaymentCapture(UUID.randomUUID().toString(), payment.source.name, payment.cents, payment.merchant,
-                payment.method, now, fingerprint).also { dao.insert(it) }
+                payment.method, now, fingerprint, paidAt = payment.paidAt).also { dao.insert(it) }
         } }
 
     suspend fun ignore(id: String) = withContext(Dispatchers.IO) { database.withTransaction {

@@ -58,4 +58,38 @@ class PaymentScreenParserTest {
         assertEquals(listOf(same), capture.similarEntries(listOf(same)))
         assertTrue(capture.similarEntries(listOf(same.copy(note = "另一家店"))).isEmpty())
     }
+
+    @Test fun detailsRequireOptInAndKeepOriginalTimeAndCrossScreenOrderIdentity() {
+        val order = "202611201234567890"
+        val wechat = listOf("返回", "账单详情", "测试便利店", "-18.50", "当前状态", "支付成功",
+            "商品", "午餐", "商户全称", "测试便利店", "支付时间", "2024-02-29 13:14:15",
+            "支付方式", "零钱", "交易单号", order)
+        val alipay = listOf("账单详情", "测试便利店", "−￥18.50", "交易成功", "付款时间：2024年2月29日 13:14:15",
+            "付款方式", "花呗", "支付宝交易号：$order", "申请退款")
+        listOf(PaymentSource.WECHAT to wechat, PaymentSource.ALIPAY to alipay).forEach { (source, detail) ->
+            assertNull(PaymentScreenParser.parse(source, detail, now))
+            val capture = PaymentScreenParser.parse(source, detail, now, includeDetails = true)!!
+            assertEquals(1850L, capture.cents)
+            assertEquals("测试便利店", capture.merchant)
+            assertEquals(java.time.LocalDate.of(2024, 2, 29), LedgerRepository.bookingDay(capture.paidAt!!))
+            assertEquals(PaymentScreenParser.parse(source, base, now)!!.fingerprint("payment"), capture.fingerprint("detail"))
+        }
+    }
+
+    @Test fun detailExcludesNonExpensesAndDoesNotGuessMissingTransactionData() {
+        val detail = listOf("账单详情", "测试便利店", "-18.50", "交易成功", "付款时间", "2025-03-18 12:34:56")
+        fun parse(lines: List<String>) = PaymentScreenParser.parse(PaymentSource.ALIPAY, lines, now, includeDetails = true)
+        val payment = parse(detail)!!
+        assertEquals(payment.fingerprint("first"), payment.fingerprint("second"))
+        assertNotEquals(payment.fingerprint("first"), parse(detail.dropLast(1) + "2025-03-18 12:35:56")!!.fingerprint("first"))
+        listOf(
+            listOf("账单") + detail.drop(1), detail.dropLast(2), detail.dropLast(1) + "2025-03-18 12:34",
+            detail.dropLast(1) + "2099-03-18 12:34:56", detail + "已部分退款", detail + "交易类型: 转账",
+            detail + "当前状态: 交易关闭", detail.map { if (it == "-18.50") "+18.50" else it },
+            detail.map { if (it == "测试便利店") "信用卡还款" else it },
+            detail.map { if (it == "-18.50") "18.50" else it },
+            detail.take(2) + listOf("优惠金额", "-2.50") + detail.drop(3),
+            detail.take(3) + "-2.50" + detail.drop(3),
+        ).forEach { assertNull(it.toString(), parse(it)) }
+    }
 }

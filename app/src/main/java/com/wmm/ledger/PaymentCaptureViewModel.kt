@@ -42,6 +42,7 @@ internal class PaymentCaptureViewModel(application: Application) : AndroidViewMo
     } }
 
     fun enable(value: Boolean, consent: Boolean = false) = settings.setEnabled(value, consent)
+    fun includeDetails(value: Boolean) = settings.setIncludeDetails(value)
     fun selectSource(source: PaymentSource, value: Boolean) = settings.setSource(source, value)
     fun bind(source: PaymentSource, accountId: String?) = action {
         withContext(Dispatchers.IO) { ledger.secrets.setCaptureAccount(source, accountId) }
