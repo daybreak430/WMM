@@ -54,6 +54,7 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
     private val repository = LedgerRepository.shared(application)
     private val resolver = application.contentResolver
     private val appearancePrefs = application.getSharedPreferences("appearance", Context.MODE_PRIVATE)
+    private val launchPrefs = application.getSharedPreferences("launch", Context.MODE_PRIVATE)
     private val habitLocationPrefs = application.getSharedPreferences("habit_location", Context.MODE_PRIVATE)
     private val locateHabits = MutableStateFlow(habitLocationPrefs.getBoolean("enabled", false))
     internal val habitLocation = locateHabits.asStateFlow()
@@ -65,6 +66,8 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
         Appearance.entries.firstOrNull { it.name == appearancePrefs.getString("mode", null) } ?: Appearance.SYSTEM,
     )
     internal val appearance = preferredAppearance.asStateFlow()
+    private val launchEntry = MutableStateFlow(launchPrefs.getBoolean("open_entry", false))
+    internal val openEntryOnLaunch = launchEntry.asStateFlow()
     private val backupShares = Channel<Uri>(Channel.BUFFERED)
     val sharedBackups = backupShares.receiveAsFlow()
 
@@ -253,6 +256,11 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
     internal fun selectAppearance(appearance: Appearance) {
         appearancePrefs.edit().putString("mode", appearance.name).apply()
         preferredAppearance.value = appearance
+    }
+
+    internal fun setOpenEntryOnLaunch(enabled: Boolean) {
+        launchPrefs.edit().putBoolean("open_entry", enabled).apply()
+        launchEntry.value = enabled
     }
 
     fun selectProvider(provider: Provider) {

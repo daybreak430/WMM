@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
@@ -20,6 +21,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -187,6 +189,17 @@ fun SettingsRow(title: String, description: String? = null, icon: Glyph? = null,
 fun Hairline(inset: Int = 0) = HorizontalDivider(
     Modifier.padding(horizontal = inset.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .78f),
 )
+
+@Composable
+internal fun SettingsSwitchRow(title: String, checked: Boolean, icon: Glyph? = null, onToggle: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth().toggleable(checked, role = Role.Switch, onValueChange = onToggle)
+        .padding(horizontal = 14.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        if (icon != null) IconBadge(icon)
+        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+        Switch(checked, onCheckedChange = null)
+    }
+}
 
 @Composable
 fun ConfirmDialog(title: String, text: String, action: String, onDismiss: () -> Unit, onConfirm: () -> Unit) {

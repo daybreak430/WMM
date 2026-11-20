@@ -112,6 +112,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         readCaptureRequest(intent)
+        val desktopLaunch = savedInstanceState == null && intent?.action == Intent.ACTION_MAIN &&
+            intent?.hasCategory(Intent.CATEGORY_LAUNCHER) == true
         enableEdgeToEdge()
         setContent {
             val model: LedgerViewModel = viewModel()
@@ -128,7 +130,7 @@ class MainActivity : ComponentActivity() {
                 )
             }
             val request by captureRequest.collectAsStateWithLifecycle()
-            LedgerTheme(dark) { LedgerApp(model, appearance, request) {
+            LedgerTheme(dark) { LedgerApp(model, appearance, request, desktopLaunch && model.openEntryOnLaunch.value) {
                 captureRequest.value = null
                 intent?.removeExtra(com.wmm.ledger.capture.PAYMENT_CAPTURE_ID)
             } }
@@ -139,7 +141,8 @@ class MainActivity : ComponentActivity() {
 private data class Destination(val route: String?, val depth: Int)
 
 @Composable
-private fun LedgerApp(model: LedgerViewModel, appearance: Appearance, incomingCapture: String?, consumeCapture: () -> Unit) {
+private fun LedgerApp(model: LedgerViewModel, appearance: Appearance, incomingCapture: String?,
+    startWithEntry: Boolean, consumeCapture: () -> Unit) {
     val paymentModel: PaymentCaptureViewModel = viewModel()
     val paymentOptions by paymentModel.options.collectAsStateWithLifecycle()
     val paymentAccounts by paymentModel.accounts.collectAsStateWithLifecycle()
@@ -153,7 +156,8 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance, incomingCa
     val fileBusy by model.fileBusy.collectAsStateWithLifecycle()
     var tabName by rememberSaveable { mutableStateOf(Tab.LEDGER.name) }
     val tab = if (tabName == Tab.STATS.name) Tab.STATS else Tab.LEDGER
-    var route by rememberSaveable { mutableStateOf<String?>(null) }
+    // 只给桌面新启动设置初始页面，已有页面和核对入口沿用各自的路由。
+    var route by rememberSaveable { mutableStateOf(if (startWithEntry && incomingCapture == null) "new" else null) }
     var parent by rememberSaveable { mutableStateOf<String?>(null) }
     var periodName by rememberSaveable { mutableStateOf(Period.MONTH.name) }
     var dayText by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }

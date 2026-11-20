@@ -11,20 +11,15 @@ import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -81,13 +76,13 @@ internal fun PaymentCaptureScreen(data: LedgerSnapshot, model: PaymentCaptureVie
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item("permission") {
                 GroupCard { Column {
-                    CaptureSwitch("自动识别付款", options.enabled, setCaptureEnabled)
+                    SettingsSwitchRow("自动识别付款", options.enabled, onToggle = setCaptureEnabled)
                     Hairline(14)
                     SettingsRow("系统无障碍服务", end = if (connected) "已开启" else "去开启", icon = Glyph.EYE) {
                         if (options.enabled) openPaymentPermission(context) else setCaptureEnabled(true)
                     }
                     Hairline(14)
-                    CaptureSwitch("识别账单详情", options.includeDetails) {
+                    SettingsSwitchRow("识别账单详情", options.includeDetails) {
                         if (it) detailsConsent = true else model.includeDetails(false)
                     }
                     Hairline(14)
@@ -100,7 +95,7 @@ internal fun PaymentCaptureScreen(data: LedgerSnapshot, model: PaymentCaptureVie
                 GroupCard { Column {
                     PaymentSource.entries.forEachIndexed { index, source ->
                         if (index > 0) Hairline(14)
-                        CaptureSwitch(source.title, source.name in options.sources) { model.selectSource(source, it) }
+                        SettingsSwitchRow(source.title, source.name in options.sources) { model.selectSource(source, it) }
                         val account = data.accounts.firstOrNull { it.id == bindings[source] && !it.archived }
                         SettingsRow("核对时关联账户", icon = Glyph.WALLET, end = account?.name ?: "不关联") {
                             bindingSource = source.name
@@ -196,13 +191,4 @@ private fun PaymentCaptureGuide(close: () -> Unit) {
             Text("3. 点浮层上的「核对」，检查金额、日期和账户，再保存。点「稍后」的账单可回到这里继续核对。")
         }
     }, confirmButton = { TextButton(onClick = close) { Text("知道了") } })
-}
-
-@Composable
-private fun CaptureSwitch(title: String, checked: Boolean, change: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().toggleable(checked, role = Role.Switch, onValueChange = change)
-        .padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-        Switch(checked, onCheckedChange = null)
-    }
 }

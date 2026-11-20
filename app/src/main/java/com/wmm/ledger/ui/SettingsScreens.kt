@@ -76,6 +76,7 @@ internal fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, active
     var avatarOptions by rememberSaveable { mutableStateOf(false) }
     var exportWarning by rememberSaveable { mutableStateOf(false) }
     val habitLocation by model.habitLocation.collectAsStateWithLifecycle()
+    val openEntryOnLaunch by model.openEntryOnLaunch.collectAsStateWithLifecycle()
     val netAssetAmount = remember(data) { currency(data.netAssetTotal()) }
     var netAssetVisible by rememberSaveable { mutableStateOf(false) }
     var explainLocation by rememberSaveable { mutableStateOf(false) }
@@ -139,6 +140,9 @@ internal fun SettingsScreen(data: LedgerSnapshot, model: LedgerViewModel, active
                         Switch(captureEnabled, onCheckedChange = setCaptureEnabled,
                             modifier = Modifier.semantics { contentDescription = "自动记账开关" })
                     }, onClick = autoCapture)
+                    Hairline(14)
+                    SettingsSwitchRow("启动时打开记一笔", openEntryOnLaunch, icon = Glyph.BOOK,
+                        onToggle = model::setOpenEntryOnLaunch)
                 }
             }
             item("preferences") {
