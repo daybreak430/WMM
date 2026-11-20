@@ -20,6 +20,10 @@ internal class PaymentCaptureRepository(private val database: LedgerDatabase, pr
 
     suspend fun prune(now: Long = System.currentTimeMillis()) = withContext(Dispatchers.IO) { dao.prune(now - RETENTION) }
 
+    suspend fun pending(id: String): PaymentCapture? = withContext(Dispatchers.IO) {
+        dao.get(id)?.takeIf { it.status == "PENDING" && System.currentTimeMillis() - it.observedAt <= RETENTION }
+    }
+
     suspend fun enqueue(payment: RecognizedPayment, session: String, now: Long, generation: Long): PaymentCapture? =
         withContext(Dispatchers.IO) { database.withTransaction {
             if (payment.cents !in 1..MAX_CENTS || payment.merchant.length !in 2..80 || payment.method.length > 48) {

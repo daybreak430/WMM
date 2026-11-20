@@ -50,6 +50,16 @@ internal class PaymentCaptureViewModel(application: Application) : AndroidViewMo
     fun ignore(id: String) = action { ledger.captures.ignore(id) }
     fun clear() = action { ledger.captures.clear() }
     fun dismissError() { failure.value = null }
+
+    suspend fun review(id: String) = try {
+        // 后台停止订阅后列表可能仍是旧值，核对入口必须重新读取数据库。
+        ledger.captures.pending(id)
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        failure.value = "无法读取识别记录，请重试。"
+        null
+    }
     private fun action(block: suspend () -> Unit) = viewModelScope.launch {
         try { block() }
         catch (error: CancellationException) { throw error }

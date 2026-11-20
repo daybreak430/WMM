@@ -137,7 +137,6 @@ private data class Destination(val route: String?, val depth: Int)
 @Composable
 private fun LedgerApp(model: LedgerViewModel, appearance: Appearance, incomingCapture: String?, consumeCapture: () -> Unit) {
     val paymentModel: PaymentCaptureViewModel = viewModel()
-    val paymentState by paymentModel.captures.collectAsStateWithLifecycle()
     val paymentAccounts by paymentModel.accounts.collectAsStateWithLifecycle()
     val assistant: LedgerAssistantViewModel = viewModel()
     val questionTurns by assistant.questions.collectAsStateWithLifecycle()
@@ -206,13 +205,11 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance, incomingCa
         }
     }
 
-    LaunchedEffect(incomingCapture, paymentState.loaded, snapshot != null) {
-        if (incomingCapture != null && paymentState.loaded && snapshot != null) {
+    LaunchedEffect(incomingCapture, snapshot != null) {
+        if (incomingCapture != null && snapshot != null) {
             consumeCapture()
-            if (paymentState.pending.any { it.id == incomingCapture }) {
-                parent = "auto-capture"
-                route = "capture:$incomingCapture"
-            } else snackbar.showSnackbar("识别记录已处理或过期。")
+            parent = "auto-capture"
+            route = "capture:$incomingCapture"
         }
     }
 
@@ -325,11 +322,20 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance, incomingCa
                                         parent = current; route = "capture:$it"
                                     }
                                     current.startsWith("capture:") -> {
-                                        val capture = remember(current) { paymentState.pending.firstOrNull { it.id == current.substringAfter(':') } }
+                                        val review by produceState<Pair<Boolean, com.wmm.ledger.data.PaymentCapture?>>(
+                                            false to null, current) {
+                                            value = true to paymentModel.review(current.substringAfter(':'))
+                                        }
+                                        val capture = review.second
                                         if (capture != null) EntryEditor(data, null, model, capture,
                                             paymentAccounts[com.wmm.ledger.data.PaymentSource.valueOf(capture.source)]) {
                                             if (route == current) back()
-                                        } else LaunchedEffect(current) { if (route == current) back() }
+                                        } else if (!review.first) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                            CircularProgressIndicator()
+                                        } else LaunchedEffect(current) {
+                                            if (route == current) back()
+                                            snackbar.showSnackbar("识别记录已处理或过期。")
+                                        }
                                     }
                                     current == "scheduled-bills" -> ScheduledBillsScreen(data, ::back) { id ->
                                         parent = current

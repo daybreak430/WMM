@@ -1,6 +1,8 @@
 package com.wmm.ledger
 
 import android.content.Context
+import android.content.Intent
+import androidx.lifecycle.Lifecycle
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
@@ -20,11 +22,12 @@ class PaymentCaptureUiTest {
         val originalOptions = prefs.all.toMap()
         val originalBinding = shared.secrets.captureAccount(PaymentSource.WECHAT)
         prefs.edit().clear().commit()
+        shared.secrets.setCaptureAccount(PaymentSource.WECHAT, null)
         val now = System.currentTimeMillis() - 500
         val tag = Tag("capture-meal", "EXPENSE", "验收餐饮")
         val credit = Account("capture-credit", "CREDIT", "验收信用账户", -10_000, now - 10_000)
         try {
-            withLedger(LedgerSnapshot(tags = listOf(tag), accounts = listOf(credit))) { _, _ ->
+            withLedger(LedgerSnapshot(tags = listOf(tag), accounts = listOf(credit))) { _, scenario ->
                 ui.waitUntil(10_000) { ui.onNodeWithContentDescription("个人设置").isDisplayed() }
                 ui.onNodeWithContentDescription("个人设置").performClick()
                 ui.onNodeWithText("自动记账").performScrollTo().performClick()
@@ -63,6 +66,25 @@ class PaymentCaptureUiTest {
                 ui.waitUntil(10_000) { ui.onNodeWithText("待核对 · 0").isDisplayed() }
                 assertEquals(2, runBlocking { shared.snapshot() }.entries.size)
                 assertEquals(-13_700L, runBlocking { shared.snapshot() }.accountBalances()[credit.id])
+                // 停止页面订阅后模拟服务写入，再通过浮层 Intent 唤回，不能依赖缓存列表。
+                scenario.moveToState(Lifecycle.State.CREATED)
+                android.os.SystemClock.sleep(6_000)
+                val backgroundCapture = capture("c".repeat(64))!!
+                val reviewIntent = Intent(context, MainActivity::class.java)
+                    .setAction(com.wmm.ledger.capture.REVIEW_PAYMENT_ACTION)
+                    .putExtra(com.wmm.ledger.capture.PAYMENT_CAPTURE_ID, backgroundCapture.id)
+                scenario.moveToState(Lifecycle.State.RESUMED)
+                scenario.onActivity { activity ->
+                    val launchIntent = activity.intent
+                    InstrumentationRegistry.getInstrumentation().callActivityOnNewIntent(activity, reviewIntent)
+                    // ActivityScenario 按启动 Intent 跟踪生命周期，恢复测试启动标记后继续验证重建。
+                    activity.intent = launchIntent
+                }
+                ui.waitUntil(10_000) { ui.onNodeWithText("核对微信支出").isDisplayed() }
+                scenario.recreate()
+                ui.waitUntil(10_000) { ui.onNodeWithText("核对微信支出").isDisplayed() }
+                ui.onNodeWithTag("entry-note").assertTextEquals("验收便利店")
+                assertEquals(2, runBlocking { shared.snapshot() }.entries.size)
             }
         } finally {
             shared.secrets.setCaptureAccount(PaymentSource.WECHAT, originalBinding)

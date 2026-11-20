@@ -92,7 +92,14 @@ internal object PaymentScreenParser {
         lines.forEachIndexed { index, line ->
             if (line in listOf("¥", "￥") && index + 1 < lines.size) amount(lines[index + 1])?.let(allAmounts::add)
         }
-        val cents = (if (labeledAmounts.isNotEmpty()) labeledAmounts else allAmounts).distinct().singleOrNull() ?: return null
+        // 无实付标签时只认成功标题紧邻的金额，同时要求整页金额无歧义，避免将优惠或余额当作支出。
+        val header = lines.drop(successIndex + 1).take(2)
+        val headerAmount = header.firstOrNull()?.let { first ->
+            if (first == "¥" || first == "￥") header.getOrNull(1)?.let(::amount) else amount(first)
+        }
+        val cents = if (labeledAmounts.isNotEmpty()) labeledAmounts.singleOrNull()
+            else headerAmount?.takeIf { allAmounts.distinct() == listOf(it) }
+        if (cents == null) return null
         val merchant = labelValue(lines, merchantLabels)?.take(80)?.takeIf { it.length >= 2 && !money.containsMatchIn(it) && amount(it) == null } ?: return null
         val method = labelValue(lines, methodLabels).orEmpty().replace(Regex("\\d{5,}"), "••••").take(48)
         val order = labelValue(lines, orderLabels)?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{8,80}")) }

@@ -43,6 +43,10 @@ class PaymentScreenParserTest {
         }
         assertNull(PaymentScreenParser.parse(PaymentSource.WECHAT, listOf("支付成功", "¥18.50", "收款方", "付款方式", "零钱"), now))
         assertNull(PaymentScreenParser.parse(PaymentSource.WECHAT, base + "付款时间 2020-01-01 12:00", now))
+        listOf("优惠金额", "账户余额", "原价").forEach { label ->
+            assertNull(PaymentScreenParser.parse(PaymentSource.WECHAT,
+                listOf("支付成功", label, "¥2.50", "收款方", "验收便利店"), now))
+        }
     }
 
     @Test fun missingOrderIdOnlyCoalescesTheSameVisiblePaymentSession() {
