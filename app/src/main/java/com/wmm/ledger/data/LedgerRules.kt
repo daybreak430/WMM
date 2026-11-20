@@ -109,11 +109,26 @@ fun editableAmount(cents: Long): String = BigDecimal.valueOf(cents, 2).toPlainSt
 fun validName(name: String): Boolean =
     name.isNotBlank() && name.length <= MAX_NAME && name.none { it.isISOControl() }
 
+internal fun LedgerSnapshot.refundTotals(excluding: String? = null): Map<String, Long> = entries
+    .filter { it.refundOfId != null && it.id != excluding }.groupBy { requireNotNull(it.refundOfId) }
+    .mapValues { (_, refunds) -> refunds.sumOf(Entry::cents) }
+
+internal fun LedgerSnapshot.netEntries(): List<Entry> {
+    val refunds = refundTotals()
+    if (refunds.isEmpty()) return entries
+    // 按原消费的日期和分类计算净支出，退款的实际日期仍用于流水和账户余额。
+    return entries.mapNotNull { entry ->
+        if (entry.refundOfId != null) return@mapNotNull null
+        val refunded = refunds[entry.id] ?: return@mapNotNull entry
+        (entry.cents - refunded).takeIf { it > 0 }?.let { entry.copy(cents = it) }
+    }
+}
+
 fun LedgerSnapshot.stats(period: Period, day: LocalDate, today: LocalDate): PeriodStats {
     val start = period.start(day)
     val end = period.step(start, 1).toString()
     val startDay = start.toString()
-    val selected = entries.filter { it.day >= startDay && it.day < end }
+    val selected = netEntries().filter { it.day >= startDay && it.day < end }
     val byTag = tags.associateBy { it.id }
     val totals = selected.groupBy { it.tagId }.mapNotNull { (id, entries) ->
         byTag[id]?.let { TagTotal(it, entries.sumOf(Entry::cents), entries.size) }
@@ -144,7 +159,7 @@ fun LedgerSnapshot.accountBalances(): Map<String, Long> {
     for (entry in entries) {
         val account = accountById[entry.accountId] ?: continue
         if (entry.occurredAt <= account.calibratedAt) continue
-        val delta = if (entry.kind == Kind.INCOME.name) entry.cents else -entry.cents
+        val delta = if (entry.kind == Kind.INCOME.name || entry.refundOfId != null) entry.cents else -entry.cents
         balances[account.id] = balances.getValue(account.id) + delta
     }
     // 转账两端分别按各自的校准时间判断，信用账户收款会减少欠款；转账独立存储以免重复计入收支。

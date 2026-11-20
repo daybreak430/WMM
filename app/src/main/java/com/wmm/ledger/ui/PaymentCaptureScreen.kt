@@ -1,6 +1,8 @@
 package com.wmm.ledger.ui
 
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
@@ -29,6 +31,9 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wmm.ledger.PaymentCaptureViewModel
+import com.wmm.ledger.BuildConfig
+import com.wmm.ledger.capture.PaymentCaptureDiagnostics
+import com.wmm.ledger.capture.PaymentDiagnosticResult
 import com.wmm.ledger.capture.PaymentCaptureService
 import com.wmm.ledger.data.LedgerSnapshot
 import com.wmm.ledger.data.PaymentSource
@@ -57,6 +62,7 @@ internal fun PaymentCaptureScreen(data: LedgerSnapshot, model: PaymentCaptureVie
     val error by model.error.collectAsStateWithLifecycle()
     var connected by remember { mutableStateOf(paymentServiceEnabled(context)) }
     var guide by rememberSaveable { mutableStateOf(false) }
+    var diagnostics by rememberSaveable { mutableStateOf(false) }
     var detailsConsent by rememberSaveable { mutableStateOf(false) }
     var clear by rememberSaveable { mutableStateOf(false) }
     var bindingSource by rememberSaveable { mutableStateOf<String?>(null) }
@@ -86,6 +92,8 @@ internal fun PaymentCaptureScreen(data: LedgerSnapshot, model: PaymentCaptureVie
                     }
                     Hairline(14)
                     SettingsRow("使用指引", icon = Glyph.BOOK) { guide = true }
+                    Hairline(14)
+                    SettingsRow("识别诊断", icon = Glyph.SEARCH) { diagnostics = true }
                 } }
             }
             item("sources") {
@@ -105,7 +113,7 @@ internal fun PaymentCaptureScreen(data: LedgerSnapshot, model: PaymentCaptureVie
             items(captures.pending, key = { it.id }) { capture ->
                 GroupCard { Column {
                     val source = PaymentSource.valueOf(capture.source)
-                    SettingsRow(capture.merchant, description = source.title + " · " +
+                    SettingsRow(capture.merchant, description = source.title + " · " + capture.type.title + " · " +
                         Instant.ofEpochMilli(capture.bookingAt).atZone(ZoneId.systemDefault()).toLocalDate(),
                         icon = Glyph.BOOK, end = currency(capture.cents)) { review(capture.id) }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -117,8 +125,9 @@ internal fun PaymentCaptureScreen(data: LedgerSnapshot, model: PaymentCaptureVie
         }
     }
     if (guide) PaymentCaptureGuide { guide = false }
+    if (diagnostics) PaymentDiagnosticsDialog { diagnostics = false }
     if (detailsConsent) ConfirmDialog("识别账单详情？",
-        "打开微信或支付宝的一笔账单时，会读取可访问的交易信息，将识别到的消费放入待核对。金额、商户、付款方式、交易时间和去重标识仅在本机加密保存 30 天。",
+        "打开微信或支付宝的一笔账单时，会读取可访问的交易信息，将识别到的消费、支付宝退款和还款放入待核对。必要的交易信息和去重标识仅在本机加密保存 30 天。",
         "开启", { detailsConsent = false }) { detailsConsent = false; model.includeDetails(true) }
     if (clear) ConfirmDialog("清除本机识别记录？", "待核对记录和去重记录将移除，已保存流水不受影响。", "清除",
         { clear = false }) { clear = false; model.clear() }
@@ -137,6 +146,37 @@ internal fun PaymentCaptureScreen(data: LedgerSnapshot, model: PaymentCaptureVie
             }
         }, confirmButton = { TextButton(onClick = { bindingSource = null }) { Text("关闭") } })
     }
+}
+
+@Composable
+private fun PaymentDiagnosticsDialog(close: () -> Unit) {
+    val context = LocalContext.current
+    val results by PaymentCaptureDiagnostics.state.collectAsStateWithLifecycle()
+    val connected by PaymentCaptureDiagnostics.connected.collectAsStateWithLifecycle()
+    val summary = buildString {
+        appendLine("记个账 ${BuildConfig.VERSION_NAME} · Android API ${android.os.Build.VERSION.SDK_INT}")
+        appendLine(if (connected) "识别服务已连接" else "识别服务未连接")
+        results?.let { snapshot ->
+            PaymentSource.entries.forEach { source ->
+                val result = snapshot[source] ?: PaymentDiagnosticResult()
+                appendLine("${source.title} · ${result.stage.title} · ${result.events} 个事件")
+                if (result.signals.isNotEmpty()) appendLine("找到字段 ${result.signals.joinToString("、")}")
+            }
+        }
+    }.trimEnd()
+    LedgerAlertDialog(close, title = { Text("识别诊断") }, text = {
+        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("开始后，在两分钟内打开一笔账单并停留几秒，再回这里查看。诊断仅记录处理阶段和字段名称。")
+            Text(summary)
+            if (results != null) TextButton(onClick = {
+                context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("识别诊断", summary))
+            }) { Text("复制结果") }
+        }
+    }, confirmButton = {
+        TextButton(onClick = { PaymentCaptureDiagnostics.start(); close() }) {
+            Text(if (results == null) "开始诊断" else "重新诊断")
+        }
+    }, dismissButton = { TextButton(onClick = close) { Text("关闭") } })
 }
 
 @Composable

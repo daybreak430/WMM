@@ -32,7 +32,7 @@ class LedgerRepository(context: Context) {
         Room.databaseBuilder(app, LedgerDatabase::class.java, DATABASE_NAME)
             .openHelperFactory(SupportOpenHelperFactory(key))
             .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
-                MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+                MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
             .build()
     }
     private val dao get() = database.ledger()
@@ -119,6 +119,16 @@ class LedgerRepository(context: Context) {
         if (day !in FIRST_DAY..LAST_DAY || occurredAt > System.currentTimeMillis()) throw LedgerError("请选择有效的发生日期和时间。")
         database.withTransaction {
             val old = id?.let { dao.entry(it) ?: throw LedgerError("流水已变更，请重新打开。") }
+            if (old?.refundOfId != null) throw LedgerError("请在退款详情中编辑这笔流水。")
+            if (old != null) {
+                val refunded = dao.refundedCents(old.id)
+                if (refunded > 0 && (kind != Kind.EXPENSE || cents < refunded)) {
+                    throw LedgerError("原支出金额不能低于已退款金额。")
+                }
+                if (refunded > 0 && dao.earliestRefundDay(old.id)?.let { day.toString() > it } == true) {
+                    throw LedgerError("原支出日期不能晚于关联的退款。")
+                }
+            }
             val tag = dao.tag(tagId)
             if (tag?.kind != kind.name || tag.archived && old?.tagId != tagId) throw LedgerError("请选择一个有效标签。")
             if (accountId != null) {
@@ -134,7 +144,36 @@ class LedgerRepository(context: Context) {
         }
     }
 
-    suspend fun deleteEntry(id: String) = withContext(Dispatchers.IO) { dao.deleteEntry(id) }
+    suspend fun deleteEntry(id: String) = withContext(Dispatchers.IO) {
+        database.withTransaction {
+            if (dao.refundedCents(id) > 0) throw LedgerError("这笔支出关联了退款，请先处理退款流水。")
+            dao.deleteEntry(id)
+        }
+    }
+
+    internal suspend fun saveRefund(id: String?, originalId: String, cents: Long, accountId: String?,
+        note: String, occurredAt: Long, day: LocalDate): Entry = withContext(Dispatchers.IO) {
+        database.withTransaction {
+            val old = id?.let { dao.entry(it)?.takeIf { row -> row.refundOfId != null }
+                ?: throw LedgerError("退款已变更，请重新打开。") }
+            val original = dao.entry(originalId)?.takeIf { it.isOriginalExpense }
+                ?: throw LedgerError("请选择一笔有效的原支出。")
+            if (day !in FIRST_DAY..LAST_DAY || day.toString() < original.day || occurredAt > System.currentTimeMillis()) {
+                throw LedgerError("退款日期须在原支出当天或之后。")
+            }
+            if (cents !in 1..(original.cents - dao.refundedCents(original.id, id))) {
+                throw LedgerError("退款金额不能超过原支出剩余可退金额。")
+            }
+            if (accountId != null) {
+                val account = dao.account(accountId)
+                if (account == null || account.archived && old?.accountId != accountId) throw LedgerError("请选择可用的到账账户。")
+            }
+            // 退款使用单独流水保存到账日期，统计通过关联关系扣减原消费。
+            Entry(old?.id ?: newId(), Kind.EXPENSE.name, cents, original.tagId, accountId,
+                note.trim().take(MAX_NOTE), occurredAt, day.toString(), original.sceneId, hasTime = false,
+                refundOfId = original.id).also { dao.save(it) }
+        }
+    }
 
     internal suspend fun saveTransfer(
         id: String?, cents: Long, fromAccountId: String, toAccountId: String,
@@ -156,8 +195,8 @@ class LedgerRepository(context: Context) {
                 throw LedgerError("请选择可用的转出和转入账户。")
             }
             // 一条转账同时表达两端的余额变化，避免保存中断只写入一端。
-            dao.save(Transfer(old?.id ?: newId(), cents, fromAccountId, toAccountId,
-                note.trim().take(MAX_NOTE), occurredAt, day.toString(), hasTime))
+            Transfer(old?.id ?: newId(), cents, fromAccountId, toAccountId,
+                note.trim().take(MAX_NOTE), occurredAt, day.toString(), hasTime).also { dao.save(it) }
         }
     }
 
@@ -345,7 +384,7 @@ class LedgerRepository(context: Context) {
         val request = BillImport.request(provider, source, LocalDate.now(), labels)
         val reply = modelClient.send(provider, key, request, readTimeout = 120_000)
         val current = snapshot()
-        val parsed = BillImport.parse(reply, source.fingerprint, current.entries, BillLabels(current))
+        val parsed = BillImport.parse(reply, source.fingerprint, current.entries.filter { it.refundOfId == null }, BillLabels(current))
         val habits = LedgerHabits(current)
         parsed.copy(rows = parsed.rows.map(habits::classify))
     }

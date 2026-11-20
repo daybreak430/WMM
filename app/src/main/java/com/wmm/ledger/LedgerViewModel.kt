@@ -203,9 +203,19 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
 
     internal fun saveTransfer(
         id: String?, cents: Long, from: String, to: String, note: String, at: Long,
-        day: LocalDate, hasTime: Boolean, done: () -> Unit,
+        day: LocalDate, hasTime: Boolean, done: () -> Unit, captureId: String? = null,
     ) = perform("无法保存转账。") {
-        repository.saveTransfer(id, cents, from, to, note, at, day, hasTime)
+        if (captureId == null) repository.saveTransfer(id, cents, from, to, note, at, day, hasTime)
+        else repository.captures.confirmRepayment(captureId, com.wmm.ledger.data.Transfer("", cents, from, to, note,
+            at, day.toString(), hasTime))
+        done()
+        notify("已保存")
+    }
+
+    internal fun saveRefund(id: String?, originalId: String, cents: Long, account: String?, note: String, at: Long,
+        day: LocalDate, captureId: String?, done: () -> Unit) = perform("无法保存退款。") {
+        if (captureId == null) repository.saveRefund(id, originalId, cents, account, note, at, day)
+        else repository.captures.confirmRefund(captureId, originalId, cents, account, note, at, day)
         done()
         notify("已保存")
     }

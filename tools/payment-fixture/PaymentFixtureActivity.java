@@ -2,6 +2,8 @@ package com.wmm.capturefixture;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -39,6 +41,11 @@ public class PaymentFixtureActivity extends Activity {
         button("多金额测试", () -> payment("支付成功", "20261120000005", true));
         button("历史消费详情", this::details);
         button("录屏布局测试", this::recordingLayout);
+        if (getPackageName().contains("Alipay")) {
+            button("加载中的普通消费", this::delayedPurchase);
+            button("退款详情", this::refund);
+            button("还款详情", this::repayment);
+        }
     }
     private void payment(String status, String order, boolean ambiguous) {
         reset(); text(status); text("￥18.50");
@@ -72,6 +79,35 @@ public class PaymentFixtureActivity extends Activity {
             text("收款方备注"); text("二维码收款"); text("支付方式"); text("零钱");
             text("转账时间"); text("2025年4月6日 08:22:28"); text("转账单号"); text("10000000000000123456789");
         }
+        button("返回测试首页", this::home);
+    }
+
+    private void delayedPurchase() {
+        reset(); text("返回，账单详情"); text("加载中");
+        Handler handler = new Handler(Looper.getMainLooper());
+        for (int index = 1; index <= 36; index++) {
+            int frame = index;
+            handler.postDelayed(() -> content.setContentDescription("更新 " + frame), index * 80L);
+        }
+        handler.postDelayed(() -> {
+            reset(); text("返回，账单详情"); text("模拟餐饮"); text("−"); text("12.00"); text("交易成功");
+            text("支付时间2025-04-06 12:34:56"); text("付款方式储蓄卡"); text("商品说明"); text("模拟餐饮订单");
+            button("更多", () -> { text("订单号"); text("20250406000009"); });
+            button("返回测试首页", this::home);
+        }, 1550);
+    }
+
+    private void refund() {
+        reset(); text("账单详情"); text("模拟餐饮"); text("6.00"); text("退款成功");
+        text("关联记录"); text("查看原账单"); text("创建时间"); text("2025-04-07 12:34:56");
+        text("退款方式"); text("储蓄卡"); text("退款进度"); text("银行处理中"); text("银行处理成功");
+        button("返回测试首页", this::home);
+    }
+
+    private void repayment() {
+        reset(); text("账单详情"); text("示例信用账户"); text("180.00"); text("还款成功");
+        text("创建时间"); text("2025-04-08 12:34:56"); text("付款方式"); text("储蓄卡");
+        text("还款到"); text("示例信用账户"); text("处理进度"); text("银行入账成功");
         button("返回测试首页", this::home);
     }
 }

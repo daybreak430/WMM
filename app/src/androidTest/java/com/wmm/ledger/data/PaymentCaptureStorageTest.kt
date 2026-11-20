@@ -69,6 +69,44 @@ class PaymentCaptureStorageTest {
         assertNull(ledger.secrets.captureAccount(PaymentSource.ALIPAY))
     }
 
+    @Test fun receiptEnrichmentRefundAndRepaymentRemainIdempotentAcrossDatesAndBackup() = runBlocking {
+        val ledger = LedgerRepository(isolated())
+        val originalDay = java.time.LocalDate.of(2025, 4, 30)
+        val laterDay = originalDay.plusDays(2)
+        val zone = java.time.ZoneId.systemDefault()
+        val originalAt = originalDay.atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
+        val laterAt = laterDay.atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
+        val now = System.currentTimeMillis()
+        val tag = Tag("meal", "EXPENSE", "餐饮")
+        val bank = Account("bank", "SAVINGS", "示例储蓄卡", 100_000, originalAt - 1)
+        val credit = Account("credit", "CREDIT", "示例信用账户", -50_000, originalAt - 1)
+        val original = Entry("original", "EXPENSE", 10_000, tag.id, bank.id, "示例商户", originalAt, originalDay.toString())
+        ledger.replace(LedgerSnapshot(listOf(original), listOf(tag), listOf(bank, credit)))
+        val refund = RecognizedPayment(PaymentSource.ALIPAY, 3_000, "示例商户", "储蓄卡", null, laterAt, CaptureType.REFUND)
+        suspend fun enqueue(payment: RecognizedPayment) = ledger.captures.enqueue(payment, "detail", now, ledger.dataGeneration)
+        val candidate = enqueue(refund)!!
+        assertEquals(candidate.id, enqueue(refund.copy(orderHash = "a".repeat(64)))!!.id)
+        assertEquals(candidate.id, enqueue(refund)!!.id)
+        ledger.captures.confirmRefund(candidate.id, original.id, 3_000, bank.id, "部分退款", laterAt, laterDay)
+        ledger.captures.confirmRefund(candidate.id, original.id, 3_000, bank.id, "部分退款", laterAt, laterDay)
+        assertNull(enqueue(refund))
+        val repayment = enqueue(RecognizedPayment(PaymentSource.ALIPAY, 5_000, "示例信用账户", "储蓄卡", null,
+            laterAt, CaptureType.REPAYMENT))!!
+        val transfer = Transfer("", 5_000, bank.id, credit.id, "还款", laterAt, laterDay.toString(), false)
+        ledger.captures.confirmRepayment(repayment.id, transfer)
+        ledger.captures.confirmRepayment(repayment.id, transfer)
+        val snapshot = ledger.snapshot()
+        assertEquals(2, snapshot.entries.size)
+        assertEquals(1, snapshot.transfers.size)
+        assertEquals(7_000L, snapshot.stats(Period.MONTH, originalDay, laterDay).expense)
+        assertEquals(0L, snapshot.stats(Period.MONTH, laterDay, laterDay).income)
+        assertEquals(88_000L, snapshot.accountBalances()[bank.id])
+        assertEquals(-45_000L, snapshot.accountBalances()[credit.id])
+        assertEquals(snapshot, Backup.decode(Backup.encode(snapshot).inputStream()))
+        assertTrue(runCatching { ledger.saveRefund(null, original.id, 7_001, bank.id, "超额", laterAt, laterDay) }.isFailure)
+        assertTrue(runCatching { ledger.deleteEntry(original.id) }.isFailure)
+    }
+
     private fun isolated(): Context {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val id = UUID.randomUUID().toString()

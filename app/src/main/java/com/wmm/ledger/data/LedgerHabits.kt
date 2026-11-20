@@ -10,7 +10,7 @@ internal data class HabitChoice(val tag: Tag, val scene: Scene?)
 internal class LedgerHabits(data: LedgerSnapshot, private val zone: ZoneId = ZoneId.systemDefault()) {
     private val tags = data.tags.filterNot(Tag::archived).associateBy(Tag::id)
     private val scenes = data.scenes.associateBy(Scene::id)
-    private val entries = data.entries.asSequence().filter { it.tagId in tags }.take(1500)
+    private val entries = data.entries.asSequence().filter { it.refundOfId == null && it.tagId in tags }.take(1500)
         .map { entry ->
             HabitObservation(entry, merchantKey(entry.note), entry.occurredAt.takeIf { entry.hasTime }?.let { minute(it, zone) })
         }.groupBy { it.entry.kind }

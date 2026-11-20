@@ -210,10 +210,11 @@ fun LazyListScope.ledgerRows(
 
 @Composable
 private fun LedgerRow(entry: Entry, tag: String, icon: LabelStyle?, edit: (Entry) -> Unit) {
-    val income = entry.kind == Kind.INCOME.name
+    val refund = entry.refundOfId != null
+    val incoming = refund || entry.kind == Kind.INCOME.name
     val refined = LocalLedgerRefinement.current
-    LedgerRecordRow(tag, if (income) "收入" else "支出", entry.note,
-        (if (income) "+" else "−") + currency(entry.cents), income,
+    LedgerRecordRow(tag, if (refund) "退款" else if (incoming) "收入" else "支出", entry.note,
+        (if (incoming) "+" else "−") + currency(entry.cents), incoming,
         leading = { LabelBadge(icon, if (refined) 36 else 40) }) { edit(entry) }
 }
 

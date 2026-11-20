@@ -56,7 +56,7 @@ internal fun containsLedgerText(text: String, query: String): Boolean =
     normalizeLedgerText(text).contains(normalizeLedgerText(query))
 
 // 搜索和 AI 查询共用字段映射，金额用整数分精确比较；转账始终保持独立来源。
-internal class LedgerQueryEngine(private val data: LedgerSnapshot) {
+internal class LedgerQueryEngine(private val data: LedgerSnapshot, private val useNetExpenses: Boolean = true) {
     private val tags = data.tags.associateBy { it.id }
     private val scenes = data.scenes.associateBy { it.id }
     private val accounts = data.accounts.associateBy { it.id }
@@ -64,11 +64,11 @@ internal class LedgerQueryEngine(private val data: LedgerSnapshot) {
 
     fun rows(source: QuerySource): List<QueryRow> = cache.getOrPut(source) {
         when (source) {
-            QuerySource.ENTRIES -> data.entries.map { entry ->
+            QuerySource.ENTRIES -> (if (useNetExpenses) data.netEntries() else data.entries).map { entry ->
                 QueryRow(entry.id, source, entry.cents, entry.day, entry.kind,
                     tags[entry.tagId]?.name.orEmpty(), scenes[entry.sceneId]?.name.orEmpty(),
                     accounts[entry.accountId]?.name.orEmpty(), entry.note,
-                    details = mapOf("方向" to if (entry.kind == Kind.EXPENSE.name) "支出" else "收入"))
+                    details = mapOf("方向" to if (entry.refundOfId != null) "退款" else if (entry.kind == Kind.EXPENSE.name) "支出" else "收入"))
             }
             QuerySource.TRANSFERS -> data.transfers.map { transfer ->
                 val from = accounts[transfer.fromAccountId]?.name.orEmpty()
@@ -150,7 +150,7 @@ internal class LedgerQueryEngine(private val data: LedgerSnapshot) {
 
 internal fun LedgerSnapshot.searchLedger(query: String): LedgerSearchResult {
     if (query.isBlank()) return LedgerSearchResult(query, entries, transfers)
-    val engine = LedgerQueryEngine(this)
+    val engine = LedgerQueryEngine(this, useNetExpenses = false)
     val tokens = ledgerSearchTokens(query)
     val entryIds = engine.rows(QuerySource.ENTRIES).filter { row -> tokens.all(row::matchesText) }.mapTo(hashSetOf()) { it.id }
     val transferIds = engine.rows(QuerySource.TRANSFERS).filter { row -> tokens.all(row::matchesText) }.mapTo(hashSetOf()) { it.id }

@@ -84,7 +84,7 @@ class PaymentScreenParserTest {
         assertNotEquals(payment.fingerprint("first"), parse(detail.dropLast(1) + "2025-03-18 12:35:56")!!.fingerprint("first"))
         listOf(
             listOf("账单") + detail.drop(1), detail.dropLast(2), detail.dropLast(1) + "2025-03-18 12:34",
-            detail.dropLast(1) + "2099-03-18 12:34:56", detail + "已部分退款", detail + "交易类型: 转账",
+            detail.dropLast(1) + "2099-03-18 12:34:56", detail + "交易类型: 转账",
             detail + "当前状态: 交易关闭", detail.map { if (it == "-18.50") "+18.50" else it },
             detail.map { if (it == "测试便利店") "信用卡还款" else it },
             detail.map { if (it == "-18.50") "18.50" else it },
@@ -130,5 +130,38 @@ class PaymentScreenParserTest {
         assertNull(parse(qr.map { if (it == "−4.00") "+4.00" else it }))
         assertNull(parse(qr + "退款成功"))
         assertNull(parse(qr.filterNot { it == "转账单号" }))
+    }
+
+    @Test fun alipayRecordingVariantsKeepTheirDirectionAndBookingDate() {
+        val paidAt = "2025-11-09 17:44:57"
+        fun parse(lines: List<String>) = PaymentScreenParser.parse(PaymentSource.ALIPAY, lines, now, includeDetails = true)
+        val expenses = listOf(
+            listOf("账单详情", "示例酒店", "-90.86", "交易成功", "支付时间", paidAt, "付款方式", "储蓄卡", "收款方全称", "示例酒店有限公司"),
+            listOf("返回，账单详情", "示例软件服务", "−", "20.00", "交易成功", "支付时间$paidAt", "付款方式储蓄卡", "商品说明", "服务"),
+            listOf("返回", "示例餐饮", "\u200e-10.00", "交易成功", "支付时间：$paidAt", "付款方式：储蓄卡", "商品说明", "餐饮"),
+            listOf("账单详情", "示例视频服务", "-10.00", "自动扣款成功", "管理自动续费", "支付时间", paidAt, "付款方式", "储蓄卡"),
+            listOf("账单详情", "示例外卖平台", "-51.40", "交易成功", "支付时间", paidAt, "商品说明", "餐饮订单", "服务详情", "13元优惠券"),
+        )
+        assertEquals(listOf(9086L, 2000L, 1000L, 1000L, 5140L), expenses.map { detail ->
+            val payment = parse(detail)!!
+            assertEquals(CaptureType.EXPENSE, payment.type)
+            assertEquals(java.time.LocalDate.of(2025, 11, 9), LedgerRepository.bookingDay(payment.paidAt!!))
+            payment.cents
+        })
+        val refund = listOf("账单详情", "示例出行", "16.50", "退款成功", "关联记录", "查看原账单", "创建时间", paidAt,
+            "退款方式", "储蓄卡", "退款进度", "银行处理中", "银行处理成功", "商品说明", "退款-预付车费")
+        assertEquals(CaptureType.REFUND, parse(refund)?.type)
+        assertEquals(1650L, parse(refund)?.cents)
+        assertNull(parse(refund.map { if (it == "退款成功") "退款处理中" else it }))
+        for (account in listOf("示例银行", "示例信用购")) {
+            val repayment = listOf("账单详情", account, "1,180.34", "还款成功", "创建时间", paidAt, "付款方式", "储蓄卡",
+                "还款到", account, "处理进度", "银行处理中", "银行入账成功")
+            assertEquals(CaptureType.REPAYMENT, parse(repayment)?.type)
+            assertEquals(118034L, parse(repayment)?.cents)
+            assertNull(parse(repayment.filterNot { it == "还款到" }))
+        }
+        assertNull(parse(listOf("搜索交易记录", "账单") + expenses[2]))
+        assertNull(parse(listOf("返回", "账单详情")))
+        assertEquals(CaptureType.EXPENSE, parse(expenses[0].map { if (it == "交易成功") "已全额退款" else it })?.type)
     }
 }

@@ -1,4 +1,4 @@
 <resources>
     <string name="payment_capture_service">记个账付款识别</string>
-    <string name="payment_capture_description">读取所选微信和支付宝的可访问文本，识别付款成功信息。开启账单详情识别后，也可核对打开的历史消费。识别结果在本机加密保存，核对保存才入账。可随时关闭。</string>
+    <string name="payment_capture_description">读取所选微信和支付宝的可访问文本，识别付款成功信息。开启账单详情识别后，也可核对打开的消费详情、支付宝退款和还款。识别结果在本机加密保存，核对保存才入账。可随时关闭。</string>
 </resources>

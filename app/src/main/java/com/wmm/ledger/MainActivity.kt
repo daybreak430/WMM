@@ -353,9 +353,16 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance, incomingCa
                                             value = true to paymentModel.review(current.substringAfter(':'))
                                         }
                                         val capture = review.second
-                                        if (capture != null) EntryEditor(data, null, model, capture,
-                                            paymentAccounts[com.wmm.ledger.data.PaymentSource.valueOf(capture.source)]) {
-                                            if (route == current) back()
+                                        if (capture != null) {
+                                            val account = paymentAccounts[com.wmm.ledger.data.PaymentSource.valueOf(capture.source)]
+                                            val finish: () -> Unit = { if (route == current) back() }
+                                            when (capture.type) {
+                                                com.wmm.ledger.data.CaptureType.EXPENSE -> EntryEditor(data, null, model, capture, account, finish)
+                                                com.wmm.ledger.data.CaptureType.REFUND -> com.wmm.ledger.ui.RefundEditor(data, model,
+                                                    capture = capture, captureAccountId = account, back = finish)
+                                                com.wmm.ledger.data.CaptureType.REPAYMENT -> TransferEditor(data, null, model, finish,
+                                                    capture = capture, captureAccountId = account)
+                                            }
                                         } else if (!review.first) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                             CircularProgressIndicator()
                                         } else LaunchedEffect(current) {
@@ -422,7 +429,9 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance, incomingCa
                                         val initial = remember(current) {
                                             data.entries.firstOrNull { it.id == current.substringAfter(':') }
                                         }
-                                        if (initial != null) {
+                                        if (initial?.refundOfId != null) {
+                                            com.wmm.ledger.ui.RefundEditor(data, model, initial = initial) { if (route == current) back() }
+                                        } else if (initial != null) {
                                             EntryEditor(data, initial, model) { if (route == current) back() }
                                         } else {
                                             LaunchedEffect(current) { if (route == current) back() }

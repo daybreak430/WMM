@@ -10,7 +10,7 @@ internal fun LedgerSnapshot.weekCashflow(day: LocalDate): List<DailyCashflow> {
     val first = Period.WEEK.start(day)
     val startDay = first.toString()
     val endDay = first.plusDays(6).toString()
-    val days = entries.filter { it.day in startDay..endDay }.groupBy { it.day }
+    val days = netEntries().filter { it.day in startDay..endDay }.groupBy { it.day }
     return List(7) { index ->
         val date = first.plusDays(index.toLong())
         DailyCashflow(date, days[date.toString()].orEmpty().cashflow())

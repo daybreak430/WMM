@@ -64,7 +64,10 @@ data class Entry(
     val sceneId: String? = null,
     val habitArea: String? = null,
     @ColumnInfo(defaultValue = "1") val hasTime: Boolean = true,
-)
+    val refundOfId: String? = null,
+) {
+    internal val isOriginalExpense: Boolean get() = kind == Kind.EXPENSE.name && refundOfId == null
+}
 
 // 旧版报告仅用于加密库与备份兼容，不再生成、展示或作为 AI 查询来源。
 @Entity(tableName = "reports", primaryKeys = ["period", "startDay"])
@@ -91,6 +94,9 @@ interface LedgerDao {
     @Query("SELECT * FROM reports") suspend fun reports(): List<Report>
     @Query("SELECT * FROM profile WHERE id = 0") suspend fun profile(): Profile?
     @Query("SELECT * FROM entries WHERE id = :id") suspend fun entry(id: String): Entry?
+    @Query("SELECT COALESCE(SUM(cents), 0) FROM entries WHERE refundOfId = :id AND (:excluding IS NULL OR id != :excluding)")
+    suspend fun refundedCents(id: String, excluding: String? = null): Long
+    @Query("SELECT MIN(day) FROM entries WHERE refundOfId = :id") suspend fun earliestRefundDay(id: String): String?
     @Query("SELECT * FROM transfers ORDER BY day DESC, occurredAt DESC, id") suspend fun transfers(): List<Transfer>
     @Query("SELECT * FROM transfers WHERE id = :id") suspend fun transfer(id: String): Transfer?
     @Upsert suspend fun save(transfer: Transfer)
@@ -136,7 +142,7 @@ interface LedgerDao {
 @Database(
     entities = [Tag::class, Account::class, Entry::class, Report::class, Profile::class, Scene::class, ScheduledBill::class,
         Transfer::class, PaymentCapture::class],
-    version = 10,
+    version = 11,
 )
 abstract class LedgerDatabase : RoomDatabase() {
     abstract fun ledger(): LedgerDao
@@ -225,5 +231,12 @@ internal val MIGRATION_8_9 = object : Migration(8, 9) {
 internal val MIGRATION_9_10 = object : Migration(9, 10) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE payment_captures ADD COLUMN paidAt INTEGER")
+    }
+}
+
+internal val MIGRATION_10_11 = object : Migration(10, 11) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE entries ADD COLUMN refundOfId TEXT")
+        db.execSQL("ALTER TABLE payment_captures ADD COLUMN captureType TEXT NOT NULL DEFAULT 'EXPENSE'")
     }
 }

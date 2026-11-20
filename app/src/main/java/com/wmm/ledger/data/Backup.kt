@@ -13,7 +13,7 @@ import java.time.ZoneOffset
 import java.util.Locale
 
 private const val FORMAT = "wmm-ledger"
-private const val BACKUP_VERSION = 8
+private const val BACKUP_VERSION = 9
 const val MAX_BACKUP_BYTES = 32 * 1024 * 1024
 const val MAX_AVATAR_BYTES = 256 * 1024
 
@@ -32,7 +32,7 @@ internal fun InputStream.readBounded(limit: Int): ByteArray {
 object Backup {
     fun encode(data: LedgerSnapshot): ByteArray = JSONObject().apply {
         put("format", FORMAT)
-        put("version", BACKUP_VERSION)
+        put("version", if (data.entries.any { it.refundOfId != null }) BACKUP_VERSION else 8)
         put("tags", array(data.tags) {
             put("id", it.id); put("kind", it.kind); put("name", it.name); put("archived", it.archived)
             put("sortOrder", it.sortOrder ?: JSONObject.NULL)
@@ -54,6 +54,7 @@ object Backup {
             put("occurredAt", it.occurredAt); put("day", it.day)
             put("sceneId", it.sceneId ?: JSONObject.NULL)
             put("hasTime", it.hasTime)
+            put("refundOfId", it.refundOfId ?: JSONObject.NULL)
         })
         put("scheduledBills", array(data.scheduledBills) {
             put("id", it.id); put("kind", it.kind); put("cents", it.cents); put("tagId", it.tagId)
@@ -126,9 +127,16 @@ object Backup {
             require(bookingDay in utcDay.minusDays(1)..utcDay.plusDays(1))
             Entry(id(), kind, number("cents").also { require(it in 1..MAX_CENTS) }, tagId, accountId,
                 string("note").also { require(it.length <= MAX_NOTE) }, occurredAt, bookingDay.toString(), sceneId,
-                hasTime = version < 7L || flag("hasTime"))
+                hasTime = version < 7L || flag("hasTime"),
+                refundOfId = if (version >= 9L) nullableString("refundOfId") else null)
         }
         require(entries.distinctBy { it.id }.size == entries.size)
+        val entriesById = entries.associateBy { it.id }
+        entries.filter { it.refundOfId != null }.groupBy { it.refundOfId }.forEach { (originalId, refunds) ->
+            val original = requireNotNull(entriesById[originalId])
+            require(original.isOriginalExpense && refunds.all { it.kind == Kind.EXPENSE.name && it.day >= original.day })
+            require(refunds.sumOf(Entry::cents) <= original.cents)
+        }
         val transfers = if (version < 8L) emptyList() else root.list("transfers", 150_000) {
             val from = id("fromAccountId").also { require(it in accountsById) }
             val to = id("toAccountId").also { require(it in accountsById && it != from) }

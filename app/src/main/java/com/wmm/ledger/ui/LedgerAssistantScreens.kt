@@ -47,6 +47,7 @@ import com.wmm.ledger.data.LedgerSnapshot
 import com.wmm.ledger.data.Provider
 import com.wmm.ledger.data.QuerySource
 import com.wmm.ledger.data.Transfer
+import com.wmm.ledger.data.netEntries
 import java.time.LocalDate
 
 @Composable
@@ -195,7 +196,7 @@ internal fun QuestionEvidenceScreen(data: LedgerSnapshot, turn: QuestionTurn?, t
     val references = turn?.answer?.evidence.orEmpty()
     val entryIds = remember(references) { references.filter { it.source == QuerySource.ENTRIES }.mapTo(hashSetOf()) { it.id } }
     val transferIds = remember(references) { references.filter { it.source == QuerySource.TRANSFERS }.mapTo(hashSetOf()) { it.id } }
-    val entries = remember(data.entries, entryIds) { data.entries.filter { it.id in entryIds } }
+    val entries = remember(data.entries, entryIds) { data.netEntries().filter { it.id in entryIds } }
     val transfers = remember(data.transfers, transferIds) { data.transfers.filter { it.id in transferIds } }
     Column(Modifier.fillMaxSize()) {
         PageHeader("相关流水", back)

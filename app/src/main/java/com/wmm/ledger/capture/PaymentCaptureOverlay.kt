@@ -29,7 +29,7 @@ internal class PaymentCaptureOverlay(private val service: PaymentCaptureService,
     private var timeout: Job? = null
     private fun dp(value: Int) = (value * service.resources.displayMetrics.density).toInt()
 
-    fun show(capture: PaymentCapture) {
+    fun show(capture: PaymentCapture): Boolean {
         hide()
         val dark = service.resources.configuration.uiMode and 0x30 == 0x20
         val foreground = Color.parseColor(if (dark) "#EEF3FF" else "#17243A")
@@ -50,7 +50,7 @@ internal class PaymentCaptureOverlay(private val service: PaymentCaptureService,
             maxLines = 2
         }
         card.addView(text("${PaymentSource.valueOf(capture.source).title} · 待核对", 13f))
-        card.addView(text("支出 ${currency(capture.cents)}", 24f, true))
+        card.addView(text("${capture.type.title} ${currency(capture.cents)}", 24f, true))
         card.addView(text(capture.merchant, 15f))
         val actions = LinearLayout(service).apply { gravity = Gravity.END; orientation = LinearLayout.HORIZONTAL }
         fun action(label: String, block: () -> Unit) {
@@ -90,11 +90,15 @@ internal class PaymentCaptureOverlay(private val service: PaymentCaptureService,
             y = dp(48)
             title = "记个账待核对"
         }
-        try {
+        return try {
             manager.addView(card, params)
             view = card
             timeout = scope.launch { delay(12_000); hide() }
-        } catch (_: Exception) { view = null }
+            true
+        } catch (_: Exception) {
+            view = null
+            false
+        }
     }
 
     fun hide() {

@@ -33,6 +33,7 @@ import com.wmm.ledger.LedgerViewModel
 import com.wmm.ledger.data.Kind
 import com.wmm.ledger.data.LedgerRepository
 import com.wmm.ledger.data.LedgerSnapshot
+import com.wmm.ledger.data.PaymentCapture
 import com.wmm.ledger.data.Transfer
 import com.wmm.ledger.data.balanceDescription
 import com.wmm.ledger.data.accountBalances
@@ -45,15 +46,19 @@ import java.time.LocalDate
 internal fun TransferEditor(
     data: LedgerSnapshot, initial: Transfer?, model: LedgerViewModel, back: () -> Unit,
     onSelectKind: ((Kind) -> Unit)? = null,
+    capture: PaymentCapture? = null, captureAccountId: String? = null,
 ) {
     val activeAccounts = data.accounts.filterNot { it.archived }
     val defaultFrom = activeAccounts.firstOrNull { it.isDefault && !it.isCredit }
         ?: activeAccounts.firstOrNull { !it.isCredit } ?: activeAccounts.firstOrNull()
-    var fromId by rememberSaveable { mutableStateOf(initial?.fromAccountId ?: defaultFrom?.id) }
+    var fromId by rememberSaveable {
+        mutableStateOf(if (capture == null) initial?.fromAccountId ?: defaultFrom?.id
+            else captureAccountId?.takeIf { id -> activeAccounts.any { it.id == id } })
+    }
     var toId by rememberSaveable { mutableStateOf(initial?.toAccountId) }
-    var amount by rememberSaveable { mutableStateOf(initial?.cents?.let(::editableAmount).orEmpty()) }
-    var note by rememberSaveable { mutableStateOf(initial?.note.orEmpty()) }
-    var at by rememberSaveable { mutableStateOf(initial?.occurredAt ?: System.currentTimeMillis()) }
+    var amount by rememberSaveable { mutableStateOf((initial?.cents ?: capture?.cents)?.let(::editableAmount).orEmpty()) }
+    var note by rememberSaveable { mutableStateOf(initial?.note ?: capture?.merchant.orEmpty()) }
+    var at by rememberSaveable { mutableStateOf(initial?.occurredAt ?: capture?.bookingAt ?: System.currentTimeMillis()) }
     var dayText by rememberSaveable { mutableStateOf(initial?.day ?: LedgerRepository.bookingDay(at).toString()) }
     var hasTime by rememberSaveable { mutableStateOf(initial?.hasTime ?: false) }
     var choosingFrom by rememberSaveable { mutableStateOf<Boolean?>(null) }
@@ -75,7 +80,7 @@ internal fun TransferEditor(
         keyboard?.hide()
     }
     val fromAvailable = from != null && (!from.archived || initial?.fromAccountId == from.id)
-    val toAvailable = to != null && (!to.archived || initial?.toAccountId == to.id)
+    val toAvailable = to != null && (!to.archived || initial?.toAccountId == to.id) && (capture == null || to.isCredit)
 
     val chooseDate = CalendarAction(day) { changedDay ->
         if (changedDay != day) {
@@ -90,17 +95,19 @@ internal fun TransferEditor(
         val toAccount = to ?: return@save
         saving = true
         dismissKeyboard()
-        model.saveTransfer(initial?.id, saveCents, fromAccount.id, toAccount.id, note, at, day, hasTime, back)
+        model.saveTransfer(initial?.id, saveCents, fromAccount.id, toAccount.id, note, at, day, hasTime, back, capture?.id)
             .invokeOnCompletion { saving = false }
     }
     EntryEditorLayout(header = {
-        if (isNew && onSelectKind != null) EntryEditorHeader(null, onSelectKind, onTransfer = {}, back = back)
+        if (capture != null) PageHeader("核对支付宝还款", back, centered = true)
+        else if (isNew && onSelectKind != null) EntryEditorHeader(null, onSelectKind, onTransfer = {}, back = back)
         else PageHeader("编辑转账", back, centered = true) {
             IconButton(onClick = { deleteDialog = true }) { LucideIcon(Glyph.DELETE, colors.error, "删除转账") }
         }
     }, content = { _ ->
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .padding(horizontal = inset, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            if (capture != null) Text("还款到 ${capture.merchant}", style = MaterialTheme.typography.bodyMedium)
             GroupCard {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -109,12 +116,12 @@ internal fun TransferEditor(
                             choosingFrom = true
                         }
                         Hairline(14)
-                        EntryDetailRow("转入账户", to?.name ?: "请选择", Glyph.INCOME) {
+                        EntryDetailRow(if (capture == null) "转入账户" else "还款账户", to?.name ?: "请选择", Glyph.INCOME) {
                             dismissKeyboard()
                             choosingFrom = false
                         }
                     }
-                    TextButton(
+                    if (capture == null) TextButton(
                         modifier = Modifier.padding(end = 8.dp)
                             .semantics { contentDescription = "交换转出和转入账户" },
                         onClick = {
@@ -142,7 +149,8 @@ internal fun TransferEditor(
     choosingFrom?.let { outgoing ->
         val originalId = if (outgoing) initial?.fromAccountId else initial?.toAccountId
         val otherId = if (outgoing) toId else fromId
-        val options = data.accounts.filter { (!it.archived || it.id == originalId) && it.id != otherId }
+        val options = data.accounts.filter { (!it.archived || it.id == originalId) && it.id != otherId &&
+            (capture == null || outgoing || it.isCredit) }
         LedgerAlertDialog(onDismissRequest = { choosingFrom = null },
             title = { Text(if (outgoing) "转出账户" else "转入账户") }, text = {
                 LazyColumn(Modifier.heightIn(max = 360.dp)) {

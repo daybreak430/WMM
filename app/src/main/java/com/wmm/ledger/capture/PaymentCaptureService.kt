@@ -13,8 +13,10 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Toast
 import com.wmm.ledger.data.LedgerRepository
 import com.wmm.ledger.data.PaymentCaptureSettings
+import com.wmm.ledger.data.RecognizedPayment
 import com.wmm.ledger.data.PaymentScreenParser
 import com.wmm.ledger.data.PaymentSource
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -29,10 +31,12 @@ class PaymentCaptureService : AccessibilityService() {
     private val settings by lazy { PaymentCaptureSettings(this) }
     private val ledger by lazy { LedgerRepository.shared(this) }
     private var pendingRead: Job? = null
+    private var pendingSource: PaymentSource? = null
     private var overlay: PaymentCaptureOverlay? = null
     private var session = UUID.randomUUID().toString()
     private var activeSource: PaymentSource? = null
     private var lastFingerprint: String? = null
+    private var lastPromptedId: String? = null
     private var registered = false
     private var settingsJob: Job? = null
     private val screenReceiver = object : BroadcastReceiver() {
@@ -40,6 +44,7 @@ class PaymentCaptureService : AccessibilityService() {
     }
 
     override fun onServiceConnected() {
+        PaymentCaptureDiagnostics.setConnected(true)
         overlay?.hide()
         overlay = PaymentCaptureOverlay(this, scope)
         settingsJob?.cancel()
@@ -66,44 +71,98 @@ class PaymentCaptureService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val source = PaymentSource.forPackage(event?.packageName?.toString()) ?: return
-        if (!settings.snapshot().allows(source) || (getSystemService(KeyguardManager::class.java).isKeyguardLocked || !getSystemService(PowerManager::class.java).isInteractive)) return
-        if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED &&
-            event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+        PaymentCaptureDiagnostics.report(source, PaymentReadStage.EVENT)
+        if (pendingSource == source && pendingRead?.isActive == true) return
+        if (!settings.snapshot().allows(source) || !canReadScreen()) {
+            PaymentCaptureDiagnostics.report(source, PaymentReadStage.DISABLED)
+            return
+        }
+        // 到期读取一次而非每次事件重新计时，避免动态内容把读取无限向后推迟。
         pendingRead?.cancel()
+        pendingSource = source
         pendingRead = scope.launch {
-            delay(350)
-            val root = rootInActiveWindow ?: return@launch
-            val options = settings.snapshot()
-            if (root.packageName?.toString() != source.packageName || !options.allows(source)) return@launch
-            val texts = runCatching { readText(root) }.getOrNull() ?: return@launch
-            val now = System.currentTimeMillis()
-            val payment = PaymentScreenParser.parse(source, texts, now, includeDetails = options.includeDetails)
-            if (payment == null) {
-                if (texts.size >= 3) { session = UUID.randomUUID().toString(); lastFingerprint = null }
+            for (wait in READ_DELAYS) {
+                delay(wait)
+                val options = settings.snapshot()
+                if (!options.allows(source) || !canReadScreen()) return@launch
+                val root = runCatching { rootInActiveWindow }.getOrNull()
+                if (root?.packageName?.toString() != source.packageName) {
+                    PaymentCaptureDiagnostics.report(source, PaymentReadStage.WINDOW_UNAVAILABLE)
+                    continue
+                }
+                val texts = runCatching { readText(requireNotNull(root)) }.getOrNull().orEmpty()
+                if (texts.isEmpty()) {
+                    PaymentCaptureDiagnostics.report(source, PaymentReadStage.TEXT_UNAVAILABLE)
+                    continue
+                }
+                val now = System.currentTimeMillis()
+                val payment = PaymentScreenParser.parse(source, texts, now, options.includeDetails)
+                if (payment == null) {
+                    if (texts.size >= 3) resetSession()
+                    if (PaymentCaptureDiagnostics.running) PaymentCaptureDiagnostics.report(source,
+                        PaymentReadStage.UNMATCHED, PaymentScreenParser.signals(texts))
+                    continue
+                }
+                PaymentCaptureDiagnostics.report(source, PaymentReadStage.MATCHED)
+                handlePayment(payment, now)
                 return@launch
             }
-            if (source != activeSource) { session = UUID.randomUUID().toString(); lastFingerprint = null }
-            activeSource = source
-            val fingerprint = payment.fingerprint(session)
-            val screenKey = "$fingerprint|${payment.paidAt ?: "success"}"
-            if (lastFingerprint == screenKey) return@launch
-            lastFingerprint = screenKey
-            val generation = ledger.dataGeneration
-            scope.launch { try {
-                val currentOptions = settings.snapshot()
-                if (!currentOptions.allows(source) || (payment.paidAt != null && !currentOptions.includeDetails)) return@launch
-                val capture = ledger.captures.enqueue(payment, session, now, generation) ?: return@launch
-                val displayOptions = settings.snapshot()
-                if (displayOptions.allows(source) && (payment.paidAt == null || displayOptions.includeDetails) &&
-                    !getSystemService(KeyguardManager::class.java).isKeyguardLocked &&
-                    getSystemService(PowerManager::class.java).isInteractive &&
-                    rootInActiveWindow?.packageName?.toString() == source.packageName) overlay?.show(capture)
-            } catch (_: kotlinx.coroutines.CancellationException) {
-                // 新页面会重新读取；已经持久化的候选仍可在应用内核对。
-            } catch (_: Exception) {
-                Toast.makeText(this@PaymentCaptureService, "未能保存识别记录，请打开记个账检查。", Toast.LENGTH_SHORT).show()
-            } }
         }
+    }
+
+    private fun handlePayment(payment: RecognizedPayment, now: Long) {
+        val source = payment.source
+        if (source != activeSource) resetSession()
+        activeSource = source
+        val captureSession = session
+        val fingerprint = payment.fingerprint(captureSession)
+        val screenKey = "$fingerprint|${payment.paidAt ?: "success"}"
+        if (lastFingerprint == screenKey) {
+            PaymentCaptureDiagnostics.report(source, PaymentReadStage.DUPLICATE)
+            return
+        }
+        lastFingerprint = screenKey
+        val generation = ledger.dataGeneration
+        scope.launch {
+            try {
+                val current = settings.snapshot()
+                if (!current.allows(source) || (payment.paidAt != null && !current.includeDetails) || !canReadScreen()) return@launch
+                val capture = ledger.captures.enqueue(payment, captureSession, now, generation)
+                if (capture == null) {
+                    PaymentCaptureDiagnostics.report(source, PaymentReadStage.DUPLICATE)
+                    return@launch
+                }
+                PaymentCaptureDiagnostics.report(source, PaymentReadStage.SAVED)
+                if (lastPromptedId == capture.id) return@launch
+                val display = settings.snapshot()
+                if (display.allows(source) && (payment.paidAt == null || display.includeDetails) && canReadScreen() &&
+                    runCatching { rootInActiveWindow?.packageName?.toString() }.getOrNull() == source.packageName) {
+                    val shown = overlay?.show(capture) == true
+                    if (shown) lastPromptedId = capture.id
+                    PaymentCaptureDiagnostics.report(source, if (shown) PaymentReadStage.OVERLAY_SHOWN else PaymentReadStage.OVERLAY_FAILED)
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                if (lastFingerprint == screenKey) lastFingerprint = null
+                PaymentCaptureDiagnostics.report(source, PaymentReadStage.SAVE_FAILED)
+                Toast.makeText(this@PaymentCaptureService, "未能保存识别记录，请打开记个账检查。", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun resetSession() {
+        session = UUID.randomUUID().toString()
+        lastFingerprint = null
+        lastPromptedId = null
+    }
+
+    private fun canReadScreen() = !getSystemService(KeyguardManager::class.java).isKeyguardLocked &&
+        getSystemService(PowerManager::class.java).isInteractive
+
+    private companion object {
+        // 详情页先进入加载骨架，晚到的内容也有机会在窗口仍活跃时读取。
+        val READ_DELAYS = longArrayOf(220, 380, 650, 950, 1200)
     }
 
     private fun readText(root: AccessibilityNodeInfo): List<String> {
@@ -114,9 +173,14 @@ class PaymentCaptureService : AccessibilityService() {
             if (++visited > 500 || depth > 30 || size > 8_000 || texts.size >= 160 || node.isPassword || node.isEditable) return
             // 不缓存节点或整页内容，也不读取密码、输入框和受保护节点。
             if (Build.VERSION.SDK_INT >= 34 && node.isAccessibilityDataSensitive) return
-            val text = node.text?.toString()?.trim()?.takeIf(String::isNotEmpty)
-                ?: node.contentDescription?.toString()?.trim().orEmpty()
-            if (text.isNotEmpty() && text.length <= 200 && texts.lastOrNull() != text) { texts += text; size += text.length }
+            val text = node.text?.toString()?.trim()
+            val description = node.contentDescription?.toString()?.trim()
+            for (value in listOfNotNull(text, description).distinct()) {
+                if (value.isNotEmpty() && value.length <= 480 && texts.lastOrNull() != value) {
+                    texts += value
+                    size += value.length
+                }
+            }
             for (index in 0 until node.childCount.coerceAtMost(100)) {
                 if (visited >= 500 || size > 8_000 || texts.size >= 160) break
                 node.getChild(index)?.let { visit(it, depth + 1) }
@@ -128,6 +192,7 @@ class PaymentCaptureService : AccessibilityService() {
 
     override fun onInterrupt() { overlay?.hide(); pendingRead?.cancel() }
     override fun onDestroy() {
+        PaymentCaptureDiagnostics.setConnected(false)
         overlay?.hide()
         scope.cancel()
         if (registered) unregisterReceiver(screenReceiver)

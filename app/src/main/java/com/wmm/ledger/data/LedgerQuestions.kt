@@ -46,9 +46,11 @@ internal object LedgerQuestions {
             例如常用通勤方式：先按通勤场景或备注筛选 ENTRIES 支出，按 TYPE 分组、COUNT 降序；若没有明确通勤记录，说明证据范围而不是猜测。
             条件确实不明确或问题不属于本产品已记录的数据时，输出 {"queries":[],"clarification":"一个简洁的澄清问题或无法判断的原因"}。
         """.trimIndent()
-        val catalog = JSONObject().put("流水笔数", data.entries.size).put("转账笔数", data.transfers.size)
-            .put("流水最早日期", data.entries.minOfOrNull { it.day } ?: "")
-            .put("流水最晚日期", data.entries.maxOfOrNull { it.day } ?: "")
+        val entries = data.netEntries()
+        val catalog = JSONObject().put("流水笔数", entries.size).put("转账笔数", data.transfers.size)
+            .put("支出口径", "按原日期计算扣除关联退款后的净支出")
+            .put("流水最早日期", entries.minOfOrNull { it.day } ?: "")
+            .put("流水最晚日期", entries.maxOfOrNull { it.day } ?: "")
             .put("类型", JSONArray(data.tags.take(100).map { JSONObject().put("name", it.name).put("kind", it.kind) }))
             .put("场景", JSONArray(data.scenes.take(100).map { it.name }))
             .put("账户", JSONArray(data.accounts.take(100).map {
