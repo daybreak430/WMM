@@ -114,7 +114,8 @@ class PaymentCaptureService : AccessibilityService() {
             if (++visited > 500 || depth > 30 || size > 8_000 || texts.size >= 160 || node.isPassword || node.isEditable) return
             // 不缓存节点或整页内容，也不读取密码、输入框和受保护节点。
             if (Build.VERSION.SDK_INT >= 34 && node.isAccessibilityDataSensitive) return
-            val text = (node.text ?: node.contentDescription)?.toString()?.trim().orEmpty()
+            val text = node.text?.toString()?.trim()?.takeIf(String::isNotEmpty)
+                ?: node.contentDescription?.toString()?.trim().orEmpty()
             if (text.isNotEmpty() && text.length <= 200 && texts.lastOrNull() != text) { texts += text; size += text.length }
             for (index in 0 until node.childCount.coerceAtMost(100)) {
                 if (visited >= 500 || size > 8_000 || texts.size >= 160) break

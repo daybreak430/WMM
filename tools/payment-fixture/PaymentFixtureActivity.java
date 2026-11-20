@@ -38,6 +38,7 @@ public class PaymentFixtureActivity extends Activity {
         button("转账测试", () -> payment("转账成功", "20261120000004", false));
         button("多金额测试", () -> payment("支付成功", "20261120000005", true));
         button("历史消费详情", this::details);
+        button("录屏布局测试", this::recordingLayout);
     }
     private void payment(String status, String order, boolean ambiguous) {
         reset(); text(status); text("￥18.50");
@@ -56,6 +57,21 @@ public class PaymentFixtureActivity extends Activity {
         text(alipay ? "付款时间" : "支付时间"); text("2025-04-06 12:34:56");
         text(alipay ? "付款方式" : "支付方式"); text(alipay ? "花呗" : "零钱");
         text(alipay ? "支付宝交易号" : "交易单号"); text("20250406000001");
+        button("返回测试首页", this::home);
+    }
+
+    private void recordingLayout() {
+        boolean alipay = getPackageName().contains("Alipay");
+        reset();
+        if (alipay) {
+            text("账单详情"); text("联系商家"); text("模拟海外商户"); text("-486.02"); text("自动扣款成功");
+            text("管理自动续费"); text("付款授权"); text("订单金额"); text("486.02元(568.00港币)");
+            text("支付时间"); text("2025-04-06 16:11:29"); text("付款方式"); text("储蓄卡(0000)");
+        } else {
+            text("扫二维码付款-给模拟商户"); text("−4.00"); text("当前状态"); text("支付成功");
+            text("收款方备注"); text("二维码收款"); text("支付方式"); text("零钱");
+            text("转账时间"); text("2025年4月6日 08:22:28"); text("转账单号"); text("10000000000000123456789");
+        }
         button("返回测试首页", this::home);
     }
 }

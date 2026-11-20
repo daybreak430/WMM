@@ -84,17 +84,23 @@ internal object PaymentScreenParser {
     private val kindLabels = listOf("交易类型", "收支类型", "资金流向", "收/支")
     private val detailTitles = setOf("账单详情", "交易详情", "账单明细")
     private val paidStatuses = setOf("支付成功", "付款成功", "交易成功", "交易完成")
+    private const val ALIPAY_AUTO_DEBIT_SUCCESS = "自动扣款成功"
+    private val wechatQrHeading = Regex("扫(?:描)?二维码付款\\s*[-–—−]\\s*给\\s*(.{2,80})")
     private val expenseKinds = setOf("支出", "消费", "支付", "付款", "商户消费", "商户支付", "商家消费", "扫码付款")
     private val nonExpense = Regex("转账|还款|退款|退回|红包|提现|充值|理财|收款成功|收钱成功|收入|交易关闭|支付失败|付款失败|支付中|处理中|待付款|已取消|交易失败|已关闭")
     private val refundStatus = Regex("(?:已|部分)?退款(?:成功|中|金额.*)?|已全额退款|已部分退款")
     private val stamp = Regex("(20\\d{2})[-/年](\\d{1,2})[-/月](\\d{1,2})日?\\s+(\\d{1,2}):(\\d{2})(?::(\\d{2}))?")
     private val allLabels = amountLabels + merchantLabels + productLabels + methodLabels + orderLabels + timeLabels + statusLabels + kindLabels +
-        listOf("订单金额", "优惠金额", "优惠", "原价", "账户余额", "余额", "退款金额")
+        listOf("订单金额", "优惠金额", "优惠", "原价", "账户余额", "余额", "退款金额", "管理免密支付", "管理自动续费", "汇率")
 
     fun parse(source: PaymentSource, texts: List<String>, now: Long, includeDetails: Boolean = false): RecognizedPayment? {
         val lines = texts.flatMap { it.lines() }.take(160).map { Normalizer.normalize(it, Normalizer.Form.NFKC).trim() }
             .filter(String::isNotEmpty)
         val joined = lines.joinToString("\n").take(8_000)
+        if (source == PaymentSource.WECHAT) {
+            val qrIndex = lines.take(8).indexOfFirst(wechatQrHeading::matches)
+            if (qrIndex >= 0) return if (includeDetails) parseWechatQrDetail(lines, qrIndex, now) else null
+        }
         val detailIndex = lines.take(4).indexOfFirst { it in detailTitles }
         val successIndex = lines.indexOfFirst { it == "支付成功" || it == "付款成功" }
         if (detailIndex >= 0 && (successIndex < 0 || detailIndex < successIndex)) {
@@ -126,13 +132,18 @@ internal object PaymentScreenParser {
     }
 
     private fun parseDetail(source: PaymentSource, lines: List<String>, titleIndex: Int, now: Long): RecognizedPayment? {
-        val header = lines.drop(titleIndex + 1).take(5).takeWhile { field -> allLabels.none { matchesLabel(field, it) } }
-        val status = labelValue(lines, statusLabels) ?: header.firstOrNull { it in paidStatuses } ?: return null
-        if (status !in paidStatuses) return null
+        val header = lines.drop(titleIndex + 1).take(10).takeWhile { field -> allLabels.none { matchesLabel(field, it) } }
+        val acceptedStatuses = if (source == PaymentSource.ALIPAY) paidStatuses + ALIPAY_AUTO_DEBIT_SUCCESS else paidStatuses
+        val status = labelValue(lines, statusLabels) ?: header.firstOrNull { it in acceptedStatuses } ?: return null
+        if (status !in acceptedStatuses) return null
         val kind = labelValue(lines, kindLabels)
         if (kind != null && kind !in expenseKinds) return null
+        // 支付宝详情可能先暴露「联系商家」等按钮。优先取金额上方最近的商户名。
+        val amountIndex = header.indexOfFirst { detailAmount(it) != null }
+        val headerMerchant = if (amountIndex > 0) header.take(amountIndex).asReversed().firstNotNullOfOrNull(::validMerchant)
+            else header.firstNotNullOfOrNull(::validMerchant)
         val merchant = validMerchant(labelValue(lines, merchantLabels))
-            ?: header.firstNotNullOfOrNull(::validMerchant) ?: validMerchant(labelValue(lines, productLabels)) ?: return null
+            ?: headerMerchant ?: validMerchant(labelValue(lines, productLabels)) ?: return null
         val product = labelValue(lines, productLabels).orEmpty()
         if (nonExpense.containsMatchIn(merchant) || nonExpense.containsMatchIn(product) ||
             header.any(nonExpense::containsMatchIn) || lines.any(refundStatus::matches)) return null
@@ -142,6 +153,7 @@ internal object PaymentScreenParser {
         val displayAmount = header.mapNotNull(::detailAmount).distinct().singleOrNull()
         val labeled = amountLabels.mapNotNull { labelValue(lines, listOf(it)) }.mapNotNull(::detailAmount).distinct()
         val cents = when {
+            status == ALIPAY_AUTO_DEBIT_SUCCESS -> displayAmount?.takeIf { it < 0 }?.let { -it }
             labeled.isNotEmpty() -> labeled.map(::abs).distinct().singleOrNull()
             else -> displayAmount?.let(::abs)
         } ?: return null
@@ -154,6 +166,20 @@ internal object PaymentScreenParser {
         return payment.takeIf { it.orderHash != null || time.groupValues[6].isNotEmpty() }
     }
 
+    private fun parseWechatQrDetail(lines: List<String>, headingIndex: Int, now: Long): RecognizedPayment? {
+        // 微信单笔扫码付款明细没有页名，借用「转账」字段。仅识别明确的扫码付款标题与已支付的负金额。
+        val heading = wechatQrHeading.matchEntire(lines[headingIndex]) ?: return null
+        val merchant = validMerchant(heading.groupValues[1].trim()) ?: return null
+        val header = lines.drop(headingIndex + 1).take(3).takeWhile { !matchesLabel(it, "当前状态") }
+        val signedAmount = header.mapNotNull(::detailAmount).distinct().singleOrNull()?.takeIf { it < 0 } ?: return null
+        if (header.any { it.startsWith('+') } || labelValue(lines, statusLabels) != "支付成功" || lines.any(refundStatus::matches)) return null
+        if (labelValue(lines, methodLabels).isNullOrBlank()) return null
+        val time = labelValue(lines, listOf("转账时间"))?.let(stamp::matchEntire) ?: return null
+        val paidAt = transactionTime(time)?.takeIf { it <= now } ?: return null
+        val orderHash = readOrderHash(lines, orderLabels + "转账单号") ?: return null
+        return recognized(PaymentSource.WECHAT, -signedAmount, merchant, lines, paidAt, orderHash)
+    }
+
     private fun transactionTime(match: MatchResult): Long? = runCatching {
         val (year, month, day, hour, minute, second) = match.destructured
         LocalDateTime.of(year.toInt(), month.toInt(), day.toInt(), hour.toInt(), minute.toInt(), second.toIntOrNull() ?: 0)
@@ -162,14 +188,18 @@ internal object PaymentScreenParser {
 
     private fun validMerchant(value: String?): String? = value?.take(80)?.takeIf {
         it.length >= 2 && it.any(Char::isLetter) && !money.containsMatchIn(it) && it !in paidStatuses &&
-            it !in detailTitles && it !in expenseKinds && it !in setOf("返回", "关闭", "更多", "完成")
+            it !in detailTitles && it !in expenseKinds && it != ALIPAY_AUTO_DEBIT_SUCCESS &&
+            it !in setOf("返回", "关闭", "更多", "完成", "联系商家")
     }
 
-    private fun recognized(source: PaymentSource, cents: Long, merchant: String, lines: List<String>, paidAt: Long? = null): RecognizedPayment {
+    private fun recognized(source: PaymentSource, cents: Long, merchant: String, lines: List<String>, paidAt: Long? = null,
+        orderHash: String? = readOrderHash(lines, orderLabels)): RecognizedPayment {
         val method = labelValue(lines, methodLabels).orEmpty().replace(Regex("\\d{5,}"), "••••").take(48)
-        val order = labelValue(lines, orderLabels)?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{8,80}")) }
-        return RecognizedPayment(source, cents, merchant, method, order?.let { sha256(it.toByteArray()) }, paidAt)
+        return RecognizedPayment(source, cents, merchant, method, orderHash, paidAt)
     }
+
+    private fun readOrderHash(lines: List<String>, labels: List<String>): String? = labelValue(lines, labels)
+        ?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{8,80}")) }?.let { sha256(it.toByteArray()) }
 
     private fun detailAmount(text: String): Long? {
         val normalized = text.replace('−', '-').replace(Regex("^([¥￥])\\s*-\\s*"), "-¥")

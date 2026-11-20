@@ -92,4 +92,43 @@ class PaymentScreenParserTest {
             detail.take(3) + "-2.50" + detail.drop(3),
         ).forEach { assertNull(it.toString(), parse(it)) }
     }
+
+    @Test fun alipayAutomaticDebitUsesTheNegativeRmbAmountAndPaymentTime() {
+        val local = listOf("账单详情", "联系商家", "示例出行", "-10.60", "自动扣款成功", "管理免密支付",
+            "示例出行免密支付", "支付时间", "2025-04-06 15:48:34", "付款方式", "储蓄卡(0000)",
+            "商品说明", "快车行程", "乘车时间", "2025-04-06 15:25:50")
+        val foreign = listOf("账单详情", "联系商家", "示例海外商户", "-486.02", "自动扣款成功", "管理自动续费",
+            "付款授权", "订单金额", "486.02元(568.00港币)", "汇率", "1.00港币 = 0.85567000人民币",
+            "支付时间", "2025-04-06 16:11:29", "付款方式", "储蓄卡(0000)", "收款方全称", "示例海外商户")
+        fun parse(lines: List<String>) = PaymentScreenParser.parse(PaymentSource.ALIPAY, lines, now, includeDetails = true)
+        val localPayment = parse(local)!!
+        assertEquals(1060L, localPayment.cents)
+        assertEquals("示例出行", localPayment.merchant)
+        assertEquals(java.time.LocalTime.of(15, 48, 34), java.time.Instant.ofEpochMilli(localPayment.paidAt!!)
+            .atZone(java.time.ZoneId.systemDefault()).toLocalTime())
+        assertEquals(48602L, parse(foreign)!!.cents)
+        assertNull(parse(local.map { if (it == "自动扣款成功") "自动扣款失败" else it }))
+        assertNull(parse(local.map { if (it == "-10.60") "+10.60" else it }))
+        assertNull(PaymentScreenParser.parse(PaymentSource.WECHAT, local, now, includeDetails = true))
+        assertNull(PaymentScreenParser.parse(PaymentSource.ALIPAY, local, now))
+    }
+
+    @Test fun titlelessWechatQrReceiptAcceptsTransferFieldsOnlyForExplicitOutgoingQrPayment() {
+        val qr = listOf("关闭", "扫二维码付款-给示例商户", "−4.00", "当前状态", "支付成功", "收款方备注", "二维码收款",
+            "支付方式", "零钱", "转账时间", "2025年4月6日 08:22:28", "转账单号", "10000000000000123456789",
+            "账单服务", "发起群收款", "申请电子凭证")
+        fun parse(lines: List<String>) = PaymentScreenParser.parse(PaymentSource.WECHAT, lines, now, includeDetails = true)
+        val payment = parse(qr)!!
+        assertEquals(400L, payment.cents)
+        assertEquals("示例商户", payment.merchant)
+        assertEquals("零钱", payment.method)
+        assertEquals(java.time.LocalDate.of(2025, 4, 6), LedgerRepository.bookingDay(payment.paidAt!!))
+        assertEquals(64, payment.orderHash!!.length)
+        assertEquals(payment.fingerprint("first"), parse(qr)!!.fingerprint("second"))
+        assertNull(PaymentScreenParser.parse(PaymentSource.WECHAT, qr, now))
+        assertNull(parse(qr.map { if (it.startsWith("扫二维码付款")) "转账-给示例商户" else it }))
+        assertNull(parse(qr.map { if (it == "−4.00") "+4.00" else it }))
+        assertNull(parse(qr + "退款成功"))
+        assertNull(parse(qr.filterNot { it == "转账单号" }))
+    }
 }
