@@ -13,7 +13,7 @@ import org.junit.Test
 class LaunchEntryUiTest {
     @get:Rule val ui = createEmptyComposeRule()
 
-    @Test fun desktopLaunchUsesThePersistedSwitchWithoutInterruptingTheCurrentPage() {
+    @Test fun enabledLaunchWorksOnColdAndWarmEntryAndPreservesDraftsOnRecreation() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val preferences = context.getSharedPreferences("launch", Context.MODE_PRIVATE)
         val original = if (preferences.contains("open_entry")) preferences.getBoolean("open_entry", false) else null
@@ -41,7 +41,23 @@ class LaunchEntryUiTest {
                 ui.waitUntil(10_000) { home.isDisplayed() }
                 activity.moveToState(Lifecycle.State.CREATED)
                 activity.moveToState(Lifecycle.State.RESUMED)
+                ui.waitUntil(10_000) { amount.isDisplayed() }
+                ui.onNodeWithTag("amount-key-5").performClick()
+                ui.onNodeWithText("¥ 5").assertIsDisplayed()
+                activity.moveToState(Lifecycle.State.CREATED)
+                activity.moveToState(Lifecycle.State.RESUMED)
                 activity.recreate()
+                ui.waitUntil(10_000) { ui.onNodeWithText("¥ 5").isDisplayed() }
+                ui.onNodeWithContentDescription("关闭").performClick()
+                ui.waitUntil(10_000) { home.isDisplayed() }
+                activity.recreate()
+                ui.waitUntil(10_000) { home.isDisplayed() }
+                activity.onActivity { it.startActivity(Intent(android.provider.Settings.ACTION_SETTINGS)) }
+                android.os.SystemClock.sleep(700)
+                InstrumentationRegistry.getInstrumentation().uiAutomation
+                    .executeShellCommand("input keyevent KEYCODE_BACK").close()
+                ui.waitUntil(10_000) { home.isDisplayed() }
+                amount.assertDoesNotExist()
                 openSettings()
                 setting.assertIsOn().performClick()
                 setting.assertIsOff()

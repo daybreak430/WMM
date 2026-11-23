@@ -11,6 +11,7 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -95,7 +96,14 @@ import java.time.LocalDate
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
+    private val ledgerModel: LedgerViewModel by viewModels()
     private val captureRequest = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    private val entryRequest = kotlinx.coroutines.flow.MutableStateFlow(false)
+    private var returningFromBackground = false
+    private var returningFromExternalPage = false
+
+    private fun isDesktopIntent(intent: Intent?) = intent?.action == Intent.ACTION_MAIN &&
+        intent.hasCategory(Intent.CATEGORY_LAUNCHER)
     private fun readCaptureRequest(intent: Intent?) {
         captureRequest.value = intent?.takeIf { it.action == com.wmm.ledger.capture.REVIEW_PAYMENT_ACTION }
             ?.getStringExtra(com.wmm.ledger.capture.PAYMENT_CAPTURE_ID)?.takeIf {
@@ -107,16 +115,23 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         readCaptureRequest(intent)
+        if (isDesktopIntent(intent)) {
+            returningFromBackground = true
+            returningFromExternalPage = false
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         readCaptureRequest(intent)
-        val desktopLaunch = savedInstanceState == null && intent?.action == Intent.ACTION_MAIN &&
-            intent?.hasCategory(Intent.CATEGORY_LAUNCHER) == true
+        returningFromExternalPage = savedInstanceState?.getBoolean("returning_external") ?: false
+        if (!ledgerModel.launchHandled) {
+            returningFromBackground = isDesktopIntent(intent)
+            ledgerModel.launchHandled = true
+        }
         enableEdgeToEdge()
         setContent {
-            val model: LedgerViewModel = viewModel()
+            val model = ledgerModel
             val appearance by model.appearance.collectAsStateWithLifecycle()
             val dark = when (appearance) {
                 Appearance.SYSTEM -> isSystemInDarkTheme()
@@ -130,11 +145,43 @@ class MainActivity : ComponentActivity() {
                 )
             }
             val request by captureRequest.collectAsStateWithLifecycle()
-            LedgerTheme(dark) { LedgerApp(model, appearance, request, desktopLaunch && model.openEntryOnLaunch.value) {
+            val openEntry by entryRequest.collectAsStateWithLifecycle()
+            LedgerTheme(dark) { LedgerApp(model, appearance, request, openEntry, { entryRequest.value = false }) {
                 captureRequest.value = null
                 intent?.removeExtra(com.wmm.ledger.capture.PAYMENT_CAPTURE_ID)
             } }
         }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (!isChangingConfigurations) returningFromBackground = true
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (returningFromBackground && !returningFromExternalPage && captureRequest.value == null &&
+            ledgerModel.openEntryOnLaunch.value) entryRequest.value = true
+        returningFromBackground = false
+        returningFromExternalPage = false
+    }
+
+    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+    override fun startActivityForResult(intent: Intent, requestCode: Int, options: Bundle?) {
+        // 选照片、文件、系统授权及分享结束后继续原流程，下一次主动重新打开应用再进入记账。
+        val previous = returningFromExternalPage
+        returningFromExternalPage = true
+        try {
+            super.startActivityForResult(intent, requestCode, options)
+        } catch (error: Exception) {
+            returningFromExternalPage = previous
+            throw error
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean("returning_external", returningFromExternalPage)
+        super.onSaveInstanceState(outState)
     }
 }
 
@@ -142,7 +189,7 @@ private data class Destination(val route: String?, val depth: Int)
 
 @Composable
 private fun LedgerApp(model: LedgerViewModel, appearance: Appearance, incomingCapture: String?,
-    startWithEntry: Boolean, consumeCapture: () -> Unit) {
+    openEntry: Boolean, consumeEntry: () -> Unit, consumeCapture: () -> Unit) {
     val paymentModel: PaymentCaptureViewModel = viewModel()
     val paymentOptions by paymentModel.options.collectAsStateWithLifecycle()
     val paymentAccounts by paymentModel.accounts.collectAsStateWithLifecycle()
@@ -156,8 +203,7 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance, incomingCa
     val fileBusy by model.fileBusy.collectAsStateWithLifecycle()
     var tabName by rememberSaveable { mutableStateOf(Tab.LEDGER.name) }
     val tab = if (tabName == Tab.STATS.name) Tab.STATS else Tab.LEDGER
-    // 只给桌面新启动设置初始页面，已有页面和核对入口沿用各自的路由。
-    var route by rememberSaveable { mutableStateOf(if (startWithEntry && incomingCapture == null) "new" else null) }
+    var route by rememberSaveable { mutableStateOf<String?>(null) }
     var parent by rememberSaveable { mutableStateOf<String?>(null) }
     var periodName by rememberSaveable { mutableStateOf(Period.MONTH.name) }
     var dayText by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
@@ -239,6 +285,19 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance, incomingCa
             consumeCapture()
             parent = "auto-capture"
             route = "capture:$incomingCapture"
+        }
+    }
+
+    LaunchedEffect(openEntry, incomingCapture, snapshot != null) {
+        if (openEntry && snapshot != null) {
+            consumeEntry()
+            val editing = route == "new" || route?.startsWith("entry:") == true ||
+                route?.startsWith("transfer:") == true || route?.startsWith("capture:") == true
+            if (incomingCapture == null && !editing) {
+                parent = null
+                tabName = Tab.LEDGER.name
+                route = "new"
+            }
         }
     }
 

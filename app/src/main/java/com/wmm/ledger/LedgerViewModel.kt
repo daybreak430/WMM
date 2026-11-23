@@ -68,6 +68,7 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
     internal val appearance = preferredAppearance.asStateFlow()
     private val launchEntry = MutableStateFlow(launchPrefs.getBoolean("open_entry", false))
     internal val openEntryOnLaunch = launchEntry.asStateFlow()
+    internal var launchHandled = false
     private val backupShares = Channel<Uri>(Channel.BUFFERED)
     val sharedBackups = backupShares.receiveAsFlow()
 
