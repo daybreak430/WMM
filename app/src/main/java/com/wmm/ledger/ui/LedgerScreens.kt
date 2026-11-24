@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -157,7 +156,7 @@ private sealed class LedgerListItem(val id: String, val day: String, val occurre
 internal fun LazyListScope.ledgerRows(
     entries: List<Entry>, data: LedgerSnapshot, today: LocalDate, edit: (Entry) -> Unit,
     editTransfer: ((Transfer) -> Unit)? = null,
-    dailyTotals: Map<String, Cashflow> = emptyMap(),
+    dailyTotals: Map<String, Cashflow>? = null,
 ) {
     val tagById = data.tags.associateBy { it.id }
     val sceneById = data.scenes.associateBy { it.id }
@@ -173,17 +172,10 @@ internal fun LazyListScope.ledgerRows(
                 today.minusDays(1) -> "昨天"
                 else -> if (day.year == today.year) day.format(DateLabel) else date
             }
-            FlowRow(Modifier.fillMaxWidth().padding(start = 2.dp, top = 11.dp, bottom = 6.dp),
-                horizontalArrangement = Arrangement.SpaceBetween, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                val total = dailyTotals[date]
-                if (total != null) {
-                    if (total.income > 0) Text("收 ${currency(total.income)}", style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (total.expense > 0) Text("支 ${currency(total.expense)}", style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
+            if (dailyTotals == null) {
+                Text(label, Modifier.padding(start = 2.dp, top = 11.dp, bottom = 6.dp), style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else LedgerDayHeader(label, dailyTotals[date])
         }
         itemsIndexed(records, key = { _, record -> record.id }) { position, record ->
             val first = if (position == 0) 18.dp else 0.dp
