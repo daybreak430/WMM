@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -42,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.wmm.ledger.data.Cashflow
+import com.wmm.ledger.data.dailyCashflow
 import com.wmm.ledger.data.Entry
 import com.wmm.ledger.data.FIRST_DAY
 import com.wmm.ledger.data.Kind
@@ -61,6 +63,7 @@ fun LedgerScreen(data: LedgerSnapshot, today: LocalDate, openSettings: () -> Uni
     edit: (Entry) -> Unit, bottomInset: Dp, editTransfer: (Transfer) -> Unit,
     search: () -> Unit, ask: () -> Unit) {
     val stats = remember(data, today) { data.stats(Period.MONTH, today, today) }
+    val dailyTotals = remember(data.entries) { data.dailyCashflow() }
     val colors = MaterialTheme.colorScheme
     val inset = LedgerPageInset()
     Column(Modifier.fillMaxSize()) {
@@ -113,7 +116,7 @@ fun LedgerScreen(data: LedgerSnapshot, today: LocalDate, openSettings: () -> Uni
             if (data.entries.isEmpty() && data.transfers.isEmpty()) {
                 item("empty") { GroupCard { EmptyPanel("还没有流水") } }
             } else {
-                ledgerRows(data.entries, data, today, edit, editTransfer)
+                ledgerRows(data.entries, data, today, edit, editTransfer, dailyTotals)
             }
         }
     }
@@ -151,9 +154,10 @@ private sealed class LedgerListItem(val id: String, val day: String, val occurre
     class TransferItem(val transfer: Transfer) : LedgerListItem("transfer:${transfer.id}", transfer.day, transfer.occurredAt)
 }
 
-fun LazyListScope.ledgerRows(
+internal fun LazyListScope.ledgerRows(
     entries: List<Entry>, data: LedgerSnapshot, today: LocalDate, edit: (Entry) -> Unit,
     editTransfer: ((Transfer) -> Unit)? = null,
+    dailyTotals: Map<String, Cashflow> = emptyMap(),
 ) {
     val tagById = data.tags.associateBy { it.id }
     val sceneById = data.scenes.associateBy { it.id }
@@ -169,8 +173,17 @@ fun LazyListScope.ledgerRows(
                 today.minusDays(1) -> "昨天"
                 else -> if (day.year == today.year) day.format(DateLabel) else date
             }
-            Text(label, Modifier.padding(start = 2.dp, top = 11.dp, bottom = 6.dp), style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            FlowRow(Modifier.fillMaxWidth().padding(start = 2.dp, top = 11.dp, bottom = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                val total = dailyTotals[date]
+                if (total != null) {
+                    if (total.income > 0) Text("收 ${currency(total.income)}", style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (total.expense > 0) Text("支 ${currency(total.expense)}", style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
         }
         itemsIndexed(records, key = { _, record -> record.id }) { position, record ->
             val first = if (position == 0) 18.dp else 0.dp

@@ -6,6 +6,9 @@ internal data class Cashflow(val income: Long, val expense: Long)
 
 internal data class DailyCashflow(val date: LocalDate, val amount: Cashflow)
 
+internal fun LedgerSnapshot.dailyCashflow(): Map<String, Cashflow> =
+    netEntries().groupBy { it.day }.mapValues { (_, records) -> records.cashflow() }
+
 internal fun LedgerSnapshot.weekCashflow(day: LocalDate): List<DailyCashflow> {
     val first = Period.WEEK.start(day)
     val startDay = first.toString()
