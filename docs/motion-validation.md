@@ -77,7 +77,7 @@
 - 0.13.5 → 0.13.6 使用 `adb install -r` 成功，安装时间保持 `2026-11-15 20:49:09`。
 - 升级前后原有 `Upgrade-Huabei` 信用账户、净资产 −¥123.45、待还 ¥123.45 保留。
 - 本地包：`release/WMM-0.13.6-release.apk`，签名验证与 16KB zipalign 检查通过。
-- APK SHA-256：`a0ed90774c528b4dcc5d698e31ac0ca24e3dfe10669438de900058e45ff0f42f`。
+- APK 的最终 SHA-256 记录在 Release 说明中；在源码提交后重新构建，让 APK 的版本控制元数据与发布标签一致，再核对本地和下载附件的 SHA-256。
 - 发布目标：[v0.13.6](https://github.com/daybreak430/WMM/releases/tag/v0.13.6)。标签指向构建源码提交，附件名与本地一致；发布流程另核对公开下载 SHA-256。
 
 提交信息：`优化：统一全项目状态动效与交互反馈`。
