@@ -66,11 +66,11 @@ class RecordUiTest {
         ui.waitUntil(5_000) { ui.onAllNodesWithTag("amount-keypad").fetchSemanticsNodes().isNotEmpty() }
         ui.onNodeWithText("首笔账单").assertIsDisplayed()
         ui.onNodeWithText("保存流水").assertIsEnabled().performClick()
-        ui.waitUntil(10_000) { ui.onAllNodesWithText("最近流水").fetchSemanticsNodes().isNotEmpty() }
+        ui.waitUntil(10_000) { ui.onAllNodesWithText("本月结余").fetchSemanticsNodes().isNotEmpty() }
         ui.onNodeWithText(combined).assertIsDisplayed()
         ui.onNode(hasText(combined) and hasText("−¥12.35")).assertIsDisplayed()
 
-        ui.onNodeWithText("收支统计").performClick()
+        ui.onNodeWithText("统计").performClick()
         ui.onNodeWithText("月").assertIsDisplayed()
         ui.onNode(hasScrollAction()).performScrollToNode(hasText(scene))
         ui.onNodeWithText(scene).performClick()
@@ -102,10 +102,10 @@ class RecordUiTest {
         ui.waitUntil(10_000) { ui.onAllNodesWithContentDescription("记一笔").fetchSemanticsNodes().isNotEmpty() }
         ui.mainClock.autoAdvance = false
         try {
-            ui.onNodeWithText("收支统计").performClick()
+            ui.onNodeWithText("统计").performClick()
             ui.mainClock.advanceTimeByFrame()
             ui.onNodeWithText("本月收支看板").assertIsDisplayed()
-            ui.onNodeWithText("最近流水").assertDoesNotExist()
+            ui.onNodeWithText("本月结余").assertDoesNotExist()
 
             ui.onNodeWithText("周").performClick()
             ui.mainClock.advanceTimeByFrame()
@@ -126,17 +126,17 @@ class RecordUiTest {
 
             ui.onNodeWithText("账本").performClick()
             ui.mainClock.advanceTimeByFrame()
-            ui.onNodeWithText("最近流水").assertIsDisplayed()
+            ui.onNodeWithText("本月结余").assertIsDisplayed()
             ui.onNodeWithText("年度收支看板").assertDoesNotExist()
 
             ui.onNodeWithText("统计").performClick()
             ui.mainClock.advanceTimeByFrame()
             ui.onNodeWithText("年度收支看板").assertIsDisplayed()
-            ui.onNodeWithText("最近流水").assertDoesNotExist()
+            ui.onNodeWithText("本月结余").assertDoesNotExist()
 
             ui.onNodeWithText("账本").performClick()
             ui.mainClock.advanceTimeByFrame()
-            ui.onNodeWithText("最近流水").assertIsDisplayed()
+            ui.onNodeWithText("本月结余").assertIsDisplayed()
             ui.onNodeWithText("年度收支看板").assertDoesNotExist()
         } finally {
             ui.mainClock.autoAdvance = true

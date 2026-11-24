@@ -41,8 +41,8 @@ class StatsChartsUiTest {
             Entry("record-$index", tag.kind, (7 - index) * 10_000L, tag.id, null, "", 1, today.toString())
         }
         withLedger(LedgerSnapshot(tags = tags, entries = entries)) { _, activity ->
-            ui.waitUntil(10_000) { ui.onNodeWithText("收支统计").isDisplayed() }
-            ui.onNodeWithText("收支统计").performClick()
+            ui.waitUntil(10_000) { ui.onNodeWithText("统计").isDisplayed() }
+            ui.onNodeWithText("统计").performClick()
             val list = ui.onNode(hasScrollAction())
             val toggle = hasTestTag("share-toggle:expense")
             list.performScrollToNode(toggle)
@@ -71,9 +71,9 @@ class StatsChartsUiTest {
             ui.onNodeWithText("查看更多").assertIsDisplayed()
             ui.onNodeWithTag("share-toggle:expense").performTouchInput { click() }
             ui.onNodeWithText("账本").performClick()
-            ui.onNodeWithText("收支统计").performClick()
+            ui.onNodeWithText("统计").performClick()
             list.performScrollToNode(toggle)
-            ui.onNodeWithText("查看更多").assertIsDisplayed()
+            ui.onNodeWithText("收起").assertIsDisplayed()
         }
     }
 
@@ -85,8 +85,8 @@ class StatsChartsUiTest {
             Report(period.name, period.start(today).toString(), "0".repeat(64), 1, "DEEPSEEK", "旧报告-${period.title}")
         }
         withLedger(LedgerSnapshot(tags = tags, entries = entries, reports = reports)) { repository, _ ->
-            ui.waitUntil(10_000) { ui.onNodeWithText("收支统计").isDisplayed() }
-            ui.onNodeWithText("收支统计").performClick()
+            ui.waitUntil(10_000) { ui.onNodeWithText("统计").isDisplayed() }
+            ui.onNodeWithText("统计").performClick()
             val list = ui.onNode(hasScrollAction())
             listOf("周", "月", "年").forEach { period ->
                 list.performScrollToIndex(0)
@@ -119,8 +119,8 @@ class StatsChartsUiTest {
                 entry("older-ride", transit, 1000, previousWeek), entry("payment", salary, 12000, today)),
         )
         withLedger(ledger) { _, _ ->
-            ui.waitUntil(10_000) { ui.onNodeWithText("收支统计").isDisplayed() }
-            ui.onNodeWithText("收支统计").performClick()
+            ui.waitUntil(10_000) { ui.onNodeWithText("统计").isDisplayed() }
+            ui.onNodeWithText("统计").performClick()
             val list = ui.onNode(hasScrollAction())
             val sceneChart = "支出场景占比环形图"
             val unassigned = hasText("未标场景")

@@ -369,12 +369,8 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance, incomingCa
                                 LedgerScreenTheme(tab == Tab.LEDGER) {
                                     navState.SaveableStateProvider(tab.name) {
                                         when (tab) {
-                                            Tab.LEDGER -> LedgerScreen(data, today, { route = "settings" }, {
-                                                dayText = today.toString()
-                                                followToday = true
-                                                periodName = Period.MONTH.name
-                                                tabName = Tab.STATS.name
-                                            }, { route = "entry:${it.id}" }, bottomInset,
+                                            Tab.LEDGER -> LedgerScreen(data, today, { route = "settings" },
+                                                { route = "entry:${it.id}" }, bottomInset,
                                                 editTransfer = { route = "transfer:${it.id}" },
                                                 search = { parent = null; route = "search" },
                                                 ask = { parent = null; route = "ask" })

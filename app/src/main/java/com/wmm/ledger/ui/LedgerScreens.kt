@@ -58,7 +58,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Composable
-fun LedgerScreen(data: LedgerSnapshot, today: LocalDate, openSettings: () -> Unit, openStats: () -> Unit,
+fun LedgerScreen(data: LedgerSnapshot, today: LocalDate, openSettings: () -> Unit,
     edit: (Entry) -> Unit, bottomInset: Dp, editTransfer: (Transfer) -> Unit,
     search: () -> Unit, ask: () -> Unit) {
     val stats = remember(data, today) { data.stats(Period.MONTH, today, today) }
@@ -104,16 +104,8 @@ fun LedgerScreen(data: LedgerSnapshot, today: LocalDate, openSettings: () -> Uni
                     }
                 }
             }
-            item("recent") {
-                SectionTitle("最近流水", Modifier.padding(top = 14.dp, bottom = 2.dp)) {
-                    TextButton(onClick = openStats) {
-                        Text("收支统计")
-                        LucideIcon(Glyph.RIGHT, color = colors.primary, size = 15)
-                    }
-                }
-            }
             if (data.entries.isEmpty() && data.transfers.isEmpty()) {
-                item("empty") { GroupCard { EmptyPanel("还没有流水") } }
+                item("empty") { Box(Modifier.padding(top = 16.dp)) { GroupCard { EmptyPanel("还没有流水") } } }
             } else {
                 ledgerRows(data.entries, data, today, edit, editTransfer, dailyTotals)
             }
