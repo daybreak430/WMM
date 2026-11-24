@@ -106,7 +106,7 @@ internal fun PaymentCaptureScreen(data: LedgerSnapshot, model: PaymentCaptureVie
             item("pending-title") { SectionTitle("待核对 · ${captures.pending.size}") }
             if (captures.pending.isEmpty()) item("empty") { GroupCard { EmptyPanel("暂无待核对账单") } }
             items(captures.pending, key = { it.id }) { capture ->
-                GroupCard { Column {
+                GroupCard(ledgerItemMotion()) { Column {
                     val source = PaymentSource.valueOf(capture.source)
                     SettingsRow(capture.merchant, description = source.title + " · " + capture.type.title + " · " +
                         Instant.ofEpochMilli(capture.bookingAt).atZone(ZoneId.systemDefault()).toLocalDate(),

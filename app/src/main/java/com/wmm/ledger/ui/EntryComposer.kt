@@ -3,54 +3,59 @@ package com.wmm.ledger.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.wmm.ledger.data.MAX_NOTE
 import com.wmm.ledger.data.MAX_CENTS
+import com.wmm.ledger.data.MAX_NOTE
 import com.wmm.ledger.data.currency
 import com.wmm.ledger.data.editableAmount
 
@@ -89,6 +94,8 @@ internal fun EntryComposer(
     account: (@Composable () -> Unit)? = null, date: @Composable () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
+    // 窄窗口／大字号下保存文案可能占两行，整排按同一高度预留，避免状态文字变化挤动键盘。
+    val keyHeight = maxOf(48.dp, with(LocalDensity.current) { MaterialTheme.typography.labelLarge.lineHeight.toDp() * 2 + 4.dp })
     val haptics = LocalHapticFeedback.current
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -180,26 +187,31 @@ internal fun EntryComposer(
                                         "-" -> "减"
                                         else -> label
                                     }
-                                    Surface(onClick = {
-                                        haptics.performHapticFeedback(HapticFeedbackType.VirtualKey)
-                                        // 由草稿持有者读取最新状态，连续快速点按不依赖上一帧的显示值。
-                                        if (action) onSave() else onKey(key)
-                                    }, enabled = enabled, shape = RoundedCornerShape(12.dp),
-                                        color = if (action) {
+                                    val interaction = remember { MutableInteractionSource() }
+                                    val pressed by interaction.collectIsPressedAsState()
+                                    Surface(shape = RoundedCornerShape(12.dp),
+                                        color = ledgerColor(if (action) {
                                             if (enabled) colors.primary else colors.onSurface.copy(alpha = .10f)
-                                        } else colors.surface,
-                                        modifier = Modifier.weight(1f).height(48.dp)
+                                        } else if (pressed) colors.surfaceContainerHighest else colors.surface),
+                                        modifier = Modifier.weight(1f).height(keyHeight)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .clickable(interactionSource = interaction, indication = null, enabled = enabled, role = Role.Button) {
+                                                haptics.performHapticFeedback(HapticFeedbackType.VirtualKey)
+                                                // 由草稿持有者读取最新状态，连续快速点按不依赖上一帧的显示值。
+                                                if (action) onSave() else onKey(key)
+                                            }
                                             .testTag("amount-key-$key").semantics {
                                                 contentDescription = description
                                                 role = Role.Button
                                             }) {
-                                        Box(contentAlignment = Alignment.Center) {
+                                        Box(Modifier.ledgerPress(interaction), contentAlignment = Alignment.Center) {
                                             Text(label, color = when {
                                                 action && enabled -> colors.onPrimary
                                                 !enabled -> colors.onSurface.copy(alpha = .38f)
                                                 else -> colors.onSurface
                                             }, style = if (action || key == "clear") MaterialTheme.typography.labelLarge
                                             else MaterialTheme.typography.headlineSmall,
+                                                textAlign = TextAlign.Center,
                                                 fontWeight = if (action) FontWeight.SemiBold else FontWeight.Medium,
                                                 maxLines = if (action) 2 else 1)
                                         }
@@ -226,7 +238,7 @@ internal fun EntryMetaButton(label: String, value: String, icon: Glyph,
             Row(Modifier.heightIn(min = 30.dp).padding(horizontal = 10.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 LucideIcon(icon, colors.primary, size = 14)
-                Text(value, modifier = Modifier.weight(1f, fill = false),
+                Text(value, modifier = Modifier.weight(1f, fill = false).ledgerContentChange(value),
                     style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }

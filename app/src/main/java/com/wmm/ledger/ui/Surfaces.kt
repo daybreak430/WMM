@@ -2,6 +2,7 @@ package com.wmm.ledger.ui
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -32,7 +33,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
@@ -125,10 +129,10 @@ fun BalancePanel(content: @Composable ColumnScope.() -> Unit) {
 }
 
 @Composable
-fun GroupCard(content: @Composable ColumnScope.() -> Unit) {
+fun GroupCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val refined = LocalLedgerRefinement.current
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = if (refined) RoundedCornerShape(18.dp) else CardShape,
         color = MaterialTheme.colorScheme.surface,
     ) {
@@ -151,15 +155,15 @@ fun PrimaryAction(text: String, onClick: () -> Unit, modifier: Modifier = Modifi
         enabled = enabled,
         shape = if (refined) FieldShape else ActionShape,
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (refined && pressed) Color(if (dark) 0xFF71A6F5 else 0xFF1956B8) else colors.primary,
+            containerColor = ledgerColor(if (refined && pressed) Color(if (dark) 0xFF71A6F5 else 0xFF1956B8) else colors.primary),
             contentColor = colors.onPrimary,
             disabledContainerColor = colors.surfaceContainerHighest,
             disabledContentColor = colors.onSurfaceVariant,
         ),
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.ledgerPress(interaction), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             if (glyph != null) LucideIcon(glyph, if (enabled) colors.onPrimary else colors.onSurfaceVariant, size = 20)
-            Text(text, style = MaterialTheme.typography.labelLarge)
+            Text(text, modifier = Modifier.ledgerContentChange(text), style = MaterialTheme.typography.labelLarge)
         }
     }
 }
@@ -170,6 +174,9 @@ fun <T> LedgerSegments(options: List<T>, selected: T, title: (T) -> String,
 ) {
     val colors = MaterialTheme.colorScheme
     val refined = LocalLedgerRefinement.current
+    val selectedIndex = options.indexOf(selected).coerceAtLeast(0).toFloat()
+    val motionEnabled = LocalLedgerMotionEnabled.current
+    val position = animateFloatAsState(selectedIndex, ledgerSpring(), label = "分段选择位置")
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = FieldShape,
@@ -177,25 +184,33 @@ fun <T> LedgerSegments(options: List<T>, selected: T, title: (T) -> String,
         border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = .55f)),
     ) {
         Row(
-            Modifier.padding(3.dp).selectableGroup(),
+            Modifier.padding(3.dp).selectableGroup().drawBehind {
+                if (options.isNotEmpty()) {
+                    val gap = 3.dp.toPx()
+                    val width = (size.width - gap * (options.size - 1)) / options.size
+                    val index = if (motionEnabled) position.value else selectedIndex
+                    val logical = index * (width + gap)
+                    val left = if (layoutDirection == androidx.compose.ui.unit.LayoutDirection.Ltr) logical else size.width - width - logical
+                    drawRoundRect(colors.primaryContainer, Offset(left, 0f), Size(width, size.height), CornerRadius(11.dp.toPx()))
+                }
+            },
             horizontalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             for (option in options) {
                 val active = selected == option
                 val shape = RoundedCornerShape(11.dp)
-                val fill = if (active) colors.primaryContainer else Color.Transparent
-                val tint = if (active) colors.primary else colors.onSurfaceVariant
+                val interaction = remember(option) { MutableInteractionSource() }
+                val tint = ledgerColor(if (active) colors.primary else colors.onSurfaceVariant)
                 Box(
                     Modifier.weight(1f).heightIn(min = if (refined) 44.dp else 48.dp).clip(shape)
-                        .background(fill)
                         .selectable(
-                            selected = active, interactionSource = null, indication = null,
+                            selected = active, interactionSource = interaction, indication = null,
                             role = Role.RadioButton, onClick = { onSelect(option) },
                         )
                         .padding(horizontal = 8.dp, vertical = 7.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(title(option), color = tint,
+                    Text(title(option), modifier = Modifier.ledgerPress(interaction), color = tint,
                         style = MaterialTheme.typography.labelLarge)
                 }
             }

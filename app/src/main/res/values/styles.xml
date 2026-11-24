@@ -12,4 +12,8 @@
     <style name="LedgerPickerDark" parent="android:style/Theme.Material.Dialog.Alert">
         <item name="android:colorAccent">@color/brand_blue_dark_theme</item>
     </style>
+    <style name="LedgerDialogAnimation">
+        <item name="android:windowEnterAnimation">@anim/ledger_dialog_enter</item>
+        <item name="android:windowExitAnimation">@anim/ledger_dialog_exit</item>
+    </style>
 </resources>

@@ -1,5 +1,6 @@
 package com.wmm.ledger.ui
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,9 +36,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.wmm.ledger.data.Cashflow
 import com.wmm.ledger.data.DailyCashflow
 import com.wmm.ledger.data.Period
-import com.wmm.ledger.data.Cashflow
 import com.wmm.ledger.data.currency
 import java.time.LocalDate
 
@@ -108,9 +109,8 @@ internal fun WeekTrend(days: List<DailyCashflow>, anchor: LocalDate, today: Loca
                     ) {
                         Box(Modifier.fillMaxWidth().height(108.dp),
                             contentAlignment = Alignment.BottomCenter) {
-                            if (active) {
-                                Box(Modifier.fillMaxSize().background(colors.primaryContainer.copy(alpha = .36f), FieldShape))
-                            }
+                            Box(Modifier.fillMaxSize().background(ledgerColor(
+                                if (active) colors.primaryContainer.copy(alpha = .36f) else Color.Transparent), FieldShape))
                             Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.Bottom) {
                                 TrendBar(item.amount.income, peak, colors.primary)
                                 TrendBar(item.amount.expense, peak, expenseColor)
@@ -142,13 +142,14 @@ private fun TrendLegend(label: String, color: Color) {
 
 @Composable
 private fun TrendBar(amount: Long, peak: Long, color: Color) {
-    if (amount == 0L || peak <= 0L) {
-        Spacer(Modifier.width(8.dp))
-        return
-    }
-    val height = (108f * (amount.toDouble() / peak)).toFloat().dp.coerceAtLeast(1.dp)
-    Box(Modifier.width(8.dp).height(height)
-        .background(color, RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp)))
+    val fraction = animateFloatAsState(if (peak > 0) (amount.toDouble() / peak).toFloat() else 0f,
+        ledgerSpring(), label = "趋势金额比例")
+    // 固定绘图区，只在绘制阶段改变柱高，金额变化不会逐帧重排趋势布局。
+    Box(Modifier.width(8.dp).height(108.dp).drawBehind {
+        val height = (size.height * fraction.value.coerceIn(0f, 1f)).coerceAtLeast(0f)
+        drawRoundRect(color, Offset(0f, size.height - height), androidx.compose.ui.geometry.Size(size.width, height),
+            androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()))
+    })
 }
 
 @Composable

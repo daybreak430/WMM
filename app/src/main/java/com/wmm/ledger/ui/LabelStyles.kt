@@ -108,7 +108,7 @@ internal fun IconColor.labelColors(): LabelColors {
 internal fun LabelBadge(style: LabelStyle?, size: Int = 38, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
     val palette = style?.color?.labelColors()
-    Box(modifier.size(size.dp)
+    Box(modifier.size(size.dp).ledgerContentChange(style)
         .background(palette?.fill ?: colors.surfaceVariant, RoundedCornerShape(11.dp)),
         contentAlignment = Alignment.Center) {
         val iconSize = if (size <= 36) 17 else 19
@@ -120,7 +120,7 @@ internal fun LabelBadge(style: LabelStyle?, size: Int = 38, modifier: Modifier =
 @Composable
 internal fun LabelGlyph(style: LabelStyle, size: Int, tint: Color) {
     Icon(painterResource(style.icon.drawable), contentDescription = null,
-        tint = tint, modifier = Modifier.size(size.dp))
+        tint = ledgerColor(tint), modifier = Modifier.size(size.dp).ledgerContentChange(style.icon))
 }
 
 @Composable
@@ -153,7 +153,7 @@ internal fun LabelStylesScreen(data: LedgerSnapshot, model: LedgerViewModel, bac
             val visible = labels.filter { it.section == selected }
             if (visible.isEmpty()) item { GroupCard { EmptyPanel("还没有${if (selected == "场景") "场景" else "${selected}类型"}") } }
             items(visible, key = { it.id }) { label ->
-                GroupCard {
+                GroupCard(ledgerItemMotion()) {
                     Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { editing = label.id }
                         .padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically) {
@@ -223,7 +223,7 @@ private fun LabelStyleDialog(label: StyleLabel, dismiss: () -> Unit, save: (Labe
                     IconColor.entries.forEach { candidate ->
                         val active = color == candidate
                         Box(Modifier.size(33.dp).clip(CircleShape)
-                            .background(if (active) colors.surfaceContainerHighest else Color.Transparent)
+                            .background(ledgerColor(if (active) colors.surfaceContainerHighest else Color.Transparent))
                             .selectable(active, interactionSource = null, indication = null, role = Role.RadioButton,
                                 onClick = { color = candidate })
                             .semantics { contentDescription = candidate.title },
@@ -238,7 +238,7 @@ private fun LabelStyleDialog(label: StyleLabel, dismiss: () -> Unit, save: (Labe
                     LabelIcon.entries.forEach { candidate ->
                         val active = icon == candidate
                         Box(Modifier.size(40.dp).clip(RoundedCornerShape(10.dp))
-                            .background(if (active) colors.primaryContainer else colors.surfaceVariant)
+                            .background(ledgerColor(if (active) colors.primaryContainer else colors.surfaceVariant))
                             .selectable(active, interactionSource = null, indication = null, role = Role.RadioButton,
                                 onClick = { icon = candidate }),
                             contentAlignment = Alignment.Center) {

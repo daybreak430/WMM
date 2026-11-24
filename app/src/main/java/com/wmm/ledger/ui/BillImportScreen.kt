@@ -62,7 +62,7 @@ internal fun BillImportScreen(data: LedgerSnapshot, model: LedgerViewModel, prov
     val labels = remember(data.entries, data.tags, data.scenes) { BillLabels(data) }
     val colors = MaterialTheme.colorScheme
 
-    Column(Modifier.fillMaxSize().imePadding()) {
+    Column(Modifier.fillMaxSize().imePadding().ledgerContentChange(if (state.scanning) "scanning" else if (review) "review" else "choose")) {
         PageHeader("AI 导入账单", back)
         when {
             state.scanning -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -188,7 +188,7 @@ private fun BillReviewRow(row: BillRow, archivedType: Boolean, enabled: Boolean,
     GroupCard {
         Row(Modifier.fillMaxWidth().padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = row.selected, onCheckedChange = toggle, enabled = enabled && !row.alreadyImported)
-            Column(Modifier.weight(1f).padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Column(Modifier.weight(1f).ledgerSizeMotion().ledgerContentChange(row).padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 val label = billLabel(row.type.ifBlank { "类型待填写" }, row.scene.takeIf { row.kind != Kind.INCOME }.orEmpty())
                 Text(label, style = MaterialTheme.typography.titleSmall)
                 val amount = parseCents(row.amount)?.let(::currency) ?: "金额待核对"
@@ -232,7 +232,7 @@ internal fun BillRowDialog(row: BillRow, labels: BillLabels, dismiss: () -> Unit
                     if (chosen != Kind.EXPENSE) scene = ""
                 }
             }
-            if (kind == Kind.EXPENSE) {
+            LedgerVisibility(kind == Kind.EXPENSE) {
                 SettingsRow("场景", end = scene.ifBlank { "无场景" }) { picker = "场景" }
                 Hairline(14)
             }

@@ -101,7 +101,7 @@ internal fun RefundEditor(data: LedgerSnapshot, model: LedgerViewModel, initial:
                     }
                 }
             }
-            if (original != null && cents != null && (cents > remaining || original.day > dayText)) {
+            LedgerVisibility(original != null && cents != null && (cents > remaining || original.day > dayText)) {
                 Text("核对退款日期和剩余可退金额 ${currency(remaining)}。", color = MaterialTheme.colorScheme.error)
             }
         }

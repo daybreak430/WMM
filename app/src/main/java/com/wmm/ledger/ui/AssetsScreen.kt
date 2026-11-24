@@ -94,7 +94,7 @@ fun AssetsScreen(data: LedgerSnapshot, model: LedgerViewModel, back: () -> Unit)
                     ReorderableLedgerItem(
                         id, order, activeById.keys, dragState,
                         save = { updated, failed -> model.reorderAccounts(updated, failed) },
-                        modifier = Modifier.fillMaxWidth().animateItem(),
+                        modifier = ledgerItemMotion(Modifier.fillMaxWidth()),
                     ) {
                         AccountCard(activeById.getValue(id), balances[id] ?: 0) { accountOptions = id }
                     }

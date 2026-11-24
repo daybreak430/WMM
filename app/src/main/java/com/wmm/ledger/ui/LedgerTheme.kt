@@ -114,7 +114,7 @@ fun LedgerTheme(dark: Boolean, content: @Composable () -> Unit) {
     val lightBlue = colorResource(R.color.brand_blue_dark_theme)
     val palette = if (dark) Dark.copy(primary = lightBlue, inversePrimary = blue)
         else Light.copy(primary = blue, inversePrimary = lightBlue)
-    CompositionLocalProvider(LocalLedgerDark provides dark) {
+    CompositionLocalProvider(LocalLedgerDark provides dark, LocalLedgerMotionEnabled provides rememberLedgerMotionEnabled()) {
         MaterialTheme(
             colorScheme = palette,
             typography = LedgerType,

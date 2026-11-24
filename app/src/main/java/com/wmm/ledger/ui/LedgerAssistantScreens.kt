@@ -68,7 +68,7 @@ internal fun LedgerSearchScreen(data: LedgerSnapshot, query: String, result: Led
             trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { change("") }) { LucideIcon(Glyph.CLOSE, description = "清空搜索") } })
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = PagePadding, vertical = 12.dp)) {
             if (query.isNotBlank()) item("count") {
-                Text("${result.entries.size + result.transfers.size} 笔", style = MaterialTheme.typography.labelMedium,
+                Text("${result.entries.size + result.transfers.size} 笔", modifier = Modifier.ledgerContentChange(result.entries.size + result.transfers.size), style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (result.entries.isEmpty() && result.transfers.isEmpty()) item("empty") { EmptyPanel("没有找到流水") }
@@ -115,7 +115,7 @@ internal fun LedgerQuestionScreen(turns: List<QuestionTurn>, question: String, c
             contentPadding = PaddingValues(horizontal = PagePadding, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)) {
             if (turns.isEmpty()) item("examples") {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.ledgerSizeMotion().ledgerContentChange(suggestions.items), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (hasKey) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End,
                             verticalAlignment = Alignment.CenterVertically) {
@@ -136,12 +136,12 @@ internal fun LedgerQuestionScreen(turns: List<QuestionTurn>, question: String, c
                 }
             }
             items(turns, key = { it.id }) { turn ->
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(ledgerItemMotion(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Surface(shape = FieldShape, color = MaterialTheme.colorScheme.primaryContainer) {
                         Text(turn.question, Modifier.padding(14.dp), style = MaterialTheme.typography.titleSmall)
                     }
                     GroupCard {
-                        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(Modifier.fillMaxWidth().ledgerSizeMotion().ledgerContentChange(if (turn.answer != null) "answer" else if (turn.error != null) "error" else "loading").padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             when {
                                 turn.answer != null -> {
                                     Text(turn.answer.text, style = MaterialTheme.typography.bodyMedium)

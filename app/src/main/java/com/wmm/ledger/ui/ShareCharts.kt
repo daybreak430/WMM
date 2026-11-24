@@ -1,5 +1,6 @@
 package com.wmm.ledger.ui
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,6 +22,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -28,11 +30,11 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -75,10 +77,10 @@ internal fun LazyListScope.shareSection(
                 shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp), color = colors.surface) {
                 val palette = shareColors()
                 val slices = named.take(CHART_CATEGORY_LIMIT).mapIndexed { index, row ->
-                    ShareSlice(row.amount, palette[index])
+                    ShareSlice("category:${row.id}", row.amount, palette[index])
                 } + listOfNotNull(
-                    ShareSlice(otherAmount, otherColor).takeIf { otherAmount > 0 },
-                    ranks.firstOrNull { it.id == null }?.let { ShareSlice(it.amount, colors.onSurfaceVariant) },
+                    ShareSlice("aggregate:other", otherAmount, otherColor).takeIf { otherAmount > 0 },
+                    ranks.firstOrNull { it.id == null }?.let { ShareSlice("aggregate:unassigned", it.amount, colors.onSurfaceVariant) },
                 )
                 Column(Modifier.padding(top = 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     ShareRing(title, totalLabel, total, slices)
@@ -99,10 +101,10 @@ internal fun LazyListScope.shareSection(
         val colors = MaterialTheme.colorScheme
         val dotColor = if (row.id == null) colors.onSurfaceVariant
             else shareColors().getOrNull(index) ?: shareOtherColor()
-        ShareRow(row, total, dotColor, index == visibleRanks.lastIndex && !collapsible, row.id?.let { id -> { open(id) } })
+        ShareRow(row, total, dotColor, index == visibleRanks.lastIndex && !collapsible, row.id?.let { id -> { open(id) } }, ledgerItemMotion())
     }
     if (collapsible) item("share-toggle:$key") {
-        Surface(Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface,
+        Surface(ledgerItemMotion(Modifier.fillMaxWidth()), color = MaterialTheme.colorScheme.surface,
             shape = RoundedCornerShape(bottomStart = 18.dp, bottomEnd = 18.dp)) {
             TextButton(onClick = { toggleExpanded() },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("share-toggle:$key")
@@ -113,11 +115,16 @@ internal fun LazyListScope.shareSection(
     }
 }
 
-private data class ShareSlice(val amount: Long, val color: Color)
+private data class ShareSlice(val id: String, val amount: Long, val color: Color)
 
 @Composable
 private fun ShareRing(title: String, totalLabel: String, total: Long, slices: List<ShareSlice>) {
     val colors = MaterialTheme.colorScheme
+    val proportions = slices.map { slice ->
+        key(slice.id) {
+            animateFloatAsState((slice.amount.toDouble() / total).toFloat(), ledgerSpring(), label = "分类占比")
+        }
+    }
     Box(Modifier.size(142.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.matchParentSize().semantics { contentDescription = "${title}环形图" }) {
             val width = 14.dp.toPx()
@@ -126,8 +133,10 @@ private fun ShareRing(title: String, totalLabel: String, total: Long, slices: Li
             val stroke = Stroke(width)
             drawArc(colors.outlineVariant.copy(alpha = .45f), 0f, 360f, false, origin, diameter, style = stroke)
             var start = -90f
-            for (slice in slices) {
-                val sweep = (slice.amount.toDouble() * 360 / total).toFloat()
+            // 以同一帧的比例和归一化，过渡中整环仍保持闭合，读屏和中心金额始终使用最终数据。
+            val sum = proportions.sumOf { it.value.coerceAtLeast(0f).toDouble() }.toFloat().coerceAtLeast(.0001f)
+            for ((index, slice) in slices.withIndex()) {
+                val sweep = proportions[index].value.coerceAtLeast(0f) / sum * 360f
                 val gap = if (slices.size == 1) 0f else minOf(3f, sweep * .23f)
                 drawArc(slice.color, start + gap / 2, sweep - gap, false, origin, diameter, style = stroke)
                 start += sweep
@@ -143,12 +152,12 @@ private fun ShareRing(title: String, totalLabel: String, total: Long, slices: Li
 }
 
 @Composable
-private fun ShareRow(row: RankedAmount, total: Long, dot: Color, last: Boolean, click: (() -> Unit)?) {
+private fun ShareRow(row: RankedAmount, total: Long, dot: Color, last: Boolean, click: (() -> Unit)?, modifier: Modifier) {
     val colors = MaterialTheme.colorScheme
     val bottom = if (last) 18.dp else 0.dp
     val action = if (click == null) Modifier.semantics(mergeDescendants = true) {}
         else Modifier.clickable(role = Role.Button, onClick = click)
-    Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(bottomStart = bottom, bottomEnd = bottom),
+    Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(bottomStart = bottom, bottomEnd = bottom),
         color = colors.surface) {
         Column {
             Row(Modifier.fillMaxWidth().heightIn(min = 57.dp).then(action).padding(horizontal = 16.dp, vertical = 9.dp),

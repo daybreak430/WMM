@@ -117,8 +117,8 @@ fun AmountText(amount: String, color: Color = MaterialTheme.colorScheme.onSurfac
     modifier: Modifier = Modifier, style: TextStyle = RowNumber) {
     BasicText(
         text = amount,
-        modifier = modifier,
-        style = style.copy(color = color),
+        modifier = modifier.ledgerContentChange(amount),
+        style = style.copy(color = ledgerColor(color)),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         autoSize = TextAutoSize.StepBased(minFontSize = when {
@@ -141,7 +141,7 @@ fun ledgerFieldColors() = OutlinedTextFieldDefaults.colors(
 @Composable
 fun SectionTitle(title: String, modifier: Modifier = Modifier, end: @Composable () -> Unit = {}) {
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+        Text(title, Modifier.weight(1f).ledgerContentChange(title), style = MaterialTheme.typography.titleLarge)
         end()
     }
 }
@@ -177,7 +177,7 @@ fun SettingsRow(title: String, description: String? = null, icon: Glyph? = null,
             }
         } else if (end != null) {
             Box(Modifier.weight(.52f), contentAlignment = Alignment.CenterEnd) {
-                Text(end, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant,
+                Text(end, modifier = Modifier.ledgerContentChange(end), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }

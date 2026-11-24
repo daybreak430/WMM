@@ -4,9 +4,9 @@ import androidx.compose.animation.animateBounds
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -32,52 +34,52 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.LookaheadScope
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.wmm.ledger.LedgerViewModel
-import com.wmm.ledger.data.Entry
-import com.wmm.ledger.data.PaymentCapture
-import com.wmm.ledger.data.PaymentSource
-import com.wmm.ledger.data.similarEntries
-import com.wmm.ledger.data.Kind
-import com.wmm.ledger.data.LabelStyle
-import com.wmm.ledger.data.LedgerRepository
-import com.wmm.ledger.data.LedgerHabits
-import com.wmm.ledger.data.readHabitArea
-import com.wmm.ledger.data.LedgerSnapshot
-import com.wmm.ledger.data.MAX_NAME
-import com.wmm.ledger.data.editableAmount
-import com.wmm.ledger.data.changedOccurrenceTime
-import com.wmm.ledger.data.Tag
-import com.wmm.ledger.data.orderedScenes
-import com.wmm.ledger.data.orderedTags
-import com.wmm.ledger.data.validName
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mohamedrejeb.compose.dnd.DragAndDropContainer
 import com.mohamedrejeb.compose.dnd.DragAndDropState
 import com.mohamedrejeb.compose.dnd.scroll.dragAutoScroll
+import com.wmm.ledger.LedgerViewModel
+import com.wmm.ledger.data.Entry
+import com.wmm.ledger.data.Kind
+import com.wmm.ledger.data.LabelStyle
+import com.wmm.ledger.data.LedgerHabits
+import com.wmm.ledger.data.LedgerRepository
+import com.wmm.ledger.data.LedgerSnapshot
+import com.wmm.ledger.data.MAX_NAME
+import com.wmm.ledger.data.PaymentCapture
+import com.wmm.ledger.data.PaymentSource
+import com.wmm.ledger.data.Tag
+import com.wmm.ledger.data.changedOccurrenceTime
+import com.wmm.ledger.data.editableAmount
+import com.wmm.ledger.data.orderedScenes
+import com.wmm.ledger.data.orderedTags
+import com.wmm.ledger.data.readHabitArea
+import com.wmm.ledger.data.similarEntries
+import com.wmm.ledger.data.validName
 import java.time.LocalDate
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 private const val VISIBLE_TAG_LIMIT = 8
 
@@ -87,16 +89,18 @@ fun EntryEditor(data: LedgerSnapshot, initial: Entry?, model: LedgerViewModel, c
     var kindName by rememberSaveable { mutableStateOf(initial?.kind ?: Kind.EXPENSE.name) }
     var transferSelected by rememberSaveable { mutableStateOf(false) }
     val drafts = rememberSaveableStateHolder()
-    drafts.SaveableStateProvider(if (transferSelected) "transfer" else "entry") {
-        if (transferSelected) {
-            TransferEditor(data, null, model, back, onSelectKind = {
-                kindName = it.name
-                transferSelected = false
-            })
-        } else {
-            IncomeExpenseEditor(data, initial, model, Kind.valueOf(kindName), onKindChange = { kindName = it.name },
-                onTransfer = if (initial == null && capture == null) ({ transferSelected = true }) else null,
-                capture = capture, captureAccountId = captureAccountId, back = back)
+    Box(Modifier.fillMaxSize().ledgerContentChange(if (transferSelected) "transfer" else kindName)) {
+        drafts.SaveableStateProvider(if (transferSelected) "transfer" else "entry") {
+            if (transferSelected) {
+                TransferEditor(data, null, model, back, onSelectKind = {
+                    kindName = it.name
+                    transferSelected = false
+                })
+            } else {
+                IncomeExpenseEditor(data, initial, model, Kind.valueOf(kindName), onKindChange = { kindName = it.name },
+                    onTransfer = if (initial == null && capture == null) ({ transferSelected = true }) else null,
+                    capture = capture, captureAccountId = captureAccountId, back = back)
+            }
         }
     }
 }
@@ -250,8 +254,9 @@ private fun IncomeExpenseEditor(
                     }
                 }
             }
-            if (kind == Kind.EXPENSE) {
+            LedgerVisibility(kind == Kind.EXPENSE) {
                 Hairline()
+                Spacer(Modifier.height(10.dp))
                 EntryTagGroup(
                     title = "场景", labels = sceneLabels, styles = sceneStyles, selected = sceneId, expanded = showScenes,
                     dragState = sceneDrag, optional = true,
@@ -383,7 +388,7 @@ private fun EntryTagGroup(
         if (expanded) labels.keys
         else (savedIds.take(VISIBLE_TAG_LIMIT) + listOfNotNull(selected?.takeIf { it in labels })).toSet()
     }
-    Column {
+    Column(Modifier.ledgerSizeMotion()) {
         Text(title, Modifier.padding(horizontal = 1.dp),
             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
             color = colors.onSurfaceVariant)
@@ -392,7 +397,7 @@ private fun EntryTagGroup(
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     order.ids.filter { it in visibleIds }.forEach { id ->
                         key(id) {
-                            ReorderableLedgerItem(id, order, visibleIds, dragState, save, Modifier.animateBounds(this@LookaheadScope)) {
+                            ReorderableLedgerItem(id, order, visibleIds, dragState, save, Modifier.animateBounds(this@LookaheadScope, boundsTransform = { _, _ -> ledgerSpring() })) {
                                 EntryTagChip(labels.getValue(id), selected = selected == id, optional = optional,
                                     style = styles[id]) { select(id) }
                             }
@@ -445,34 +450,35 @@ private fun EntryTagChip(label: String, selected: Boolean? = null, optional: Boo
     val palette = style?.color?.labelColors()
     val accent = palette?.ink ?: colors.primary
     val shape = RoundedCornerShape(12.dp)
+    val source = remember { MutableInteractionSource() }
     val interaction = when {
         selected == null -> Modifier.clickable(
-            interactionSource = null, indication = null, role = Role.Button, onClick = onClick,
+            interactionSource = source, indication = null, role = Role.Button, onClick = onClick,
         )
         optional -> Modifier.toggleable(
-            value = selected, interactionSource = null, indication = null, role = Role.Checkbox,
+            value = selected, interactionSource = source, indication = null, role = Role.Checkbox,
             onValueChange = { onClick() },
         )
         else -> Modifier.selectable(
-            selected = selected, interactionSource = null, indication = null, role = Role.RadioButton, onClick = onClick,
+            selected = selected, interactionSource = source, indication = null, role = Role.RadioButton, onClick = onClick,
         )
     }
-    val chipFill = when (selected) {
+    val chipFill = ledgerColor(when (selected) {
         true -> palette?.fill ?: colors.primaryContainer
         false -> if (LocalLedgerDark.current) colors.surfaceContainerHigh else colors.surface
         null -> Color.Transparent
-    }
-    val tint = when (selected) {
+    })
+    val tint = ledgerColor(when (selected) {
         true -> accent
         false -> colors.onSurfaceVariant
         null -> colors.primary
-    }
-    val outline = if (selected == true) BorderStroke(1.dp, accent.copy(alpha = .42f)) else null
+    })
+    val outline = BorderStroke(1.dp, ledgerColor(if (selected == true) accent.copy(alpha = .42f) else Color.Transparent))
     val labelStyle = MaterialTheme.typography.labelLarge.copy(
         fontWeight = if (selected == null) FontWeight.SemiBold else FontWeight.Medium,
     )
     Box(Modifier.heightIn(min = 44.dp).clip(shape).then(interaction), contentAlignment = Alignment.Center) {
-        Surface(shape = shape, color = chipFill, border = outline) {
+        Surface(modifier = Modifier.ledgerPress(source), shape = shape, color = chipFill, border = outline) {
             Row(Modifier.heightIn(min = 34.dp).padding(horizontal = 11.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (add) LucideIcon(Glyph.PLUS, tint, size = 16)
@@ -492,7 +498,7 @@ internal fun EntryDetailRow(label: String, value: String, icon: Glyph, onClick: 
         LucideIcon(icon, colors.onSurfaceVariant, size = 17)
         Text(label, style = MaterialTheme.typography.titleMedium)
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-            Text(value, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant,
+            Text(value, modifier = Modifier.ledgerContentChange(value), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         LucideIcon(Glyph.RIGHT, colors.onSurfaceVariant, size = 16)

@@ -65,32 +65,33 @@ import com.wmm.ledger.ui.EmptyPanel
 import com.wmm.ledger.ui.EntryEditor
 import com.wmm.ledger.ui.Glyph
 import com.wmm.ledger.ui.LedgerNavigation
-import com.wmm.ledger.ui.LedgerScreen
-import com.wmm.ledger.ui.LedgerSearchScreen
 import com.wmm.ledger.ui.LedgerQuestionScreen
-import com.wmm.ledger.ui.QuestionEvidenceScreen
+import com.wmm.ledger.ui.LedgerScreen
 import com.wmm.ledger.ui.LedgerScreenFrame
 import com.wmm.ledger.ui.LedgerScreenTheme
+import com.wmm.ledger.ui.LedgerSearchScreen
 import com.wmm.ledger.ui.LedgerTheme
 import com.wmm.ledger.ui.LucideIcon
 import com.wmm.ledger.ui.ModelSettings
 import com.wmm.ledger.ui.NavigationBottomGap
 import com.wmm.ledger.ui.NavigationTopGap
-import com.wmm.ledger.ui.SettingsScreen
-import com.wmm.ledger.ui.TransferEditor
-import com.wmm.ledger.ui.ScheduledBillsScreen
+import com.wmm.ledger.ui.PaymentCaptureConsentDialog
+import com.wmm.ledger.ui.QuestionEvidenceScreen
 import com.wmm.ledger.ui.ScheduledBillEditor
+import com.wmm.ledger.ui.ScheduledBillsScreen
+import com.wmm.ledger.ui.SettingsScreen
 import com.wmm.ledger.ui.StatsScreen
 import com.wmm.ledger.ui.Tab
 import com.wmm.ledger.ui.TagDrillScreen
 import com.wmm.ledger.ui.TagsScreen
+import com.wmm.ledger.ui.TransferEditor
 import com.wmm.ledger.ui.blockExitingPage
 import com.wmm.ledger.ui.entryDrawerEnterMotion
 import com.wmm.ledger.ui.entryDrawerExitMotion
+import com.wmm.ledger.ui.ledgerContentChange
 import com.wmm.ledger.ui.ledgerNavigationHeight
-import com.wmm.ledger.ui.pageMotion
-import com.wmm.ledger.ui.PaymentCaptureConsentDialog
 import com.wmm.ledger.ui.openPaymentPermission
+import com.wmm.ledger.ui.pageMotion
 import com.wmm.ledger.ui.paymentServiceEnabled
 import java.time.LocalDate
 import kotlinx.coroutines.delay
@@ -310,6 +311,7 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance, incomingCa
         else -> 2
     }
     val destination = Destination(route, depth)
+    val motionEnabled = com.wmm.ledger.ui.LocalLedgerMotionEnabled.current
     val entryEditor = route == "new" || route?.startsWith("capture:") == true || route?.startsWith("entry:") == true || route?.startsWith("transfer:") == true
     val refined = entryEditor || (route == null && tab == Tab.LEDGER)
     LaunchedEffect(route) {
@@ -329,6 +331,7 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance, incomingCa
             },
         ) { padding ->
             val modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).clipToBounds()
+                .ledgerContentChange(when { openError -> "error"; snapshot == null -> "loading"; else -> "ready" })
             val data = snapshot
             when {
                 openError -> Box(modifier, contentAlignment = Alignment.Center) {
@@ -341,9 +344,9 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance, incomingCa
                     modifier = modifier,
                     transitionSpec = {
                         when {
-                            initialState.route == null && targetState.route == "new" -> entryDrawerEnterMotion()
-                            initialState.route == "new" && targetState.route == null -> entryDrawerExitMotion()
-                            else -> pageMotion(if (targetState.depth >= initialState.depth) 1 else -1)
+                            initialState.route == null && targetState.route == "new" -> entryDrawerEnterMotion(motionEnabled)
+                            initialState.route == "new" && targetState.route == null -> entryDrawerExitMotion(motionEnabled)
+                            else -> pageMotion(if (targetState.depth >= initialState.depth) 1 else -1, motionEnabled)
                         }
                     },
                     label = "详情页转场",
@@ -365,7 +368,7 @@ private fun LedgerApp(model: LedgerViewModel, appearance: Appearance, incomingCa
                             Modifier.layerBackdrop(backdrop)
                         } else Modifier
                         Box(Modifier.fillMaxSize().blockExitingPage(active)) {
-                            Box(Modifier.matchParentSize().then(capture)) {
+                            Box(Modifier.matchParentSize().then(capture).ledgerContentChange(tab)) {
                                 LedgerScreenTheme(tab == Tab.LEDGER) {
                                     navState.SaveableStateProvider(tab.name) {
                                         when (tab) {

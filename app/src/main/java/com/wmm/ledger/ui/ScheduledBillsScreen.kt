@@ -60,7 +60,7 @@ internal fun ScheduledBillsScreen(data: LedgerSnapshot, back: () -> Unit, edit: 
                 val status = bill.unavailableReason(data) ?: (next?.let { "下次 $it" } ?: "已结束")
                 val frequency = Period.valueOf(bill.period).repeatLabel
                 val amount = (if (bill.kind == Kind.INCOME.name) "+" else "−") + currency(bill.cents)
-                GroupCard {
+                GroupCard(ledgerItemMotion()) {
                     SettingsRow(bill.note.ifBlank { tagsById[bill.tagId]?.name ?: "定时账单" },
                         description = "$frequency · $status", icon = Glyph.CALENDAR, end = amount) { edit(bill.id) }
                 }
@@ -133,7 +133,7 @@ internal fun ScheduledBillEditor(
                         focus.clearFocus()
                         fieldName = BillField.TAG.name
                     }
-                    if (kind == Kind.EXPENSE) {
+                    LedgerVisibility(kind == Kind.EXPENSE) {
                         Hairline(14)
                         SettingsRow("场景", end = data.scenes.firstOrNull { it.id == sceneId }?.name ?: "不关联") {
                             focus.clearFocus()

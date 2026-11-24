@@ -48,8 +48,8 @@ fun LucideIcon(glyph: Glyph, color: Color = MaterialTheme.colorScheme.onSurface,
     Icon(
         painter = painterResource(glyph.drawable),
         contentDescription = description,
-        modifier = Modifier.size(size.dp),
-        tint = color,
+        modifier = Modifier.size(size.dp).ledgerContentChange(glyph),
+        tint = ledgerColor(color),
     )
 }
 

@@ -135,6 +135,7 @@ private fun GlassNavigationControls(
     selected: Tab, modifier: Modifier, onRecord: () -> Unit, onSelect: (Tab) -> Unit,
 ) {
     val dark = LocalLedgerDark.current
+    val motionEnabled = LocalLedgerMotionEnabled.current
     val haptics = LocalHapticFeedback.current
     val activeInk = if (dark) Color(0xFFC9E6FF) else Color(0xFF087CF0)
     val idleInk = if (dark) Color(0xFFBDCEE4) else Color(0xFF405977)
@@ -149,12 +150,12 @@ private fun GlassNavigationControls(
     var dragSpeed by remember { mutableFloatStateOf(0f) }
     var settleJob by remember { mutableStateOf<Job?>(null) }
     val expansion by animateFloatAsState(
-        if (dragging || ledgerPressed || statsPressed) 1f else 0f,
-        spring(dampingRatio = .72f, stiffness = Spring.StiffnessMedium),
+        if (motionEnabled && (dragging || ledgerPressed || statsPressed)) 1f else 0f,
+        ledgerSpring(),
         label = "玻璃触摸形变",
     )
     val stretch by animateFloatAsState(
-        dragSpeed, spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh),
+        if (motionEnabled) dragSpeed else 0f, spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh),
         label = "玻璃拖动惯性",
     )
     val highlighted by remember {
@@ -167,9 +168,10 @@ private fun GlassNavigationControls(
         dragSpeed = 0f
         settleJob?.cancel()
         val end = tab.ordinal.toFloat()
+        if (!motionEnabled) { capsulePosition = null; return }
         capsulePosition = start
         settleJob = scope.launch {
-            animate(start, end, animationSpec = spring(dampingRatio = .78f, stiffness = Spring.StiffnessMedium)) { value, _ ->
+            animate(start, end, animationSpec = ledgerSpring()) { value, _ ->
                 capsulePosition = value
             }
             capsulePosition = null
@@ -236,7 +238,7 @@ private fun GlassNavigationControls(
                 if (tab == Tab.STATS) Spacer(Modifier.width(RecordButtonWidth))
                 val active = tab == selected
                 val focused = tab.ordinal == highlighted
-                val tint = if (focused) activeInk else idleInk
+                val tint = ledgerColor(if (focused) activeInk else idleInk)
                 Column(
                     Modifier.weight(1f).fillMaxHeight().clip(CircleShape)
                         .selectable(active, interactionSource = interactions.getValue(tab),
@@ -252,7 +254,7 @@ private fun GlassNavigationControls(
                 ) {
                     LucideIcon(tab.icon, tint, size = 22)
                     Text(tab.label, color = tint, style = MaterialTheme.typography.labelMedium,
-                        fontWeight = if (focused) FontWeight.Bold else FontWeight.SemiBold)
+                        fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -285,12 +287,8 @@ private fun RecordNavigationButton(onRecord: () -> Unit, modifier: Modifier = Mo
     }
     val haptics = LocalHapticFeedback.current
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) .96f else 1f,
-        spring(dampingRatio = .8f, stiffness = Spring.StiffnessMedium), label = "记一笔按压")
     Box(
-        modifier.graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(CircleShape)
+        modifier.clip(CircleShape)
             .background(gradient)
             .semantics { contentDescription = RECORD_DESCRIPTION }
             .clickable(interactionSource = interaction, indication = null, role = Role.Button) {
@@ -299,10 +297,8 @@ private fun RecordNavigationButton(onRecord: () -> Unit, modifier: Modifier = Mo
             },
         contentAlignment = Alignment.Center,
     ) {
-        LucideIcon(
-            Glyph.PLUS,
-            colors.onPrimary,
-            size = RECORD_ICON_SIZE,
-        )
+        Box(Modifier.ledgerPress(interaction)) {
+            LucideIcon(Glyph.PLUS, colors.onPrimary, size = RECORD_ICON_SIZE)
+        }
     }
 }

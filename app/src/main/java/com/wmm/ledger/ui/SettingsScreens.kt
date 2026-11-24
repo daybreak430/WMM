@@ -350,7 +350,7 @@ fun TagsScreen(data: LedgerSnapshot, model: LedgerViewModel, back: () -> Unit) {
                         ReorderableLedgerItem(
                             id, order, tagsById.keys, dragState,
                             save = { updated, failed -> model.reorderTags(kind, updated, failed) },
-                            modifier = Modifier.fillMaxWidth().animateItem(),
+                            modifier = ledgerItemMotion(Modifier.fillMaxWidth()),
                         ) {
                             val tag = tagsById.getValue(id)
                             GroupCard {

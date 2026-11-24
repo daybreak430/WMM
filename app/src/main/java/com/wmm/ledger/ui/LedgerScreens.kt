@@ -176,7 +176,7 @@ internal fun LazyListScope.ledgerRows(
             val refined = LocalLedgerRefinement.current
             val shape = RoundedCornerShape(topStart = first, topEnd = first, bottomStart = last, bottomEnd = last)
             // 流水逐行加载，首尾圆角和组内分隔线组成连续的卡面。
-            Surface(color = colors.surface, shape = shape) {
+            Surface(modifier = ledgerItemMotion(), color = colors.surface, shape = shape) {
                 Column {
                     when (record) {
                         is LedgerListItem.EntryItem -> {
@@ -282,7 +282,7 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
                         }
                         TextButton(onClick = calendar, modifier = Modifier.weight(1f)) {
                             LucideIcon(Glyph.CALENDAR, color = colors.primary, size = 17)
-                            Text(periodLabel(period, summary.start), Modifier.padding(start = 7.dp),
+                            Text(periodLabel(period, summary.start), Modifier.padding(start = 7.dp).ledgerContentChange(expenseRange),
                                 style = MaterialTheme.typography.labelLarge)
                         }
                         val next = period.step(summary.start, 1)
@@ -294,10 +294,12 @@ fun StatsScreen(data: LedgerSnapshot, today: LocalDate, period: Period, day: Loc
                 }
             }
             item("rollup") {
-                PeriodCashflowBoard(period, summary.start, summary.inProgress, Cashflow(summary.income, summary.expense))
+                Column(Modifier.ledgerContentChange(expenseRange)) {
+                    PeriodCashflowBoard(period, summary.start, summary.inProgress, Cashflow(summary.income, summary.expense))
+                }
             }
             if (period == Period.WEEK) item("week-trend") {
-                Box(Modifier.padding(top = 12.dp)) {
+                Box(ledgerItemMotion(Modifier.padding(top = 12.dp))) {
                     WeekTrend(trend, day, today)
                 }
             }

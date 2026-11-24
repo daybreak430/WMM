@@ -1,11 +1,13 @@
 package com.wmm.ledger.capture
 
+import android.animation.ValueAnimator
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.WindowManager
+import android.view.animation.PathInterpolator
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -62,7 +64,7 @@ internal class PaymentCaptureOverlay(private val service: PaymentCaptureService,
                 setOnClickListener { block() }
             })
         }
-        action("稍后") { hide() }
+        action("稍后") { hide(animated = true) }
         action("忽略") {
             hide()
             scope.launch {
@@ -93,7 +95,13 @@ internal class PaymentCaptureOverlay(private val service: PaymentCaptureService,
         return try {
             manager.addView(card, params)
             view = card
-            timeout = scope.launch { delay(12_000); hide() }
+            if (ValueAnimator.areAnimatorsEnabled()) {
+                card.alpha = 0f
+                card.translationY = -dp(8).toFloat()
+                card.animate().alpha(1f).translationY(0f).setDuration(180)
+                    .setInterpolator(PathInterpolator(.2f, .8f, .2f, 1f)).start()
+            }
+            timeout = scope.launch { delay(12_000); hide(animated = true) }
             true
         } catch (_: Exception) {
             view = null
@@ -101,9 +109,24 @@ internal class PaymentCaptureOverlay(private val service: PaymentCaptureService,
         }
     }
 
-    fun hide() {
+    fun hide(animated: Boolean = false) {
         timeout?.cancel(); timeout = null
-        view?.let { runCatching { manager.removeView(it) } }
-        view = null
+        val card = view ?: return
+        card.animate().cancel()
+        fun remove() {
+            if (view === card) {
+                runCatching { manager.removeView(card) }
+                view = null
+            }
+        }
+        // 锁屏、关闭服务和替换候选必须立即移除；只有普通收起才播放短离场。
+        if (animated && ValueAnimator.areAnimatorsEnabled()) {
+            card.importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+            for (index in 0 until card.childCount) card.getChildAt(index).isEnabled = false
+            val actions = card.getChildAt(card.childCount - 1) as? LinearLayout
+            actions?.let { for (index in 0 until it.childCount) it.getChildAt(index).isEnabled = false }
+            card.animate().alpha(0f).translationY(-dp(4).toFloat()).setDuration(120)
+                .setInterpolator(PathInterpolator(.2f, .8f, .2f, 1f)).withEndAction { remove() }.start()
+        } else remove()
     }
 }
